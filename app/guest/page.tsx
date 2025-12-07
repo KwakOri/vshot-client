@@ -14,6 +14,7 @@ import { usePhotoCapture } from "@/hooks/usePhotoCapture";
 import { useSignaling } from "@/hooks/useSignaling";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { useAppStore } from "@/lib/store";
+import { downloadPhotoFrame } from "@/lib/frame-generator";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -41,6 +42,7 @@ export default function GuestPage() {
   const [showFlash, setShowFlash] = useState(false);
   const [isPhotoSession, setIsPhotoSession] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<number[]>([]);
+  const [isGeneratingFrame, setIsGeneratingFrame] = useState(false);
 
   // Use shared photo capture hook
   const {
@@ -363,6 +365,24 @@ export default function GuestPage() {
     });
   };
 
+  const handleGenerateFrame = async () => {
+    if (selectedPhotos.length !== 4) {
+      alert('4장의 사진을 선택해주세요.');
+      return;
+    }
+
+    setIsGeneratingFrame(true);
+    try {
+      await downloadPhotoFrame(photos, selectedPhotos, store.roomId || 'frame');
+      console.log('[Guest] Photo frame generated and downloaded');
+    } catch (error) {
+      console.error('[Guest] Failed to generate frame:', error);
+      alert('프레임 생성에 실패했습니다.');
+    } finally {
+      setIsGeneratingFrame(false);
+    }
+  };
+
   // Cleanup
   useEffect(() => {
     return () => {
@@ -620,9 +640,11 @@ export default function GuestPage() {
             photos={photos}
             selectedPhotos={selectedPhotos}
             onPhotoSelect={togglePhotoSelection}
+            onGenerateFrame={handleGenerateFrame}
             maxSelection={4}
             readOnly={false}
             role="guest"
+            isGenerating={isGeneratingFrame}
           />
         </div>
 

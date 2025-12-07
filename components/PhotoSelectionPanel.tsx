@@ -2,10 +2,12 @@ interface PhotoSelectionPanelProps {
   photos: string[];
   selectedPhotos: number[];
   onPhotoSelect?: (index: number) => void;
+  onGenerateFrame?: () => void;
   maxSelection?: number;
   readOnly?: boolean;
   role: 'host' | 'guest';
   peerSelectedPhotos?: number[];
+  isGenerating?: boolean;
 }
 
 /**
@@ -17,10 +19,12 @@ export function PhotoSelectionPanel({
   photos,
   selectedPhotos,
   onPhotoSelect,
+  onGenerateFrame,
   maxSelection = 4,
   readOnly = false,
   role,
-  peerSelectedPhotos = []
+  peerSelectedPhotos = [],
+  isGenerating = false
 }: PhotoSelectionPanelProps) {
   if (photos.length === 0) return null;
 
@@ -89,12 +93,14 @@ export function PhotoSelectionPanel({
       </div>
 
       {/* Generate frame button */}
-      {selectionCount === maxSelection && (
+      {selectionCount === maxSelection && onGenerateFrame && (
         <div className="mt-6">
           <button
-            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold text-lg transition"
+            onClick={onGenerateFrame}
+            disabled={isGenerating}
+            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold text-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            프레임 생성하기
+            {isGenerating ? '프레임 생성 중...' : '프레임 생성하기'}
           </button>
         </div>
       )}

@@ -14,6 +14,7 @@ import { usePhotoCapture } from "@/hooks/usePhotoCapture";
 import { useSignaling } from "@/hooks/useSignaling";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { useAppStore } from "@/lib/store";
+import { downloadPhotoFrame } from "@/lib/frame-generator";
 import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -33,6 +34,7 @@ export default function HostPage() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showFlash, setShowFlash] = useState(false);
   const [peerSelectedPhotos, setPeerSelectedPhotos] = useState<number[]>([]);
+  const [isGeneratingFrame, setIsGeneratingFrame] = useState(false);
 
   // Use shared photo capture hook
   const {
@@ -321,6 +323,24 @@ export default function HostPage() {
     }
   };
 
+  const handleGenerateFrame = async () => {
+    if (peerSelectedPhotos.length !== 4) {
+      alert('Guest가 4장의 사진을 선택해야 합니다.');
+      return;
+    }
+
+    setIsGeneratingFrame(true);
+    try {
+      await downloadPhotoFrame(photos, peerSelectedPhotos, store.roomId || 'frame');
+      console.log('[Host] Photo frame generated and downloaded');
+    } catch (error) {
+      console.error('[Host] Failed to generate frame:', error);
+      alert('프레임 생성에 실패했습니다.');
+    } finally {
+      setIsGeneratingFrame(false);
+    }
+  };
+
   // Auto-start camera when room is created
   useEffect(() => {
     if (store.roomId && !isCameraActive && !localStream) {
@@ -537,9 +557,11 @@ export default function HostPage() {
           <PhotoSelectionPanel
             photos={photos}
             selectedPhotos={[]}
+            onGenerateFrame={handleGenerateFrame}
             readOnly={true}
             role="host"
             peerSelectedPhotos={peerSelectedPhotos}
+            isGenerating={isGeneratingFrame}
           />
         </div>
 
