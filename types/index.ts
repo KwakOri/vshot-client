@@ -9,6 +9,7 @@ export type SignalMessage =
   | { type: 'ice'; roomId: string; from: string; to: string; candidate: RTCIceCandidateInit }
   | { type: 'leave'; roomId: string; userId: string }
   | { type: 'photo-session-start'; roomId: string }
+  | { type: 'session-settings'; roomId: string; settings: SessionSettings }
   | { type: 'countdown-tick'; roomId: string; count: number; photoNumber: number }
   | { type: 'capture-now'; roomId: string; photoNumber: number }
   | { type: 'capture-request'; roomId: string; photoNumber: number }
@@ -25,6 +26,11 @@ export interface ChromaKeySettings {
   color: string;
   similarity: number;
   smoothness: number;
+}
+
+export interface SessionSettings {
+  recordingDuration: number; // seconds (default: 10)
+  captureInterval: number; // seconds between photos (default: 3)
 }
 
 export interface CapturedPhoto {

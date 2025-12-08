@@ -277,6 +277,34 @@ export default function GuestPage() {
     };
   }, [on, setMergedPhotos]);
 
+  // Listen to video frame ready event
+  useEffect(() => {
+    const handleVideoFrameReady = (message: any) => {
+      console.log('[Guest] Video frame ready:', message);
+
+      if (message.videoUrl) {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const fullUrl = `${API_URL}${message.videoUrl}`;
+
+        console.log('[Guest] Downloading video from:', fullUrl);
+
+        // Auto download video
+        const link = document.createElement('a');
+        link.href = fullUrl;
+        link.download = `vshot-frame-${store.roomId}-${Date.now()}.mp4`;
+        link.click();
+
+        alert('영상 프레임이 다운로드되었습니다! 🎉');
+      }
+    };
+
+    on('video-frame-ready', handleVideoFrameReady);
+
+    return () => {
+      // Cleanup if needed
+    };
+  }, [on, store.roomId]);
+
   // Listen to photo session events and chroma key settings
   useEffect(() => {
     const handlePhotoSessionStart = (message: any) => {
@@ -313,10 +341,18 @@ export default function GuestPage() {
       }
     };
 
+    const handleSessionSettings = (message: any) => {
+      console.log("[Guest] Received session settings from server:", message);
+      if (message.settings) {
+        console.log("[Guest] Session settings - recordingDuration:", message.settings.recordingDuration, "captureInterval:", message.settings.captureInterval);
+      }
+    };
+
     on("photo-session-start", handlePhotoSessionStart);
     on("countdown-tick", handleCountdownTick);
     on("capture-now", handleCaptureNow);
     on("chromakey-settings", handleChromaKeySettings);
+    on("session-settings", handleSessionSettings);
 
     console.log("[Guest] Event handlers registered");
 
@@ -381,6 +417,30 @@ export default function GuestPage() {
     } finally {
       setIsGeneratingFrame(false);
     }
+  };
+
+  const handleRequestVideoFrame = () => {
+    if (selectedPhotos.length !== 4) {
+      alert('4장의 사진을 선택해주세요.');
+      return;
+    }
+
+    if (!store.roomId) {
+      alert('방에 참가하지 않았습니다.');
+      return;
+    }
+
+    console.log('[Guest] Requesting video frame with photos:', selectedPhotos);
+
+    // Send video frame request to server
+    sendMessage({
+      type: 'video-frame-request',
+      roomId: store.roomId,
+      userId: store.userId,
+      selectedPhotos,
+    });
+
+    alert('Host에게 영상 프레임 생성 요청을 전송했습니다!\n잠시 후 영상이 자동으로 다운로드됩니다.');
   };
 
   // Cleanup
@@ -646,6 +706,46 @@ export default function GuestPage() {
             role="guest"
             isGenerating={isGeneratingFrame}
           />
+
+          {/* Video Frame Request */}
+          {selectedPhotos.length === 4 && photos.length >= 8 && (
+            <div className="bg-gradient-to-r from-pink-900/50 to-purple-900/50 rounded-lg p-6 mt-6 border-2 border-pink-600">
+              <div className="flex items-start gap-4">
+                <div className="text-4xl">🎬</div>
+                <div className="flex-1">
+                  <h2 className="text-2xl font-semibold mb-2">영상 프레임 생성</h2>
+                  <p className="text-gray-300 mb-4">
+                    선택한 4개의 사진에 해당하는 영상을 2x2 그리드로 합성하여 MP4로 제공합니다.
+                  </p>
+                  <div className="bg-gray-800/50 rounded-lg p-4 space-y-2 mb-4">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-pink-400">1.</span>
+                      <span>Host가 촬영한 영상을 자동으로 분할</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-pink-400">2.</span>
+                      <span>선택한 4개 구간을 2x2 그리드로 합성</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-pink-400">3.</span>
+                      <span>MP4 형식으로 변환 후 자동 다운로드</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleRequestVideoFrame}
+                    className="w-full px-6 py-4 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 rounded-lg font-semibold text-lg transition shadow-lg transform hover:scale-105"
+                  >
+                    📹 영상 프레임 요청하기
+                  </button>
+                  <div className="mt-3 p-3 bg-blue-900/30 border border-blue-600/50 rounded-lg">
+                    <p className="text-xs text-blue-200">
+                      ℹ️ 요청 후 Host에서 자동으로 합성이 시작됩니다. 합성이 완료되면 영상이 자동으로 다운로드됩니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Usage info */}
