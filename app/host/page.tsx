@@ -31,6 +31,7 @@ export default function HostPage() {
     useWebRTC({ sendMessage, on });
 
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [sourceType, setSourceType] = useState<'camera' | 'screen'>('camera'); // Track source type
   const [chromaKeyEnabled, setChromaKeyEnabled] = useState(true); // Default ON for VR
   const [sensitivity, setSensitivity] = useState(50);
   const [smoothness, setSmoothness] = useState(10);
@@ -171,6 +172,8 @@ export default function HostPage() {
 
       await startLocalStream(() => Promise.resolve(stream));
       setIsCameraActive(true);
+      setSourceType('camera');
+      setChromaKeyEnabled(true); // Enable chroma key for camera
       console.log("[Host] Camera started");
     } catch (error) {
       console.error("[Host] Camera error:", error);
@@ -178,8 +181,40 @@ export default function HostPage() {
     }
   };
 
-  // Stop camera
-  const stopCamera = () => {
+  // Start screen share
+  const startScreenShare = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: true,
+      });
+
+      // Handle when user stops sharing via browser UI
+      stream.getVideoTracks()[0].addEventListener('ended', () => {
+        console.log("[Host] Screen share stopped by user");
+        stopSource();
+      });
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+
+      await startLocalStream(() => Promise.resolve(stream));
+      setIsCameraActive(true);
+      setSourceType('screen');
+      // Keep chroma key state - user can choose to enable/disable for screen share
+      console.log("[Host] Screen share started");
+    } catch (error) {
+      console.error("[Host] Screen share error:", error);
+      alert("화면 공유에 접근할 수 없습니다.");
+    }
+  };
+
+  // Stop camera or screen share
+  const stopSource = () => {
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
       setIsCameraActive(false);
@@ -760,7 +795,7 @@ export default function HostPage() {
   useEffect(() => {
     return () => {
       console.log('[Host] Component unmounting - cleaning up resources');
-      stopCamera();
+      stopSource();
       if (videoRecorderRef.current) {
         videoRecorderRef.current.dispose();
       }
@@ -797,7 +832,7 @@ export default function HostPage() {
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-4 text-dark">
-            Host (VTuber with Chroma Key)
+            Host {isCameraActive && (sourceType === 'camera' ? '(📹 카메라)' : '(🖥️ 화면 공유)')}
           </h1>
           <div className="space-y-3">
             {store.roomId && (
@@ -819,20 +854,47 @@ export default function HostPage() {
         <div className="bg-white border-2 border-neutral rounded-lg p-6 mb-6 shadow-md">
           <div className="flex flex-wrap gap-4 items-center mb-4">
             {!isCameraActive ? (
-              <button
-                onClick={startCamera}
-                disabled={!isConnected}
-                className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50"
-              >
-                {isConnected ? "카메라 시작" : "연결 중..."}
-              </button>
+              <>
+                <button
+                  onClick={startCamera}
+                  disabled={!isConnected}
+                  className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50"
+                >
+                  {isConnected ? "📹 카메라 시작" : "연결 중..."}
+                </button>
+                <button
+                  onClick={startScreenShare}
+                  disabled={!isConnected}
+                  className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50"
+                >
+                  {isConnected ? "🖥️ 화면 공유" : "연결 중..."}
+                </button>
+              </>
             ) : (
-              <button
-                onClick={stopCamera}
-                className="px-6 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
-              >
-                카메라 중지
-              </button>
+              <>
+                <button
+                  onClick={stopSource}
+                  className="px-6 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
+                >
+                  {sourceType === 'camera' ? '📹 카메라 중지' : '🖥️ 화면 공유 중지'}
+                </button>
+                {sourceType === 'camera' && (
+                  <button
+                    onClick={startScreenShare}
+                    className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
+                  >
+                    🖥️ 화면 공유로 전환
+                  </button>
+                )}
+                {sourceType === 'screen' && (
+                  <button
+                    onClick={startCamera}
+                    className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
+                  >
+                    📹 카메라로 전환
+                  </button>
+                )}
+              </>
             )}
 
             {isCameraActive && (
@@ -997,7 +1059,11 @@ export default function HostPage() {
           {/* Main view - Show own video when alone, composite when connected */}
           <div className="bg-gray-800 rounded-lg p-4">
             <h2 className="text-xl font-semibold mb-4">
-              {remoteStream ? "합성 화면 (Guest + Host)" : "내 영상 (Host)"}
+              {remoteStream
+                ? "합성 화면 (Guest + Host)"
+                : sourceType === 'camera'
+                  ? "내 영상 (Host)"
+                  : "내 화면 (Host)"}
             </h2>
             {/* 1:1 Container to prevent layout shift */}
             <div className="relative rounded-lg overflow-hidden aspect-square">
@@ -1045,7 +1111,7 @@ export default function HostPage() {
 
               {!isCameraActive && (
                 <div className="absolute inset-0 flex items-center justify-center text-gray-500 bg-black">
-                  카메라를 시작해주세요
+                  카메라 또는 화면 공유를 시작해주세요
                 </div>
               )}
             </div>
@@ -1094,11 +1160,9 @@ export default function HostPage() {
           {/* Video Frame Composition */}
           {recordedSegments.length >= 4 && peerSelectedPhotos.length === 4 && (
             <div className="bg-white border-2 border-neutral rounded-lg p-6 mt-6 shadow-md">
-              <h2 className="text-2xl font-semibold mb-4 text-dark">🚀 영상 프레임 생성 (WebGL GPU 합성)</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-dark">영상 프레임 생성</h2>
               <p className="text-dark/70 mb-4">
                 Guest가 선택한 4개의 사진에 해당하는 영상을 2x2 그리드로 합성합니다.
-                <br />
-                <span className="text-primary font-semibold">⚡ GPU 가속 - 재인코딩 없이 실시간 합성!</span>
               </p>
 
               {isComposing && (
@@ -1117,7 +1181,7 @@ export default function HostPage() {
                 disabled={isComposing}
                 className="w-full px-6 py-4 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold text-lg transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isComposing ? '⚡ GPU 합성 중...' : '⚡ 영상 프레임 생성 (WebGL GPU)'}
+                {isComposing ? '합성 중...' : '영상 프레임 생성'}
               </button>
 
               {composedVideo && (
@@ -1131,9 +1195,9 @@ export default function HostPage() {
                   </div>
                   <div className="bg-neutral/30 border border-neutral rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-semibold text-primary">⚡ WebGL 합성 완료</span>
+                      <span className="text-sm font-semibold text-primary">합성 완료</span>
                       <span className="text-xs text-dark/70 font-medium">
-                        WebM · {(composedVideo.blob.size / 1024 / 1024).toFixed(2)} MB
+                        {(composedVideo.blob.size / 1024 / 1024).toFixed(2)} MB
                       </span>
                     </div>
                     <button
@@ -1143,82 +1207,14 @@ export default function HostPage() {
                       }}
                       className="w-full px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
                     >
-                      📥 영상 프레임 다운로드 (WebM - WebGL 합성)
+                      📥 영상 프레임 다운로드
                     </button>
                     <p className="text-xs text-dark/70 mt-3 text-center">
-                      ⚡ WebGL GPU로 실시간 합성 - FFmpeg 재인코딩 없음!
-                      <br />
-                      💡 Guest가 선택한 4개 영상을 2x2 그리드로 합성한 WebM 파일입니다.
+                      Guest가 선택한 4개 영상을 2x2 그리드로 합성한 파일입니다.
                     </p>
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Recorded video segments panel */}
-          {recordedSegments.length > 0 && !isCapturing && (
-            <div className="bg-white border-2 border-neutral rounded-lg p-6 mt-6 shadow-md">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-semibold text-dark">⚡ 녹화된 영상 세그먼트 (개별 녹화)</h2>
-                <div className="px-3 py-1 bg-primary text-white rounded-full text-sm font-semibold shadow-md">
-                  ✓ {recordedSegments.length}개 구간
-                </div>
-              </div>
-              <p className="text-dark/70 mb-4">
-                각 사진 촬영 시 개별로 녹화된 영상 (FFmpeg 분할 불필요!)
-              </p>
-
-              {/* Video grid */}
-              <div className="grid grid-cols-4 gap-4 mb-4">
-                {recordedSegments.map((segment) => (
-                  <div key={segment.photoNumber} className="bg-neutral/30 border border-neutral rounded-lg overflow-hidden">
-                    <video
-                      src={segment.url}
-                      controls
-                      className="w-full aspect-video bg-black"
-                    />
-                    <div className="p-3">
-                      <div className="text-sm font-semibold mb-1 text-dark">
-                        영상 #{segment.photoNumber}
-                      </div>
-                      <div className="text-xs text-dark/70 mb-2 font-medium">
-                        {segment.startTime.toFixed(1)}s - {segment.endTime.toFixed(1)}s
-                        <br />
-                        {(segment.blob.size / 1024 / 1024).toFixed(2)} MB
-                      </div>
-                      <button
-                        onClick={() => {
-                          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                          downloadVideo(segment.blob, `vshot-video-${store.roomId}-${segment.photoNumber}-${timestamp}.webm`);
-                        }}
-                        className="w-full px-3 py-2 bg-secondary hover:bg-secondary-dark text-white rounded text-sm font-semibold transition shadow-md"
-                      >
-                        다운로드
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Download all button */}
-              <button
-                onClick={() => {
-                  if (store.roomId) {
-                    downloadSegments(recordedSegments, store.roomId);
-                  }
-                }}
-                className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
-              >
-                ⚡ 모든 구간 다운로드 ({recordedSegments.length}개)
-              </button>
-              <div className="mt-4 bg-primary/10 border-2 border-primary rounded-lg p-4">
-                <p className="text-xs text-dark font-medium">
-                  ✅ 개별 녹화 방식으로 FFmpeg 분할 단계가 완전히 제거되었습니다!
-                  <br />
-                  ⚡ 영상 합성 시간이 90% 단축됩니다.
-                </p>
-              </div>
             </div>
           )}
         </div>
@@ -1230,7 +1226,9 @@ export default function HostPage() {
             <ul className="list-disc list-inside space-y-2 text-dark/80">
               <li>Room ID를 Guest에게 공유하세요</li>
               <li>Guest가 입장하면 자동으로 연결됩니다</li>
-              <li>크로마키를 활성화하여 녹색 배경을 제거할 수 있습니다</li>
+              <li>카메라와 화면 공유를 자유롭게 전환할 수 있습니다</li>
+              <li>크로마키를 활성화하여 특정 색상 배경을 제거할 수 있습니다</li>
+              {sourceType === 'screen' && <li>화면 공유 중에도 크로마키를 사용하여 배경을 제거할 수 있습니다</li>}
             </ul>
           </div>
         )}
