@@ -14,11 +14,13 @@ import { usePhotoCapture } from "@/hooks/usePhotoCapture";
 import { useSignaling } from "@/hooks/useSignaling";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { useAppStore } from "@/lib/store";
+import { getApiHeadersMultipart } from "@/lib/api";
 import { downloadPhotoFrame } from "@/lib/frame-generator";
 import { VideoRecorder, downloadVideo } from "@/lib/video-recorder";
 import { splitVideo, downloadSegments, cleanupSegments, type VideoSegment } from "@/lib/video-splitter";
 import { composeVideoGrid, downloadComposedVideo } from "@/lib/video-composer";
 import { composeVideoWithWebGL, downloadWebGLComposedVideo, type VideoSource } from "@/lib/webgl-video-composer";
+import { ASPECT_RATIOS, type AspectRatio } from "@/types";
 import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -32,6 +34,13 @@ export default function HostPage() {
   const [chromaKeyEnabled, setChromaKeyEnabled] = useState(true); // Default ON for VR
   const [sensitivity, setSensitivity] = useState(50);
   const [smoothness, setSmoothness] = useState(10);
+
+  // Display options (flip horizontal)
+  const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
+  const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
+
+  // Aspect ratio settings (must be declared before usePhotoCapture)
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
 
   // Photo capture state
   const [isCapturing, setIsCapturing] = useState(false);
@@ -52,6 +61,7 @@ export default function HostPage() {
   } = usePhotoCapture({
     roomId: store.roomId,
     userId: store.userId,
+    aspectRatio: aspectRatio,
     onFlash: () => {
       setShowFlash(true);
       setTimeout(() => setShowFlash(false), 300);
@@ -86,6 +96,8 @@ export default function HostPage() {
     enabled: chromaKeyEnabled,
     sensitivity,
     smoothness,
+    width: ASPECT_RATIOS[aspectRatio].width,
+    height: ASPECT_RATIOS[aspectRatio].height,
   });
 
   // Use shared composite canvas hook
@@ -95,6 +107,10 @@ export default function HostPage() {
     foregroundCanvas: localCanvasRef.current,
     localStream,
     remoteStream,
+    width: ASPECT_RATIOS[aspectRatio].width,
+    height: ASPECT_RATIOS[aspectRatio].height,
+    guestFlipHorizontal,
+    hostFlipHorizontal,
   });
 
   // Initialize video recorder once
@@ -197,6 +213,45 @@ export default function HostPage() {
     }
   }, [chromaKeyEnabled, sensitivity, smoothness, store.roomId, remoteStream]);
 
+  // Toggle Host's display flip option
+  const toggleHostFlip = () => {
+    const newFlipState = !hostFlipHorizontal;
+    setHostFlipHorizontal(newFlipState);
+
+    // Broadcast to Guest
+    if (store.roomId) {
+      sendMessage({
+        type: 'host-display-options',
+        roomId: store.roomId,
+        options: {
+          flipHorizontal: newFlipState,
+        },
+      });
+      console.log('[Host] Sent display options:', { flipHorizontal: newFlipState });
+    }
+  };
+
+  // Update aspect ratio settings and broadcast
+  const updateAspectRatio = (ratio: AspectRatio) => {
+    setAspectRatio(ratio);
+
+    if (store.roomId) {
+      const settings = {
+        ratio,
+        width: ASPECT_RATIOS[ratio].width,
+        height: ASPECT_RATIOS[ratio].height,
+      };
+
+      sendMessage({
+        type: 'aspect-ratio-settings',
+        roomId: store.roomId,
+        settings,
+      });
+
+      console.log('[Host] Sent aspect ratio settings:', settings);
+    }
+  };
+
   // Setup remote video
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
@@ -221,6 +276,22 @@ export default function HostPage() {
       // Cleanup if needed
     };
   }, [on, store.userId]);
+
+  // Listen to guest display options
+  useEffect(() => {
+    const handleGuestDisplayOptions = (message: any) => {
+      console.log("[Host] Received guest display options:", message.options);
+      if (message.options) {
+        setGuestFlipHorizontal(message.options.flipHorizontal);
+      }
+    };
+
+    on("guest-display-options", handleGuestDisplayOptions);
+
+    return () => {
+      // Cleanup if needed
+    };
+  }, [on]);
 
   // Listen to session settings broadcast from server
   useEffect(() => {
@@ -478,7 +549,7 @@ export default function HostPage() {
 
     setIsGeneratingFrame(true);
     try {
-      await downloadPhotoFrame(photos, peerSelectedPhotos, store.roomId || 'frame');
+      await downloadPhotoFrame(photos, peerSelectedPhotos, store.roomId || 'frame', aspectRatio);
       console.log('[Host] Photo frame generated and downloaded');
     } catch (error) {
       console.error('[Host] Failed to generate frame:', error);
@@ -533,8 +604,8 @@ export default function HostPage() {
       const composedBlob = await composeVideoWithWebGL(
         videoSources,
         {
-          width: 1920,
-          height: 1080,
+          width: ASPECT_RATIOS[aspectRatio].width,
+          height: ASPECT_RATIOS[aspectRatio].height,
           frameRate: 24,
         },
         (progress) => {
@@ -555,6 +626,7 @@ export default function HostPage() {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const response = await fetch(`${API_URL}/api/video/upload`, {
         method: 'POST',
+        headers: getApiHeadersMultipart(),
         body: formData,
       });
 
@@ -625,8 +697,8 @@ export default function HostPage() {
       const composedBlob = await composeVideoWithWebGL(
         videoSources,
         {
-          width: 1920,
-          height: 1080,
+          width: ASPECT_RATIOS[aspectRatio].width,
+          height: ASPECT_RATIOS[aspectRatio].height,
           frameRate: 24,
         },
         (progress) => {
@@ -719,19 +791,19 @@ export default function HostPage() {
   console.log("HOST: isProcessing", isProcessing);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
+    <div className="min-h-screen bg-light text-dark p-8">
       <FlashOverlay show={showFlash} />
 
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-4">
+          <h1 className="text-3xl font-bold mb-4 text-dark">
             Host (VTuber with Chroma Key)
           </h1>
           <div className="space-y-3">
             {store.roomId && (
-              <div className="bg-purple-600 px-6 py-3 rounded-lg inline-block">
-                <span className="text-sm opacity-80">Room ID:</span>
-                <span className="text-2xl font-bold ml-2">{store.roomId}</span>
+              <div className="bg-primary px-6 py-3 rounded-lg inline-block shadow-md">
+                <span className="text-sm opacity-90 text-white">Room ID:</span>
+                <span className="text-2xl font-bold ml-2 text-white">{store.roomId}</span>
               </div>
             )}
             <ConnectionStatus
@@ -744,20 +816,20 @@ export default function HostPage() {
         </div>
 
         {/* Controls */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <div className="bg-white border-2 border-neutral rounded-lg p-6 mb-6 shadow-md">
           <div className="flex flex-wrap gap-4 items-center mb-4">
             {!isCameraActive ? (
               <button
                 onClick={startCamera}
                 disabled={!isConnected}
-                className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition disabled:opacity-50"
+                className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50"
               >
                 {isConnected ? "카메라 시작" : "연결 중..."}
               </button>
             ) : (
               <button
                 onClick={stopCamera}
-                className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition"
+                className="px-6 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
               >
                 카메라 중지
               </button>
@@ -766,13 +838,27 @@ export default function HostPage() {
             {isCameraActive && (
               <button
                 onClick={() => setChromaKeyEnabled(!chromaKeyEnabled)}
-                className={`px-6 py-3 rounded-lg font-semibold transition ${
+                className={`px-6 py-3 rounded-lg font-semibold transition shadow-md ${
                   chromaKeyEnabled
-                    ? "bg-blue-600 hover:bg-blue-700"
-                    : "bg-gray-600 hover:bg-gray-700"
+                    ? "bg-primary hover:bg-primary-dark text-white"
+                    : "bg-neutral hover:bg-neutral-dark text-dark"
                 }`}
               >
                 크로마키: {chromaKeyEnabled ? "ON" : "OFF"}
+              </button>
+            )}
+
+            {isCameraActive && (
+              <button
+                onClick={toggleHostFlip}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                  hostFlipHorizontal
+                    ? 'bg-primary hover:bg-primary-dark text-white shadow-md'
+                    : 'bg-neutral hover:bg-neutral-dark text-dark'
+                }`}
+                title="내 화면 좌우 반전"
+              >
+                {hostFlipHorizontal ? '↔️ Host 반전 ON' : '↔️ Host 반전 OFF'}
               </button>
             )}
           </div>
@@ -812,8 +898,8 @@ export default function HostPage() {
 
         {/* Timer settings */}
         {remoteStream && (
-          <div className="bg-gray-800 rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">촬영 설정</h2>
+          <div className="bg-white border-2 border-neutral rounded-lg p-6 mb-6 shadow-md">
+            <h2 className="text-xl font-semibold mb-4 text-dark">촬영 설정</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">
@@ -853,6 +939,44 @@ export default function HostPage() {
           </div>
         )}
 
+        {/* Aspect Ratio settings */}
+        {remoteStream && (
+          <div className="bg-white border-2 border-neutral rounded-lg p-6 mb-6 shadow-md">
+            <h2 className="text-xl font-semibold mb-4 text-dark">화면 비율 설정</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-3">
+                  촬영 비율 (Aspect Ratio): {ASPECT_RATIOS[aspectRatio].label}
+                </label>
+                <div className="grid grid-cols-5 gap-3">
+                  {(Object.keys(ASPECT_RATIOS) as AspectRatio[]).map((ratio) => (
+                    <button
+                      key={ratio}
+                      onClick={() => updateAspectRatio(ratio)}
+                      disabled={isCapturing}
+                      className={`px-4 py-3 rounded-lg font-semibold text-sm transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
+                        aspectRatio === ratio
+                          ? 'bg-primary hover:bg-primary-dark text-white'
+                          : 'bg-neutral hover:bg-neutral-dark text-dark'
+                      }`}
+                    >
+                      {ratio}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-3">
+                  미리보기, 사진 촬영, 영상 녹화, 합성 등 모든 과정에 적용됩니다
+                </p>
+                <div className="mt-2 px-4 py-2 bg-neutral/30 rounded-lg">
+                  <p className="text-xs text-dark/70 font-medium">
+                    해상도: {ASPECT_RATIOS[aspectRatio].width} × {ASPECT_RATIOS[aspectRatio].height}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Video display */}
         <div className="grid grid-cols-1 gap-6">
           {/* Hidden video elements for processing */}
@@ -875,7 +999,8 @@ export default function HostPage() {
             <h2 className="text-xl font-semibold mb-4">
               {remoteStream ? "합성 화면 (Guest + Host)" : "내 영상 (Host)"}
             </h2>
-            <div className="relative rounded-lg overflow-hidden aspect-video">
+            {/* 1:1 Container to prevent layout shift */}
+            <div className="relative rounded-lg overflow-hidden aspect-square">
               <div
                 className="absolute inset-0"
                 style={{
@@ -890,21 +1015,31 @@ export default function HostPage() {
                 }}
               />
 
-              {/* Show own chroma key canvas when alone */}
-              <canvas
-                ref={localCanvasRef}
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity ${
-                  remoteStream ? "opacity-0" : "opacity-100"
-                }`}
-              />
+              {/* Canvas container with dynamic aspect ratio */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                {/* Show own chroma key canvas when alone */}
+                <canvas
+                  ref={localCanvasRef}
+                  className={`absolute max-w-full max-h-full transition-opacity ${
+                    remoteStream ? "opacity-0" : "opacity-100"
+                  }`}
+                  style={{
+                    transform: hostFlipHorizontal ? 'scaleX(-1)' : 'scaleX(1)',
+                    aspectRatio: aspectRatio.replace(':', '/'),
+                  }}
+                />
 
-              {/* Show composite when connected */}
-              <canvas
-                ref={compositeCanvasRef}
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity ${
-                  !remoteStream ? "opacity-0" : "opacity-100"
-                }`}
-              />
+                {/* Show composite when connected */}
+                <canvas
+                  ref={compositeCanvasRef}
+                  className={`absolute max-w-full max-h-full transition-opacity ${
+                    !remoteStream ? "opacity-0" : "opacity-100"
+                  }`}
+                  style={{
+                    aspectRatio: aspectRatio.replace(':', '/'),
+                  }}
+                />
+              </div>
 
               <CountdownOverlay countdown={countdown} />
 
@@ -918,15 +1053,15 @@ export default function HostPage() {
 
           {/* Photo capture panel */}
           {remoteStream && (
-            <div className="bg-gray-800 rounded-lg p-4 mt-6">
-              <h2 className="text-xl font-semibold mb-4">사진 촬영</h2>
+            <div className="bg-white border-2 border-neutral rounded-lg p-6 mt-6 shadow-md">
+              <h2 className="text-xl font-semibold mb-4 text-dark">사진 촬영</h2>
 
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-lg">촬영: {photoCount} / 8</div>
+                  <div className="text-lg text-dark font-semibold">촬영: {photoCount} / 8</div>
                   {currentlyRecording !== null && (
-                    <div className="flex items-center gap-2 text-sm text-red-400">
-                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <div className="flex items-center gap-2 text-sm text-primary font-medium">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                       영상 #{currentlyRecording} 녹화 중
                     </div>
                   )}
@@ -934,7 +1069,7 @@ export default function HostPage() {
                 <button
                   onClick={startPhotoSession}
                   disabled={!remoteStream || isCapturing}
-                  className="w-full px-6 py-3 bg-pink-600 hover:bg-pink-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isCapturing ? "촬영 중..." : "촬영 시작 (사진 + 영상)"}
                 </button>
@@ -958,19 +1093,19 @@ export default function HostPage() {
 
           {/* Video Frame Composition */}
           {recordedSegments.length >= 4 && peerSelectedPhotos.length === 4 && (
-            <div className="bg-gray-800 rounded-lg p-6 mt-6">
-              <h2 className="text-2xl font-semibold mb-4">🚀 영상 프레임 생성 (WebGL GPU 합성)</h2>
-              <p className="text-gray-400 mb-4">
+            <div className="bg-white border-2 border-neutral rounded-lg p-6 mt-6 shadow-md">
+              <h2 className="text-2xl font-semibold mb-4 text-dark">🚀 영상 프레임 생성 (WebGL GPU 합성)</h2>
+              <p className="text-dark/70 mb-4">
                 Guest가 선택한 4개의 사진에 해당하는 영상을 2x2 그리드로 합성합니다.
                 <br />
-                <span className="text-green-400">⚡ GPU 가속 - 재인코딩 없이 실시간 합성!</span>
+                <span className="text-primary font-semibold">⚡ GPU 가속 - 재인코딩 없이 실시간 합성!</span>
               </p>
 
               {isComposing && (
-                <div className="bg-gray-700 rounded-lg p-4 mb-4">
+                <div className="bg-neutral/30 border border-neutral rounded-lg p-4 mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                    <div className="text-sm">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                    <div className="text-sm text-dark font-medium">
                       {composeProgress || '처리 중...'}
                     </div>
                   </div>
@@ -980,24 +1115,24 @@ export default function HostPage() {
               <button
                 onClick={handleComposeVideoFrame}
                 disabled={isComposing}
-                className="w-full px-6 py-4 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 rounded-lg font-semibold text-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-6 py-4 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold text-lg transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isComposing ? '⚡ GPU 합성 중...' : '⚡ 영상 프레임 생성 (WebGL GPU)'}
               </button>
 
               {composedVideo && (
                 <div className="mt-4">
-                  <div className="bg-gray-700 rounded-lg overflow-hidden mb-4">
+                  <div className="bg-dark rounded-lg overflow-hidden mb-4 border-2 border-neutral">
                     <video
                       src={composedVideo.url}
                       controls
                       className="w-full aspect-video bg-black"
                     />
                   </div>
-                  <div className="bg-gray-700 rounded-lg p-4">
+                  <div className="bg-neutral/30 border border-neutral rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-medium text-green-400">⚡ WebGL 합성 완료</span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-sm font-semibold text-primary">⚡ WebGL 합성 완료</span>
+                      <span className="text-xs text-dark/70 font-medium">
                         WebM · {(composedVideo.blob.size / 1024 / 1024).toFixed(2)} MB
                       </span>
                     </div>
@@ -1006,11 +1141,11 @@ export default function HostPage() {
                         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
                         downloadWebGLComposedVideo(composedVideo.blob, `vshot-frame-${store.roomId}-${timestamp}.webm`);
                       }}
-                      className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition"
+                      className="w-full px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
                     >
                       📥 영상 프레임 다운로드 (WebM - WebGL 합성)
                     </button>
-                    <p className="text-xs text-gray-400 mt-3 text-center">
+                    <p className="text-xs text-dark/70 mt-3 text-center">
                       ⚡ WebGL GPU로 실시간 합성 - FFmpeg 재인코딩 없음!
                       <br />
                       💡 Guest가 선택한 4개 영상을 2x2 그리드로 합성한 WebM 파일입니다.
@@ -1023,31 +1158,31 @@ export default function HostPage() {
 
           {/* Recorded video segments panel */}
           {recordedSegments.length > 0 && !isCapturing && (
-            <div className="bg-gray-800 rounded-lg p-6 mt-6">
+            <div className="bg-white border-2 border-neutral rounded-lg p-6 mt-6 shadow-md">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-semibold">⚡ 녹화된 영상 세그먼트 (개별 녹화)</h2>
-                <div className="px-3 py-1 bg-green-600 rounded-full text-sm">
+                <h2 className="text-2xl font-semibold text-dark">⚡ 녹화된 영상 세그먼트 (개별 녹화)</h2>
+                <div className="px-3 py-1 bg-primary text-white rounded-full text-sm font-semibold shadow-md">
                   ✓ {recordedSegments.length}개 구간
                 </div>
               </div>
-              <p className="text-gray-400 mb-4">
+              <p className="text-dark/70 mb-4">
                 각 사진 촬영 시 개별로 녹화된 영상 (FFmpeg 분할 불필요!)
               </p>
 
               {/* Video grid */}
               <div className="grid grid-cols-4 gap-4 mb-4">
                 {recordedSegments.map((segment) => (
-                  <div key={segment.photoNumber} className="bg-gray-700 rounded-lg overflow-hidden">
+                  <div key={segment.photoNumber} className="bg-neutral/30 border border-neutral rounded-lg overflow-hidden">
                     <video
                       src={segment.url}
                       controls
                       className="w-full aspect-video bg-black"
                     />
-                    <div className="p-2">
-                      <div className="text-sm font-medium mb-1">
+                    <div className="p-3">
+                      <div className="text-sm font-semibold mb-1 text-dark">
                         영상 #{segment.photoNumber}
                       </div>
-                      <div className="text-xs text-gray-400 mb-2">
+                      <div className="text-xs text-dark/70 mb-2 font-medium">
                         {segment.startTime.toFixed(1)}s - {segment.endTime.toFixed(1)}s
                         <br />
                         {(segment.blob.size / 1024 / 1024).toFixed(2)} MB
@@ -1057,7 +1192,7 @@ export default function HostPage() {
                           const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
                           downloadVideo(segment.blob, `vshot-video-${store.roomId}-${segment.photoNumber}-${timestamp}.webm`);
                         }}
-                        className="w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm transition"
+                        className="w-full px-3 py-2 bg-secondary hover:bg-secondary-dark text-white rounded text-sm font-semibold transition shadow-md"
                       >
                         다운로드
                       </button>
@@ -1073,12 +1208,12 @@ export default function HostPage() {
                     downloadSegments(recordedSegments, store.roomId);
                   }
                 }}
-                className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg font-semibold transition"
+                className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
               >
                 ⚡ 모든 구간 다운로드 ({recordedSegments.length}개)
               </button>
-              <div className="mt-4 bg-green-900/30 border border-green-600/50 rounded-lg p-4">
-                <p className="text-xs text-green-200">
+              <div className="mt-4 bg-primary/10 border-2 border-primary rounded-lg p-4">
+                <p className="text-xs text-dark font-medium">
                   ✅ 개별 녹화 방식으로 FFmpeg 분할 단계가 완전히 제거되었습니다!
                   <br />
                   ⚡ 영상 합성 시간이 90% 단축됩니다.
@@ -1090,9 +1225,9 @@ export default function HostPage() {
 
         {/* Usage info */}
         {!store.peerId && isCameraActive && (
-          <div className="mt-8 bg-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">안내</h2>
-            <ul className="list-disc list-inside space-y-2 text-gray-300">
+          <div className="mt-8 bg-white border-2 border-neutral rounded-lg p-6 shadow-md">
+            <h2 className="text-xl font-semibold mb-4 text-dark">안내</h2>
+            <ul className="list-disc list-inside space-y-2 text-dark/80">
               <li>Room ID를 Guest에게 공유하세요</li>
               <li>Guest가 입장하면 자동으로 연결됩니다</li>
               <li>크로마키를 활성화하여 녹색 배경을 제거할 수 있습니다</li>

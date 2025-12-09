@@ -8,6 +8,8 @@ interface UseCompositeCanvasOptions {
   remoteStream: MediaStream | null;
   width?: number;
   height?: number;
+  guestFlipHorizontal?: boolean;
+  hostFlipHorizontal?: boolean;
 }
 
 /**
@@ -21,7 +23,9 @@ export function useCompositeCanvas({
   localStream,
   remoteStream,
   width = 1920,
-  height = 1080
+  height = 1080,
+  guestFlipHorizontal = false,
+  hostFlipHorizontal = false
 }: UseCompositeCanvasOptions) {
   const animationFrameRef = useRef<number>();
 
@@ -52,20 +56,56 @@ export function useCompositeCanvas({
         compositeCanvas.height = height;
       }
 
-      // Draw background (Guest video)
+      // Draw background (Guest video) with object-cover behavior
       ctx.fillStyle = '#1a1a2e';
       ctx.fillRect(0, 0, width, height);
 
       if (backgroundVideo.readyState >= 2) {
+        // Calculate object-cover dimensions (maintain aspect ratio, crop to fit)
+        const videoWidth = backgroundVideo.videoWidth;
+        const videoHeight = backgroundVideo.videoHeight;
+        const videoAspect = videoWidth / videoHeight;
+        const canvasAspect = width / height;
+
+        let drawWidth: number;
+        let drawHeight: number;
+        let offsetX: number;
+        let offsetY: number;
+
+        if (videoAspect > canvasAspect) {
+          // Video is wider than canvas - fit height, crop width
+          drawHeight = height;
+          drawWidth = height * videoAspect;
+          offsetX = (width - drawWidth) / 2;
+          offsetY = 0;
+        } else {
+          // Video is taller than canvas - fit width, crop height
+          drawWidth = width;
+          drawHeight = width / videoAspect;
+          offsetX = 0;
+          offsetY = (height - drawHeight) / 2;
+        }
+
         ctx.save();
-        ctx.scale(-1, 1); // Mirror
-        ctx.drawImage(backgroundVideo, -width, 0, width, height);
+        if (guestFlipHorizontal) {
+          ctx.scale(-1, 1); // Mirror Guest video
+          ctx.drawImage(backgroundVideo, -offsetX - drawWidth, offsetY, drawWidth, drawHeight);
+        } else {
+          ctx.drawImage(backgroundVideo, offsetX, offsetY, drawWidth, drawHeight);
+        }
         ctx.restore();
       }
 
       // Draw foreground (Host with chroma key)
       if (foregroundCanvas.width > 0 && foregroundCanvas.height > 0) {
-        ctx.drawImage(foregroundCanvas, 0, 0, width, height);
+        ctx.save();
+        if (hostFlipHorizontal) {
+          ctx.scale(-1, 1); // Mirror Host canvas
+          ctx.drawImage(foregroundCanvas, -width, 0, width, height);
+        } else {
+          ctx.drawImage(foregroundCanvas, 0, 0, width, height);
+        }
+        ctx.restore();
       }
 
       animationFrameRef.current = requestAnimationFrame(drawComposite);
@@ -89,7 +129,7 @@ export function useCompositeCanvas({
       }
       backgroundVideo.removeEventListener('loadedmetadata', startComposite);
     };
-  }, [localStream, remoteStream, compositeCanvas, backgroundVideo, foregroundCanvas, width, height]);
+  }, [localStream, remoteStream, compositeCanvas, backgroundVideo, foregroundCanvas, width, height, guestFlipHorizontal, hostFlipHorizontal]);
 
   return { animationFrameRef };
 }

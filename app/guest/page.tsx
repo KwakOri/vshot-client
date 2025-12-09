@@ -14,7 +14,8 @@ import { usePhotoCapture } from "@/hooks/usePhotoCapture";
 import { useSignaling } from "@/hooks/useSignaling";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { useAppStore } from "@/lib/store";
-import { downloadPhotoFrame } from "@/lib/frame-generator";
+import { generatePhotoFrameBlob, downloadPhotoFrameFromBlob } from "@/lib/frame-generator";
+import { ASPECT_RATIOS, type AspectRatio } from "@/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -37,12 +38,24 @@ export default function GuestPage() {
   const [hostSensitivity, setHostSensitivity] = useState(50);
   const [hostSmoothness, setHostSmoothness] = useState(10);
 
+  // Display options (flip horizontal)
+  const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
+  const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
+
+  // Aspect ratio settings (received from Host)
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
+
   // Photo capture state
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showFlash, setShowFlash] = useState(false);
   const [isPhotoSession, setIsPhotoSession] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<number[]>([]);
   const [isGeneratingFrame, setIsGeneratingFrame] = useState(false);
+
+  // Composition state (photo + video)
+  const [isComposing, setIsComposing] = useState(false);
+  const [photoFrameUrl, setPhotoFrameUrl] = useState<string | null>(null);
+  const [videoFrameUrl, setVideoFrameUrl] = useState<string | null>(null);
 
   // Use shared photo capture hook
   const {
@@ -56,6 +69,7 @@ export default function GuestPage() {
   } = usePhotoCapture({
     roomId: store.roomId,
     userId: store.userId,
+    aspectRatio: aspectRatio,
     onFlash: () => {
       setShowFlash(true);
       setTimeout(() => setShowFlash(false), 300);
@@ -79,6 +93,8 @@ export default function GuestPage() {
     enabled: hostChromaKeyEnabled,
     sensitivity: hostSensitivity,
     smoothness: hostSmoothness,
+    width: ASPECT_RATIOS[aspectRatio].width,
+    height: ASPECT_RATIOS[aspectRatio].height,
   });
 
   // Use shared composite canvas hook
@@ -88,6 +104,10 @@ export default function GuestPage() {
     foregroundCanvas: remoteCanvasRef.current,
     localStream,
     remoteStream,
+    width: ASPECT_RATIOS[aspectRatio].width,
+    height: ASPECT_RATIOS[aspectRatio].height,
+    guestFlipHorizontal,
+    hostFlipHorizontal,
   });
 
   // Initialize
@@ -279,22 +299,19 @@ export default function GuestPage() {
 
   // Listen to video frame ready event
   useEffect(() => {
-    const handleVideoFrameReady = (message: any) => {
+    const handleVideoFrameReady = async (message: any) => {
       console.log('[Guest] Video frame ready:', message);
 
       if (message.videoUrl) {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
         const fullUrl = `${API_URL}${message.videoUrl}`;
 
-        console.log('[Guest] Downloading video from:', fullUrl);
+        console.log('[Guest] Video frame URL received:', fullUrl);
 
-        // Auto download video
-        const link = document.createElement('a');
-        link.href = fullUrl;
-        link.download = `vshot-frame-${store.roomId}-${Date.now()}.mp4`;
-        link.click();
-
-        alert('영상 프레임이 다운로드되었습니다! 🎉');
+        // Store video URL and end composition
+        setVideoFrameUrl(fullUrl);
+        setIsComposing(false);
+        console.log('[Guest] Composition complete - photo and video ready for download');
       }
     };
 
@@ -303,7 +320,7 @@ export default function GuestPage() {
     return () => {
       // Cleanup if needed
     };
-  }, [on, store.roomId]);
+  }, [on]);
 
   // Listen to photo session events and chroma key settings
   useEffect(() => {
@@ -348,11 +365,27 @@ export default function GuestPage() {
       }
     };
 
+    const handleHostDisplayOptions = (message: any) => {
+      console.log("[Guest] Received host display options:", message.options);
+      if (message.options) {
+        setHostFlipHorizontal(message.options.flipHorizontal);
+      }
+    };
+
+    const handleAspectRatioSettings = (message: any) => {
+      console.log("[Guest] Received aspect ratio settings:", message.settings);
+      if (message.settings && message.settings.ratio) {
+        setAspectRatio(message.settings.ratio);
+      }
+    };
+
     on("photo-session-start", handlePhotoSessionStart);
     on("countdown-tick", handleCountdownTick);
     on("capture-now", handleCaptureNow);
     on("chromakey-settings", handleChromaKeySettings);
     on("session-settings", handleSessionSettings);
+    on("host-display-options", handleHostDisplayOptions);
+    on("aspect-ratio-settings", handleAspectRatioSettings);
 
     console.log("[Guest] Event handlers registered");
 
@@ -407,40 +440,93 @@ export default function GuestPage() {
       return;
     }
 
-    setIsGeneratingFrame(true);
-    try {
-      await downloadPhotoFrame(photos, selectedPhotos, store.roomId || 'frame');
-      console.log('[Guest] Photo frame generated and downloaded');
-    } catch (error) {
-      console.error('[Guest] Failed to generate frame:', error);
-      alert('프레임 생성에 실패했습니다.');
-    } finally {
-      setIsGeneratingFrame(false);
-    }
-  };
-
-  const handleRequestVideoFrame = () => {
-    if (selectedPhotos.length !== 4) {
-      alert('4장의 사진을 선택해주세요.');
-      return;
-    }
-
     if (!store.roomId) {
       alert('방에 참가하지 않았습니다.');
       return;
     }
 
-    console.log('[Guest] Requesting video frame with photos:', selectedPhotos);
+    // Start composition process
+    setIsComposing(true);
+    setPhotoFrameUrl(null);
+    setVideoFrameUrl(null);
 
-    // Send video frame request to server
-    sendMessage({
-      type: 'video-frame-request',
-      roomId: store.roomId,
-      userId: store.userId,
-      selectedPhotos,
-    });
+    try {
+      // 1. Generate photo frame (blob URL)
+      const selectedPhotoUrls = selectedPhotos.map(index => photos[index]);
+      const photoBlobUrl = await generatePhotoFrameBlob(selectedPhotoUrls, aspectRatio);
+      setPhotoFrameUrl(photoBlobUrl);
+      console.log('[Guest] Photo frame generated');
 
-    alert('Host에게 영상 프레임 생성 요청을 전송했습니다!\n잠시 후 영상이 자동으로 다운로드됩니다.');
+      // 2. Request video frame from Host
+      console.log('[Guest] Requesting video frame with photos:', selectedPhotos);
+      sendMessage({
+        type: 'video-frame-request',
+        roomId: store.roomId,
+        userId: store.userId,
+        selectedPhotos,
+      });
+      console.log('[Guest] Video frame request sent to Host');
+    } catch (error) {
+      console.error('[Guest] Failed to generate photo frame:', error);
+      alert('사진 프레임 생성에 실패했습니다.');
+      setIsComposing(false);
+    }
+  };
+
+  // Download photo frame
+  const handleDownloadPhoto = () => {
+    if (photoFrameUrl && store.roomId) {
+      downloadPhotoFrameFromBlob(photoFrameUrl, store.roomId);
+      console.log('[Guest] Photo frame downloaded');
+    }
+  };
+
+  // Download video frame
+  const handleDownloadVideo = async () => {
+    if (!videoFrameUrl || !store.roomId) return;
+
+    try {
+      // Fetch video as blob to prevent opening in new page
+      const response = await fetch(videoFrameUrl);
+      if (!response.ok) {
+        throw new Error('Failed to fetch video');
+      }
+
+      const blob = await response.blob();
+
+      // Download blob directly
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `vshot-video-${store.roomId}-${Date.now()}.mp4`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      console.log('[Guest] Video frame downloaded');
+    } catch (error) {
+      console.error('[Guest] Failed to download video:', error);
+      alert('영상 다운로드에 실패했습니다.');
+    }
+  };
+
+  // Toggle Guest's display flip option
+  const toggleGuestFlip = () => {
+    const newFlipState = !guestFlipHorizontal;
+    setGuestFlipHorizontal(newFlipState);
+
+    // Broadcast to Host
+    if (store.roomId) {
+      sendMessage({
+        type: 'guest-display-options',
+        roomId: store.roomId,
+        options: {
+          flipHorizontal: newFlipState,
+        },
+      });
+      console.log('[Guest] Sent display options:', { flipHorizontal: newFlipState });
+    }
   };
 
   // Cleanup
@@ -455,23 +541,23 @@ export default function GuestPage() {
   // Step 1: Media selection and start
   if (!mediaReady) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-8">
-        <div className="max-w-md w-full bg-gray-800 rounded-2xl shadow-2xl p-8">
-          <h1 className="text-3xl font-bold mb-6 text-center">Guest 입장</h1>
+      <div className="min-h-screen bg-light text-dark flex items-center justify-center p-8">
+        <div className="max-w-md w-full bg-white border-2 border-neutral rounded-2xl shadow-lg p-8">
+          <h1 className="text-3xl font-bold mb-6 text-center text-dark">Guest 입장</h1>
 
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium mb-3">
+              <label className="block text-sm font-semibold mb-3 text-dark">
                 영상 소스 선택
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setStreamType("camera")}
                   disabled={isCameraActive}
-                  className={`px-4 py-3 rounded-lg font-semibold transition ${
+                  className={`px-4 py-3 rounded-lg font-semibold transition shadow-md ${
                     streamType === "camera"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                      ? "bg-primary text-white"
+                      : "bg-neutral text-dark hover:bg-neutral-dark"
                   } disabled:opacity-50`}
                 >
                   📷 카메라
@@ -479,10 +565,10 @@ export default function GuestPage() {
                 <button
                   onClick={() => setStreamType("screen")}
                   disabled={isCameraActive}
-                  className={`px-4 py-3 rounded-lg font-semibold transition ${
+                  className={`px-4 py-3 rounded-lg font-semibold transition shadow-md ${
                     streamType === "screen"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                      ? "bg-primary text-white"
+                      : "bg-neutral text-dark hover:bg-neutral-dark"
                   } disabled:opacity-50`}
                 >
                   🖥️ 화면 공유
@@ -493,14 +579,14 @@ export default function GuestPage() {
             <button
               onClick={startMedia}
               disabled={isCameraActive}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-lg text-lg disabled:opacity-50 transition"
+              className="w-full bg-secondary hover:bg-secondary-dark text-white font-bold py-4 rounded-lg text-lg disabled:opacity-50 transition shadow-md"
             >
               {isCameraActive
                 ? "시작 중..."
                 : `${streamType === "camera" ? "카메라" : "화면 공유"} 시작`}
             </button>
 
-            <div className="text-xs text-gray-400 text-center">
+            <div className="text-xs text-dark/70 text-center font-medium">
               먼저 영상 소스를 선택하고 시작해주세요
             </div>
           </div>
@@ -512,33 +598,34 @@ export default function GuestPage() {
   // Step 2: Room ID input with preview
   if (!isJoined) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="min-h-screen bg-light text-dark p-8">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold mb-6 text-center">Guest 입장</h1>
+          <h1 className="text-3xl font-bold mb-6 text-center text-dark">Guest 입장</h1>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Video preview */}
-            <div className="bg-gray-800 rounded-2xl p-6">
-              <h2 className="text-xl font-semibold mb-4">미리보기</h2>
-              <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
+            <div className="bg-white border-2 border-neutral rounded-2xl p-6 shadow-lg">
+              <h2 className="text-xl font-semibold mb-4 text-dark">미리보기</h2>
+              <div className="relative bg-black rounded-lg overflow-hidden aspect-video border-2 border-neutral">
                 <video
                   ref={localVideoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{ transform: guestFlipHorizontal ? 'scaleX(-1)' : 'scaleX(1)' }}
                 />
               </div>
-              <div className="mt-3 text-sm text-green-400 text-center">
+              <div className="mt-3 text-sm text-primary text-center font-semibold">
                 ✓ {streamType === "camera" ? "카메라" : "화면 공유"} 활성화됨
               </div>
             </div>
 
             {/* Room join form */}
-            <div className="bg-gray-800 rounded-2xl p-6 flex flex-col justify-center">
+            <div className="bg-white border-2 border-neutral rounded-2xl p-6 flex flex-col justify-center shadow-lg">
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label className="block text-sm font-semibold mb-2 text-dark">
                     Room ID
                   </label>
                   <input
@@ -549,7 +636,7 @@ export default function GuestPage() {
                     }
                     placeholder="예: ABC123"
                     maxLength={6}
-                    className="w-full px-4 py-3 bg-gray-700 rounded-lg text-white text-center text-2xl font-bold tracking-widest"
+                    className="w-full px-4 py-3 bg-neutral/40 border-2 border-neutral rounded-lg text-dark text-center text-2xl font-bold tracking-widest focus:outline-none focus:border-primary"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         joinRoom();
@@ -561,12 +648,12 @@ export default function GuestPage() {
                 <button
                   onClick={joinRoom}
                   disabled={!roomIdInput.trim()}
-                  className="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-4 rounded-lg text-lg disabled:opacity-50 transition"
+                  className="w-full bg-secondary hover:bg-secondary-dark text-white font-bold py-4 rounded-lg text-lg disabled:opacity-50 transition shadow-md"
                 >
                   입장하기
                 </button>
 
-                <div className="text-xs text-gray-400 text-center">
+                <div className="text-xs text-dark/70 text-center font-medium">
                   Host로부터 받은 Room ID를 입력하세요
                 </div>
               </div>
@@ -579,17 +666,17 @@ export default function GuestPage() {
 
   // Main screen
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
+    <div className="min-h-screen bg-light text-dark p-8">
       <FlashOverlay show={showFlash} />
 
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-4">Guest (Camera)</h1>
+          <h1 className="text-3xl font-bold mb-4 text-dark">Guest (Camera)</h1>
           <div className="space-y-3">
             {store.roomId && (
-              <div className="bg-pink-600 px-6 py-3 rounded-lg inline-block">
-                <span className="text-sm opacity-80">Room ID:</span>
-                <span className="text-2xl font-bold ml-2">{store.roomId}</span>
+              <div className="bg-secondary px-6 py-3 rounded-lg inline-block shadow-md">
+                <span className="text-sm opacity-90 text-white">Room ID:</span>
+                <span className="text-2xl font-bold ml-2 text-white">{store.roomId}</span>
               </div>
             )}
             <ConnectionStatus
@@ -602,18 +689,35 @@ export default function GuestPage() {
         </div>
 
         {/* Controls */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <div className="flex flex-wrap gap-4 items-center">
-            {remoteStream && (
-              <div className="text-sm text-gray-400">
-                Host 크로마키: {hostChromaKeyEnabled ? "ON" : "OFF"}
-                {hostChromaKeyEnabled &&
-                  ` (민감도: ${hostSensitivity}, 부드러움: ${hostSmoothness})`}
-              </div>
-            )}
-            {!remoteStream && (
-              <div className="text-sm text-gray-400">Host를 기다리는 중...</div>
-            )}
+        <div className="bg-white border-2 border-neutral rounded-lg p-6 mb-6 shadow-md">
+          <div className="flex flex-wrap gap-4 items-center justify-between">
+            <div className="flex flex-wrap gap-4 items-center">
+              {remoteStream && (
+                <div className="text-sm text-dark/70 font-medium">
+                  Host 크로마키: {hostChromaKeyEnabled ? "ON" : "OFF"}
+                  {hostChromaKeyEnabled &&
+                    ` (민감도: ${hostSensitivity}, 부드러움: ${hostSmoothness})`}
+                </div>
+              )}
+              {!remoteStream && (
+                <div className="text-sm text-dark/70 font-medium">Host를 기다리는 중...</div>
+              )}
+            </div>
+
+            {/* Display options */}
+            <div className="flex gap-2">
+              <button
+                onClick={toggleGuestFlip}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                  guestFlipHorizontal
+                    ? 'bg-primary hover:bg-primary-dark text-white shadow-md'
+                    : 'bg-neutral hover:bg-neutral-dark text-dark'
+                }`}
+                title="내 화면 좌우 반전"
+              >
+                {guestFlipHorizontal ? '↔️ Guest 반전 ON' : '↔️ Guest 반전 OFF'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -632,34 +736,45 @@ export default function GuestPage() {
           />
 
           {/* Main view - Show own video when alone, composite when connected */}
-          <div className="bg-gray-800 rounded-lg p-4">
-            <h2 className="text-xl font-semibold mb-4">
+          <div className="bg-white border-2 border-neutral rounded-lg p-6 shadow-md">
+            <h2 className="text-xl font-semibold mb-4 text-dark">
               {remoteStream ? "합성 화면 (Guest + Host)" : "내 영상 (Guest)"}
             </h2>
-            <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
-              {/* Show own video when alone */}
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className={`absolute inset-0 w-full h-full object-cover scale-x-[-1] transition-opacity ${
-                  remoteStream ? "opacity-0" : "opacity-100"
-                }`}
-              />
+            {/* 1:1 Container to prevent layout shift */}
+            <div className="relative bg-black rounded-lg overflow-hidden aspect-square">
+              {/* Canvas/Video container with dynamic aspect ratio */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                {/* Show own video when alone */}
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`absolute max-w-full max-h-full transition-opacity ${
+                    remoteStream ? "opacity-0" : "opacity-100"
+                  }`}
+                  style={{
+                    transform: guestFlipHorizontal ? 'scaleX(-1)' : 'scaleX(1)',
+                    aspectRatio: aspectRatio.replace(':', '/'),
+                  }}
+                />
 
-              {/* Show composite when connected */}
-              <canvas
-                ref={compositeCanvasRef}
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity ${
-                  !remoteStream ? "opacity-0" : "opacity-100"
-                }`}
-              />
+                {/* Show composite when connected */}
+                <canvas
+                  ref={compositeCanvasRef}
+                  className={`absolute max-w-full max-h-full transition-opacity ${
+                    !remoteStream ? "opacity-0" : "opacity-100"
+                  }`}
+                  style={{
+                    aspectRatio: aspectRatio.replace(':', '/'),
+                  }}
+                />
+              </div>
 
               <CountdownOverlay countdown={countdown} />
 
               {!isCameraActive && (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                <div className="absolute inset-0 flex items-center justify-center text-dark/50 font-medium bg-neutral/20">
                   카메라를 준비하는 중...
                 </div>
               )}
@@ -668,21 +783,21 @@ export default function GuestPage() {
 
           {/* Photo status panel */}
           {remoteStream && (
-            <div className="bg-gray-800 rounded-lg p-4 mt-6">
-              <h2 className="text-xl font-semibold mb-4">사진 촬영</h2>
+            <div className="bg-white border-2 border-neutral rounded-lg p-6 mt-6 shadow-md">
+              <h2 className="text-xl font-semibold mb-4 text-dark">사진 촬영</h2>
 
               <div className="mb-4">
-                <div className="text-lg mb-2">촬영: {photoCount} / 8</div>
+                <div className="text-lg mb-2 text-dark font-semibold">촬영: {photoCount} / 8</div>
                 {isPhotoSession ? (
-                  <div className="px-6 py-3 bg-yellow-600 rounded-lg text-center font-semibold">
+                  <div className="px-6 py-3 bg-secondary text-white rounded-lg text-center font-semibold shadow-md">
                     촬영 중...
                   </div>
                 ) : photoCount >= 8 ? (
-                  <div className="px-6 py-3 bg-green-600 rounded-lg text-center font-semibold">
+                  <div className="px-6 py-3 bg-primary text-white rounded-lg text-center font-semibold shadow-md">
                     촬영 완료!
                   </div>
                 ) : (
-                  <div className="px-6 py-3 bg-gray-700 rounded-lg text-center text-gray-400">
+                  <div className="px-6 py-3 bg-neutral/40 border border-neutral rounded-lg text-center text-dark/70 font-medium">
                     Host가 촬영을 시작하면
                     <br />
                     자동으로 시작됩니다
@@ -704,44 +819,100 @@ export default function GuestPage() {
             maxSelection={4}
             readOnly={false}
             role="guest"
-            isGenerating={isGeneratingFrame}
+            isGenerating={isComposing}
           />
 
-          {/* Video Frame Request */}
+          {/* Composition Status and Download Section */}
           {selectedPhotos.length === 4 && photos.length >= 8 && (
-            <div className="bg-gradient-to-r from-pink-900/50 to-purple-900/50 rounded-lg p-6 mt-6 border-2 border-pink-600">
+            <div className="bg-primary/10 rounded-lg p-6 mt-6 border-2 border-primary shadow-md">
               <div className="flex items-start gap-4">
                 <div className="text-4xl">🎬</div>
                 <div className="flex-1">
-                  <h2 className="text-2xl font-semibold mb-2">영상 프레임 생성</h2>
-                  <p className="text-gray-300 mb-4">
-                    선택한 4개의 사진에 해당하는 영상을 2x2 그리드로 합성하여 MP4로 제공합니다.
-                  </p>
-                  <div className="bg-gray-800/50 rounded-lg p-4 space-y-2 mb-4">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-pink-400">1.</span>
-                      <span>Host가 촬영한 영상을 자동으로 분할</span>
+                  <h2 className="text-2xl font-semibold mb-2 text-dark">사진 및 영상 생성</h2>
+
+                  {/* Loading State */}
+                  {isComposing && (
+                    <div className="bg-white rounded-lg p-6 border-2 border-secondary">
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className="w-12 h-12 border-4 border-secondary border-t-transparent rounded-full animate-spin"></div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-dark">합성 진행 중...</h3>
+                          <p className="text-sm text-dark/70">사진 및 영상을 생성하고 있습니다. 잠시만 기다려주세요.</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className={photoFrameUrl ? "text-primary" : "text-dark/40"}>
+                            {photoFrameUrl ? "✅" : "⏳"}
+                          </span>
+                          <span className={photoFrameUrl ? "text-dark font-semibold" : "text-dark/70"}>
+                            사진 프레임 생성 {photoFrameUrl ? "완료" : "중..."}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-dark/40">⏳</span>
+                          <span className="text-dark/70">영상 프레임 생성 중...</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-pink-400">2.</span>
-                      <span>선택한 4개 구간을 2x2 그리드로 합성</span>
+                  )}
+
+                  {/* Complete State - Download Buttons */}
+                  {!isComposing && photoFrameUrl && videoFrameUrl && (
+                    <div className="bg-white rounded-lg p-6 border-2 border-primary">
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="text-3xl">✅</span>
+                        <div>
+                          <h3 className="text-lg font-semibold text-dark">생성 완료!</h3>
+                          <p className="text-sm text-dark/70">사진과 영상이 준비되었습니다. 다운로드해주세요.</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button
+                          onClick={handleDownloadPhoto}
+                          className="px-6 py-4 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold text-lg transition shadow-md flex items-center justify-center gap-2"
+                        >
+                          <span>📸</span>
+                          <span>사진 다운로드</span>
+                        </button>
+                        <button
+                          onClick={handleDownloadVideo}
+                          className="px-6 py-4 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold text-lg transition shadow-md flex items-center justify-center gap-2"
+                        >
+                          <span>🎥</span>
+                          <span>동영상 다운로드</span>
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-pink-400">3.</span>
-                      <span>MP4 형식으로 변환 후 자동 다운로드</span>
+                  )}
+
+                  {/* Initial State - Info */}
+                  {!isComposing && !photoFrameUrl && !videoFrameUrl && (
+                    <div>
+                      <p className="text-dark/70 mb-4">
+                        선택한 4개의 사진과 영상을 2x2 그리드로 합성하여 제공합니다.
+                      </p>
+                      <div className="bg-neutral/30 border border-neutral rounded-lg p-4 space-y-2">
+                        <div className="flex items-center gap-2 text-sm text-dark">
+                          <span className="text-primary font-bold">1.</span>
+                          <span>사진 프레임을 2x2 그리드로 생성</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-dark">
+                          <span className="text-primary font-bold">2.</span>
+                          <span>Host에게 영상 합성 요청</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-dark">
+                          <span className="text-primary font-bold">3.</span>
+                          <span>생성 완료 후 각각 다운로드</span>
+                        </div>
+                      </div>
+                      <div className="mt-4 p-3 bg-secondary/10 border border-secondary rounded-lg">
+                        <p className="text-xs text-dark/80 font-medium">
+                          ℹ️ 위의 "프레임 생성하기" 버튼을 클릭하면 사진과 영상이 자동으로 생성됩니다.
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    onClick={handleRequestVideoFrame}
-                    className="w-full px-6 py-4 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 rounded-lg font-semibold text-lg transition shadow-lg transform hover:scale-105"
-                  >
-                    📹 영상 프레임 요청하기
-                  </button>
-                  <div className="mt-3 p-3 bg-blue-900/30 border border-blue-600/50 rounded-lg">
-                    <p className="text-xs text-blue-200">
-                      ℹ️ 요청 후 Host에서 자동으로 합성이 시작됩니다. 합성이 완료되면 영상이 자동으로 다운로드됩니다.
-                    </p>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -750,9 +921,9 @@ export default function GuestPage() {
 
         {/* Usage info */}
         {!remoteStream && isCameraActive && (
-          <div className="mt-8 bg-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">안내</h2>
-            <ul className="list-disc list-inside space-y-2 text-gray-300">
+          <div className="mt-8 bg-white border-2 border-neutral rounded-lg p-6 shadow-md">
+            <h2 className="text-xl font-semibold mb-4 text-dark">안내</h2>
+            <ul className="list-disc list-inside space-y-2 text-dark/80">
               <li>Host가 연결되면 자동으로 영상이 표시됩니다</li>
               <li>
                 Host의 크로마키를 활성화하여 녹색 배경을 제거할 수 있습니다

@@ -1,5 +1,6 @@
 // Import chroma key functionality from canvas-chromakey module
 import { applyChromaKeyToCanvas, type ChromaKeySettings } from './canvas-chromakey';
+import { getApiHeaders } from './api';
 
 export const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -9,7 +10,14 @@ export const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
 // Fetch ICE servers from server (including TURN if configured)
 export async function fetchIceServers(apiUrl: string): Promise<RTCIceServer[]> {
   try {
-    const response = await fetch(`${apiUrl}/api/ice-servers`);
+    const response = await fetch(`${apiUrl}/api/ice-servers`, {
+      headers: getApiHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ICE servers: ${response.status}`);
+    }
+
     const data = await response.json();
     console.log('[WebRTC] Fetched ICE servers:', data.iceServers);
     return data.iceServers || DEFAULT_ICE_SERVERS;

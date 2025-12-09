@@ -18,14 +18,22 @@
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* VShot Theme Colors */
+  --primary: #FC712B;
+  --secondary: #FD9319;
+  --dark: #1B1612;
+  --light: #F3E9E7;
+  --neutral: #E2D4C4;
+
+  /* Default theme (Light mode) */
+  --background: #F3E9E7;
+  --foreground: #1B1612;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1B1612;
+    --foreground: #F3E9E7;
   }
 }
 

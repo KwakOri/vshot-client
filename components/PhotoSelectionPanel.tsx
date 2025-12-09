@@ -1,3 +1,5 @@
+import { Image } from 'lucide-react';
+
 interface PhotoSelectionPanelProps {
   photos: string[];
   selectedPhotos: number[];
@@ -32,16 +34,19 @@ export function PhotoSelectionPanel({
   const selectionCount = displaySelections.length;
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 mt-6">
-      <h2 className="text-2xl font-semibold mb-2">
-        {readOnly ? 'Guest의 사진 선택' : '사진 선택'}
-      </h2>
-      <p className="text-gray-400 mb-4">
+    <div className="bg-neutral/30 border-2 border-neutral rounded-lg p-6 mt-6">
+      <div className="flex items-center gap-2 mb-2">
+        <Image size={24} className="text-primary" />
+        <h2 className="text-2xl font-semibold text-dark">
+          {readOnly ? 'Guest의 사진 선택' : '사진 선택'}
+        </h2>
+      </div>
+      <p className="text-dark/70 mb-4">
         {readOnly ? (
           <>
             Guest가 선택한 사진을 확인하세요
             {selectionCount > 0 && (
-              <span className="ml-2 text-pink-400">
+              <span className="ml-2 text-primary font-semibold">
                 ({selectionCount} / {maxSelection} 선택됨)
               </span>
             )}
@@ -62,12 +67,12 @@ export function PhotoSelectionPanel({
             <div
               key={index}
               onClick={() => canSelect && onPhotoSelect(index)}
-              className={`relative aspect-[4/3] rounded-lg overflow-hidden transition-all ${
+              className={`relative aspect-[4/3] rounded-lg overflow-hidden transition-all border-2 ${
                 isSelected
-                  ? 'ring-4 ring-pink-500 scale-105'
+                  ? 'ring-4 ring-primary scale-105 border-primary'
                   : readOnly
-                  ? 'opacity-50'
-                  : 'hover:ring-2 hover:ring-gray-500 hover:scale-102 cursor-pointer'
+                  ? 'opacity-50 border-neutral'
+                  : 'hover:ring-2 hover:ring-secondary hover:scale-102 cursor-pointer border-neutral-dark'
               }`}
             >
               <img
@@ -78,13 +83,13 @@ export function PhotoSelectionPanel({
 
               {/* Selection indicator */}
               {isSelected && (
-                <div className="absolute top-2 right-2 w-8 h-8 bg-pink-500 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
+                <div className="absolute top-2 right-2 w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-bold shadow-lg">
                   {selectionOrder}
                 </div>
               )}
 
               {/* Photo number */}
-              <div className="absolute bottom-2 left-2 px-2 py-1 bg-black bg-opacity-50 rounded text-sm">
+              <div className="absolute bottom-2 left-2 px-2 py-1 bg-dark/70 rounded text-sm text-light font-medium">
                 #{index + 1}
               </div>
             </div>
@@ -98,9 +103,12 @@ export function PhotoSelectionPanel({
           <button
             onClick={onGenerateFrame}
             disabled={isGenerating}
-            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold text-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-6 py-4 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold text-lg transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isGenerating ? '프레임 생성 중...' : '프레임 생성하기'}
+            {isGenerating
+              ? (role === 'guest' ? '사진 및 영상 생성 중...' : '프레임 생성 중...')
+              : (role === 'guest' ? '사진 및 영상 생성하기' : '프레임 생성하기')
+            }
           </button>
         </div>
       )}

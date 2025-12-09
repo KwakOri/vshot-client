@@ -108,6 +108,10 @@ export async function composeVideoGrid(
       '-crf', '23', // Quality (lower = better, 23 is good default)
       '-r', config.frameRate.toString(), // Frame rate
       '-pix_fmt', 'yuv420p', // Pixel format for compatibility
+      '-movflags', '+faststart', // Enable streaming (moov atom at start)
+      '-metadata', 'title=VShot Video Grid',
+      '-metadata', 'encoder=FFmpeg.wasm',
+      '-metadata', 'comment=Created with VShot',
       outputFileName,
     ]);
 
@@ -117,7 +121,7 @@ export async function composeVideoGrid(
 
     // Read output file
     const data = await ffmpeg.readFile(outputFileName);
-    const blob = new Blob([data], { type: 'video/mp4' });
+    const blob = new Blob([data as BlobPart], { type: 'video/mp4' });
 
     console.log('[VideoComposer] Output blob created:', {
       size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
@@ -218,6 +222,10 @@ export async function composeTwoVideos(
       '-crf', '23',
       '-r', config.frameRate.toString(),
       '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart', // Enable streaming
+      '-metadata', 'title=VShot Video Side-by-Side',
+      '-metadata', 'encoder=FFmpeg.wasm',
+      '-metadata', 'comment=Created with VShot',
       outputFileName,
     ]);
 
@@ -227,7 +235,7 @@ export async function composeTwoVideos(
 
     // Read output file
     const data = await ffmpeg.readFile(outputFileName);
-    const blob = new Blob([data], { type: 'video/mp4' });
+    const blob = new Blob([data as BlobPart], { type: 'video/mp4' });
 
     console.log('[VideoComposer] Output blob created:', {
       size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
@@ -252,7 +260,10 @@ export function downloadComposedVideo(blob: Blob, filename: string): void {
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
   URL.revokeObjectURL(url);
   console.log('[VideoComposer] Video downloaded:', filename);
 }
@@ -293,11 +304,15 @@ export async function convertToMP4(
       '-preset', 'fast',
       '-crf', '23',
       '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-metadata', 'title=VShot Video',
+      '-metadata', 'encoder=FFmpeg.wasm',
+      '-metadata', 'comment=Created with VShot',
       outputFile,
     ]);
 
     const data = await ffmpeg.readFile(outputFile);
-    const blob = new Blob([data], { type: 'video/mp4' });
+    const blob = new Blob([data as BlobPart], { type: 'video/mp4' });
 
     onProgress?.('완료!');
     console.log('[VideoComposer] Conversion complete:', blob.size, 'bytes');

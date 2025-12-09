@@ -134,7 +134,7 @@ export async function splitVideo(
       // Read output file (now MP4)
       const actualOutputFile = outputFileName.replace('.webm', '.mp4');
       const data = await ffmpeg.readFile(actualOutputFile);
-      const blob = new Blob([data], { type: 'video/mp4' });
+      const blob = new Blob([data as BlobPart], { type: 'video/mp4' });
       const url = URL.createObjectURL(blob);
 
       results.push({
@@ -173,7 +173,10 @@ export function downloadSegments(segments: VideoSegment[], roomId: string): void
     const link = document.createElement('a');
     link.href = segment.url;
     link.download = `vshot-video-${roomId}-${segment.photoNumber}-${timestamp}.webm`;
+    link.style.display = 'none';
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
   });
 }
 

@@ -7,6 +7,8 @@ interface UseChromaKeyOptions {
   enabled: boolean;
   sensitivity: number;
   smoothness: number;
+  width?: number;
+  height?: number;
 }
 
 /**
@@ -19,7 +21,9 @@ export function useChromaKey({
   stream,
   enabled,
   sensitivity,
-  smoothness
+  smoothness,
+  width = 1920,
+  height = 1080
 }: UseChromaKeyOptions) {
   const animationFrameRef = useRef<number>();
 
@@ -46,14 +50,41 @@ export function useChromaKey({
         return;
       }
 
-      // Set canvas size to match video
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+      // Set canvas size to desired aspect ratio
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
       }
 
-      // Draw video frame to canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Clear canvas with transparent background
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw video with object-cover behavior (maintain aspect ratio, crop to fit)
+      const videoWidth = video.videoWidth;
+      const videoHeight = video.videoHeight;
+      const videoAspect = videoWidth / videoHeight;
+      const canvasAspect = width / height;
+
+      let drawWidth: number;
+      let drawHeight: number;
+      let offsetX: number;
+      let offsetY: number;
+
+      if (videoAspect > canvasAspect) {
+        // Video is wider than canvas - fit height, crop width
+        drawHeight = height;
+        drawWidth = height * videoAspect;
+        offsetX = (width - drawWidth) / 2;
+        offsetY = 0;
+      } else {
+        // Video is taller than canvas - fit width, crop height
+        drawWidth = width;
+        drawHeight = width / videoAspect;
+        offsetX = 0;
+        offsetY = (height - drawHeight) / 2;
+      }
+
+      ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
 
       // Apply chroma key if enabled
       if (enabled) {
@@ -101,7 +132,7 @@ export function useChromaKey({
       }
       video.removeEventListener('loadedmetadata', startAnimation);
     };
-  }, [stream, enabled, sensitivity, smoothness, videoElement, canvasElement]);
+  }, [stream, enabled, sensitivity, smoothness, videoElement, canvasElement, width, height]);
 
   return { animationFrameRef };
 }

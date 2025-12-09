@@ -1,8 +1,11 @@
 import { useState, useCallback } from 'react';
+import { ASPECT_RATIOS, type AspectRatio } from '@/types';
+import { getApiHeaders } from '@/lib/api';
 
 interface UsePhotoCaptureOptions {
   roomId: string | null;
   userId: string;
+  aspectRatio: AspectRatio;
   onFlash?: () => void;
 }
 
@@ -16,7 +19,7 @@ interface CapturePhotoParams {
  * Shared hook for photo capture and upload functionality
  * Used by both host and guest pages
  */
-export function usePhotoCapture({ roomId, userId, onFlash }: UsePhotoCaptureOptions) {
+export function usePhotoCapture({ roomId, userId, aspectRatio, onFlash }: UsePhotoCaptureOptions) {
   const [photoCount, setPhotoCount] = useState(0);
   const [photos, setPhotos] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -36,19 +39,77 @@ export function usePhotoCapture({ roomId, userId, onFlash }: UsePhotoCaptureOpti
 
     try {
       let photoData: string;
+      const targetRatio = ASPECT_RATIOS[aspectRatio];
+      const targetWidth = targetRatio.width;
+      const targetHeight = targetRatio.height;
 
       if (isCanvas && canvasOrVideo instanceof HTMLCanvasElement) {
-        // Capture from canvas
-        photoData = canvasOrVideo.toDataURL('image/png');
+        // Capture from canvas - canvas should already be at correct aspect ratio
+        // But we'll resize to target dimensions to ensure consistency
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = targetWidth;
+        tempCanvas.height = targetHeight;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        if (tempCtx) {
+          // Use cover mode to fill the entire target area
+          const sourceAspect = canvasOrVideo.width / canvasOrVideo.height;
+          const targetAspect = targetWidth / targetHeight;
+
+          let sx = 0, sy = 0, sWidth = canvasOrVideo.width, sHeight = canvasOrVideo.height;
+
+          if (sourceAspect > targetAspect) {
+            // Source is wider - crop sides
+            sWidth = canvasOrVideo.height * targetAspect;
+            sx = (canvasOrVideo.width - sWidth) / 2;
+          } else {
+            // Source is taller - crop top/bottom
+            sHeight = canvasOrVideo.width / targetAspect;
+            sy = (canvasOrVideo.height - sHeight) / 2;
+          }
+
+          tempCtx.drawImage(
+            canvasOrVideo,
+            sx, sy, sWidth, sHeight,
+            0, 0, targetWidth, targetHeight
+          );
+
+          photoData = tempCanvas.toDataURL('image/png');
+        } else {
+          throw new Error('Could not get canvas context');
+        }
       } else if (canvasOrVideo instanceof HTMLVideoElement) {
-        // Capture from video
+        // Capture from video with aspect ratio correction
         const canvas = document.createElement('canvas');
-        canvas.width = canvasOrVideo.videoWidth || 1920;
-        canvas.height = canvasOrVideo.videoHeight || 1080;
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
         const ctx = canvas.getContext('2d');
 
         if (ctx) {
-          ctx.drawImage(canvasOrVideo, 0, 0, canvas.width, canvas.height);
+          const videoWidth = canvasOrVideo.videoWidth || 1920;
+          const videoHeight = canvasOrVideo.videoHeight || 1080;
+          const videoAspect = videoWidth / videoHeight;
+          const targetAspect = targetWidth / targetHeight;
+
+          // Use cover mode: crop video to fit target aspect ratio
+          let sx = 0, sy = 0, sWidth = videoWidth, sHeight = videoHeight;
+
+          if (videoAspect > targetAspect) {
+            // Video is wider than target - crop sides
+            sWidth = videoHeight * targetAspect;
+            sx = (videoWidth - sWidth) / 2;
+          } else {
+            // Video is taller than target - crop top/bottom
+            sHeight = videoWidth / targetAspect;
+            sy = (videoHeight - sHeight) / 2;
+          }
+
+          ctx.drawImage(
+            canvasOrVideo,
+            sx, sy, sWidth, sHeight,
+            0, 0, targetWidth, targetHeight
+          );
+
           photoData = canvas.toDataURL('image/png');
         } else {
           throw new Error('Could not get canvas context');
@@ -57,20 +118,19 @@ export function usePhotoCapture({ roomId, userId, onFlash }: UsePhotoCaptureOpti
         throw new Error('Invalid canvas or video element');
       }
 
-      console.log(`[PhotoCapture] Captured photo ${photoNumber}, uploading to server...`);
+      console.log(`[PhotoCapture] Captured photo ${photoNumber} at ${targetWidth}x${targetHeight}, uploading to server...`);
 
       // Upload to server
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const response = await fetch(`${API_URL}/api/photo/upload`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getApiHeaders(),
         body: JSON.stringify({
           roomId,
           userId,
           photoNumber,
-          imageData: photoData
+          imageData: photoData,
+          aspectRatio: aspectRatio
         })
       });
 
@@ -88,7 +148,7 @@ export function usePhotoCapture({ roomId, userId, onFlash }: UsePhotoCaptureOpti
       console.error(`[PhotoCapture] Failed to upload photo ${photoNumber}:`, error);
       throw error;
     }
-  }, [roomId, userId, onFlash]);
+  }, [roomId, userId, aspectRatio, onFlash]);
 
   const resetCapture = useCallback(() => {
     setPhotoCount(0);

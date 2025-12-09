@@ -19,6 +19,11 @@ export type SignalMessage =
   | { type: 'photo-select'; roomId: string; userId: string; selectedIndices: number[] }
   | { type: 'photo-select-sync'; roomId: string; userId: string; role: 'host' | 'guest'; selectedIndices: number[] }
   | { type: 'chromakey-settings'; roomId: string; settings: ChromaKeySettings }
+  | { type: 'video-frame-request'; roomId: string; userId: string; selectedPhotos: number[] }
+  | { type: 'video-frame-ready'; roomId: string; videoUrl: string }
+  | { type: 'host-display-options'; roomId: string; options: { flipHorizontal: boolean } }
+  | { type: 'guest-display-options'; roomId: string; options: { flipHorizontal: boolean } }
+  | { type: 'aspect-ratio-settings'; roomId: string; settings: AspectRatioSettings }
   | { type: 'error'; message: string };
 
 export interface ChromaKeySettings {
@@ -32,6 +37,22 @@ export interface SessionSettings {
   recordingDuration: number; // seconds (default: 10)
   captureInterval: number; // seconds between photos (default: 3)
 }
+
+export type AspectRatio = '16:9' | '4:3' | '3:4' | '9:16' | '1:1';
+
+export interface AspectRatioSettings {
+  ratio: AspectRatio;
+  width: number;
+  height: number;
+}
+
+export const ASPECT_RATIOS: Record<AspectRatio, { width: number; height: number; label: string }> = {
+  '16:9': { width: 1920, height: 1080, label: '16:9 (가로)' },
+  '4:3': { width: 1440, height: 1080, label: '4:3 (표준)' },
+  '3:4': { width: 1080, height: 1440, label: '3:4 (세로)' },
+  '9:16': { width: 1080, height: 1920, label: '9:16 (세로)' },
+  '1:1': { width: 1080, height: 1080, label: '1:1 (정사각형)' },
+};
 
 export interface CapturedPhoto {
   photoNumber: number;
