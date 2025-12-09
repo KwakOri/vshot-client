@@ -25,7 +25,7 @@ export function useChromaKey({
   width = 1920,
   height = 1080
 }: UseChromaKeyOptions) {
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const video = videoElement;

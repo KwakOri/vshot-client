@@ -27,7 +27,7 @@ export function useCompositeCanvas({
   guestFlipHorizontal = false,
   hostFlipHorizontal = false
 }: UseCompositeCanvasOptions) {
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (!localStream || !remoteStream || !backgroundVideo || !foregroundCanvas || !compositeCanvas) {
