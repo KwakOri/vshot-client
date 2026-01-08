@@ -4,3 +4,7 @@ export { CountdownOverlay } from './CountdownOverlay';
 export { ProcessingIndicator } from './ProcessingIndicator';
 export { PhotoThumbnailGrid } from './PhotoThumbnailGrid';
 export { PhotoSelectionPanel } from './PhotoSelectionPanel';
+export { VideoDisplayPanel } from './VideoDisplayPanel';
+export { SegmentedBar } from './SegmentedBar';
+export { PhotoCounter } from './PhotoCounter';
+export { SettingsPanel } from './SettingsPanel';

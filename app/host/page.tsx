@@ -2,24 +2,29 @@
 
 import {
   ConnectionStatus,
-  CountdownOverlay,
   FlashOverlay,
+  PhotoCounter,
   PhotoSelectionPanel,
-  PhotoThumbnailGrid,
   ProcessingIndicator,
+  SegmentedBar,
+  SettingsPanel,
+  VideoDisplayPanel,
 } from "@/components";
 import { useChromaKey } from "@/hooks/useChromaKey";
 import { useCompositeCanvas } from "@/hooks/useCompositeCanvas";
 import { usePhotoCapture } from "@/hooks/usePhotoCapture";
 import { useSignaling } from "@/hooks/useSignaling";
 import { useWebRTC } from "@/hooks/useWebRTC";
-import { useAppStore } from "@/lib/store";
 import { getApiHeadersMultipart } from "@/lib/api";
 import { downloadPhotoFrame } from "@/lib/frame-generator";
-import { VideoRecorder, downloadVideo } from "@/lib/video-recorder";
-import { splitVideo, downloadSegments, cleanupSegments, type VideoSegment } from "@/lib/video-splitter";
-import { composeVideoGrid, downloadComposedVideo } from "@/lib/video-composer";
-import { composeVideoWithWebGL, downloadWebGLComposedVideo, type VideoSource } from "@/lib/webgl-video-composer";
+import { useAppStore } from "@/lib/store";
+import { VideoRecorder } from "@/lib/video-recorder";
+import { type VideoSegment } from "@/lib/video-splitter";
+import {
+  composeVideoWithWebGL,
+  downloadWebGLComposedVideo,
+  type VideoSource,
+} from "@/lib/webgl-video-composer";
 import { ASPECT_RATIOS, type AspectRatio } from "@/types";
 import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -31,7 +36,7 @@ export default function HostPage() {
     useWebRTC({ sendMessage, on });
 
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [sourceType, setSourceType] = useState<'camera' | 'screen'>('camera'); // Track source type
+  const [sourceType, setSourceType] = useState<"camera" | "screen">("camera"); // Track source type
   const [chromaKeyEnabled, setChromaKeyEnabled] = useState(true); // Default ON for VR
   const [sensitivity, setSensitivity] = useState(50);
   const [smoothness, setSmoothness] = useState(10);
@@ -41,7 +46,7 @@ export default function HostPage() {
   const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
 
   // Aspect ratio settings (must be declared before usePhotoCapture)
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("3:4");
 
   // Photo capture state
   const [isCapturing, setIsCapturing] = useState(false);
@@ -78,12 +83,17 @@ export default function HostPage() {
 
   // Video recording state - Individual segments per photo
   const [recordedSegments, setRecordedSegments] = useState<VideoSegment[]>([]);
-  const [currentlyRecording, setCurrentlyRecording] = useState<number | null>(null); // photoNumber being recorded
+  const [currentlyRecording, setCurrentlyRecording] = useState<number | null>(
+    null
+  ); // photoNumber being recorded
 
   // Video composition state
-  const [composedVideo, setComposedVideo] = useState<{ blob: Blob; url: string } | null>(null);
+  const [composedVideo, setComposedVideo] = useState<{
+    blob: Blob;
+    url: string;
+  } | null>(null);
   const [isComposing, setIsComposing] = useState(false);
-  const [composeProgress, setComposeProgress] = useState('');
+  const [composeProgress, setComposeProgress] = useState("");
 
   // Timer settings
   const [recordingDuration, setRecordingDuration] = useState(10); // seconds
@@ -112,40 +122,55 @@ export default function HostPage() {
     height: ASPECT_RATIOS[aspectRatio].height,
     guestFlipHorizontal,
     hostFlipHorizontal,
+    blurGuest: true, // Blur guest video on host screen
   });
 
   // Initialize video recorder once
   useEffect(() => {
     if (!videoRecorderRef.current) {
-      console.log('[Host] Creating VideoRecorder with canvas getter');
-      videoRecorderRef.current = new VideoRecorder(() => compositeCanvasRef.current);
-      console.log('[Host] VideoRecorder initialized with getter function');
+      videoRecorderRef.current = new VideoRecorder(
+        () => compositeCanvasRef.current
+      );
     }
-  }, []); // Initialize only once
+  }, []);
 
-  // Initialize
+  // Initialize AFTER Zustand persist hydration is complete
   useEffect(() => {
+    if (!store._hasHydrated) return;
     if (initializedRef.current) return;
     initializedRef.current = true;
 
     const init = async () => {
       let userId = store.userId;
+      const existingRoomId = store.roomId;
+      const existingRole = store.role;
+
       if (!userId) {
         userId = uuidv4();
         store.setUserId(userId);
-        console.log("[Host] userId:", userId);
       }
 
       try {
         await connect();
-        console.log("[Host] Connected to signaling server");
 
-        sendMessage({
-          type: "join",
-          roomId: "",
-          userId,
-          role: "host",
-        });
+        if (existingRoomId && existingRole === "host") {
+          // Try to rejoin the existing room
+          sendMessage({
+            type: "join",
+            roomId: existingRoomId,
+            userId,
+            role: "host",
+          });
+        } else {
+          // Create new room
+          store.setRole("host");
+          sendMessage({
+            type: "join",
+            roomId: "",
+            userId,
+            role: "host",
+          });
+        }
       } catch (error) {
         console.error("[Host] Connection failed:", error);
         alert("서버에 연결할 수 없습니다.");
@@ -153,7 +178,7 @@ export default function HostPage() {
     };
 
     init();
-  }, []);
+  }, [store._hasHydrated]);
 
   // Start camera
   const startCamera = async () => {
@@ -172,7 +197,7 @@ export default function HostPage() {
 
       await startLocalStream(() => Promise.resolve(stream));
       setIsCameraActive(true);
-      setSourceType('camera');
+      setSourceType("camera");
       setChromaKeyEnabled(true); // Enable chroma key for camera
       console.log("[Host] Camera started");
     } catch (error) {
@@ -186,6 +211,7 @@ export default function HostPage() {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
+          cursor: "never", // Hide mouse cursor in screen share
           width: { ideal: 1920 },
           height: { ideal: 1080 },
         },
@@ -193,7 +219,7 @@ export default function HostPage() {
       });
 
       // Handle when user stops sharing via browser UI
-      stream.getVideoTracks()[0].addEventListener('ended', () => {
+      stream.getVideoTracks()[0].addEventListener("ended", () => {
         console.log("[Host] Screen share stopped by user");
         stopSource();
       });
@@ -204,7 +230,7 @@ export default function HostPage() {
 
       await startLocalStream(() => Promise.resolve(stream));
       setIsCameraActive(true);
-      setSourceType('screen');
+      setSourceType("screen");
       // Keep chroma key state - user can choose to enable/disable for screen share
       console.log("[Host] Screen share started");
     } catch (error) {
@@ -256,13 +282,15 @@ export default function HostPage() {
     // Broadcast to Guest
     if (store.roomId) {
       sendMessage({
-        type: 'host-display-options',
+        type: "host-display-options",
         roomId: store.roomId,
         options: {
           flipHorizontal: newFlipState,
         },
       });
-      console.log('[Host] Sent display options:', { flipHorizontal: newFlipState });
+      console.log("[Host] Sent display options:", {
+        flipHorizontal: newFlipState,
+      });
     }
   };
 
@@ -278,12 +306,12 @@ export default function HostPage() {
       };
 
       sendMessage({
-        type: 'aspect-ratio-settings',
+        type: "aspect-ratio-settings",
         roomId: store.roomId,
         settings,
       });
 
-      console.log('[Host] Sent aspect ratio settings:', settings);
+      console.log("[Host] Sent aspect ratio settings:", settings);
     }
   };
 
@@ -331,9 +359,17 @@ export default function HostPage() {
   // Listen to session settings broadcast from server
   useEffect(() => {
     const handleSessionSettings = (message: any) => {
-      console.log("[Host] Received session settings broadcast from server:", message);
+      console.log(
+        "[Host] Received session settings broadcast from server:",
+        message
+      );
       if (message.settings) {
-        console.log("[Host] Broadcast settings - recordingDuration:", message.settings.recordingDuration, "captureInterval:", message.settings.captureInterval);
+        console.log(
+          "[Host] Broadcast settings - recordingDuration:",
+          message.settings.recordingDuration,
+          "captureInterval:",
+          message.settings.captureInterval
+        );
       }
     };
 
@@ -347,10 +383,13 @@ export default function HostPage() {
   // Listen to video frame request from Guest
   useEffect(() => {
     const handleVideoFrameRequest = async (message: any) => {
-      console.log('[Host] Received video frame request:', message);
+      console.log("[Host] Received video frame request:", message);
 
       if (message.selectedPhotos && message.selectedPhotos.length === 4) {
-        console.log('[Host] Auto-composing video frame for photos:', message.selectedPhotos);
+        console.log(
+          "[Host] Auto-composing video frame for photos:",
+          message.selectedPhotos
+        );
 
         // Update peer selected photos
         setPeerSelectedPhotos(message.selectedPhotos);
@@ -360,7 +399,7 @@ export default function HostPage() {
       }
     };
 
-    on('video-frame-request', handleVideoFrameRequest);
+    on("video-frame-request", handleVideoFrameRequest);
 
     return () => {
       // Cleanup if needed
@@ -396,12 +435,24 @@ export default function HostPage() {
   const startPhotoSession = () => {
     if (!store.roomId) return;
 
-    console.log('[Host] ========== PHOTO SESSION START (Individual Recording) ==========');
-    console.log('[Host] Session settings:');
-    console.log('[Host]  - recordingDuration:', recordingDuration, 'seconds (영상 녹화 시간 = 촬영 카운트다운 시간)');
-    console.log('[Host]  - captureInterval:', captureInterval, 'seconds (사진 촬영 후 다음 사진까지 대기 시간)');
-    console.log('[Host] Mode: Individual segment recording (no FFmpeg splitting needed!)');
-    console.log('[Host] ================================================');
+    console.log(
+      "[Host] ========== PHOTO SESSION START (Individual Recording) =========="
+    );
+    console.log("[Host] Session settings:");
+    console.log(
+      "[Host]  - recordingDuration:",
+      recordingDuration,
+      "seconds (영상 녹화 시간 = 촬영 카운트다운 시간)"
+    );
+    console.log(
+      "[Host]  - captureInterval:",
+      captureInterval,
+      "seconds (사진 촬영 후 다음 사진까지 대기 시간)"
+    );
+    console.log(
+      "[Host] Mode: Individual segment recording (no FFmpeg splitting needed!)"
+    );
+    console.log("[Host] ================================================");
 
     setIsCapturing(true);
     resetCapture();
@@ -417,7 +468,7 @@ export default function HostPage() {
         captureInterval,
       },
     };
-    console.log('[Host] Sending session settings to server:', sessionSettings);
+    console.log("[Host] Sending session settings to server:", sessionSettings);
     sendMessage(sessionSettings);
 
     sendMessage({
@@ -439,8 +490,8 @@ export default function HostPage() {
       return;
     }
 
-    console.log('[Host] ========== Taking photo', photoNumber, '==========');
-    console.log('[Host] Starting individual video recording for this segment');
+    console.log("[Host] ========== Taking photo", photoNumber, "==========");
+    console.log("[Host] Starting individual video recording for this segment");
 
     // Start individual video recording for this photo
     if (videoRecorderRef.current) {
@@ -457,10 +508,13 @@ export default function HostPage() {
             const recordingEndTime = Date.now();
             const duration = (recordingEndTime - recordingStartTime) / 1000;
 
-            console.log(`[Host] ✅ Video segment ${completedPhotoNumber} recorded:`, {
-              size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
-              duration: `${duration.toFixed(2)}s`
-            });
+            console.log(
+              `[Host] ✅ Video segment ${completedPhotoNumber} recorded:`,
+              {
+                size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
+                duration: `${duration.toFixed(2)}s`,
+              }
+            );
 
             // Create VideoSegment
             const segment: VideoSegment = {
@@ -472,9 +526,13 @@ export default function HostPage() {
             };
 
             // Save segment
-            setRecordedSegments(prev => {
-              const newSegments = [...prev, segment].sort((a, b) => a.photoNumber - b.photoNumber);
-              console.log(`[Host] Total segments recorded: ${newSegments.length}/8`);
+            setRecordedSegments((prev) => {
+              const newSegments = [...prev, segment].sort(
+                (a, b) => a.photoNumber - b.photoNumber
+              );
+              console.log(
+                `[Host] Total segments recorded: ${newSegments.length}/8`
+              );
               return newSegments;
             });
 
@@ -482,9 +540,11 @@ export default function HostPage() {
           }
         );
 
-        console.log(`[Host] Recording started for photo ${photoNumber} (${recordingDuration}s)`);
+        console.log(
+          `[Host] Recording started for photo ${photoNumber} (${recordingDuration}s)`
+        );
       } catch (error) {
-        console.error('[Host] Failed to start recording:', error);
+        console.error("[Host] Failed to start recording:", error);
         setCurrentlyRecording(null);
       }
     }
@@ -492,7 +552,7 @@ export default function HostPage() {
     // Countdown before taking photo (matches recording duration)
     let count = recordingDuration;
     setCountdown(count);
-    console.log('[Host] Starting countdown from', count, 'seconds');
+    console.log("[Host] Starting countdown from", count, "seconds");
 
     // Send countdown ticks
     sendMessage({
@@ -504,7 +564,7 @@ export default function HostPage() {
 
     const interval = setInterval(() => {
       count--;
-      console.log('[Host] Countdown:', count);
+      console.log("[Host] Countdown:", count);
 
       if (count <= 0) {
         clearInterval(interval);
@@ -556,15 +616,19 @@ export default function HostPage() {
 
         // Take next photo or finish session
         if (photoNumber < 8) {
-          console.log('[Host] Photo', photoNumber, 'captured successfully');
-          console.log('[Host] ⏱️  Waiting', captureInterval, 'seconds before next photo');
+          console.log("[Host] Photo", photoNumber, "captured successfully");
+          console.log(
+            "[Host] ⏱️  Waiting",
+            captureInterval,
+            "seconds before next photo"
+          );
           setTimeout(() => {
-            console.log('[Host] Starting photo', photoNumber + 1);
+            console.log("[Host] Starting photo", photoNumber + 1);
             takePhoto(photoNumber + 1);
           }, captureInterval * 1000);
         } else {
           // Last photo
-          console.log('[Host] ✅ Last photo captured!');
+          console.log("[Host] ✅ Last photo captured!");
           setIsCapturing(false);
           startProcessing();
           console.log("[Host] Photo session complete, waiting for merge...");
@@ -578,17 +642,22 @@ export default function HostPage() {
 
   const handleGenerateFrame = async () => {
     if (peerSelectedPhotos.length !== 4) {
-      alert('Guest가 4장의 사진을 선택해야 합니다.');
+      alert("Guest가 4장의 사진을 선택해야 합니다.");
       return;
     }
 
     setIsGeneratingFrame(true);
     try {
-      await downloadPhotoFrame(photos, peerSelectedPhotos, store.roomId || 'frame', aspectRatio);
-      console.log('[Host] Photo frame generated and downloaded');
+      await downloadPhotoFrame(
+        photos,
+        peerSelectedPhotos,
+        store.roomId || "frame",
+        aspectRatio
+      );
+      console.log("[Host] Photo frame generated and downloaded");
     } catch (error) {
-      console.error('[Host] Failed to generate frame:', error);
-      alert('프레임 생성에 실패했습니다.');
+      console.error("[Host] Failed to generate frame:", error);
+      alert("프레임 생성에 실패했습니다.");
     } finally {
       setIsGeneratingFrame(false);
     }
@@ -598,37 +667,48 @@ export default function HostPage() {
 
   const autoComposeAndUploadVideo = async (selectedPhotoIndices: number[]) => {
     if (!store.roomId || !store.userId) {
-      console.error('[Host] Missing roomId or userId');
+      console.error("[Host] Missing roomId or userId");
       return;
     }
 
     // Check if we have recorded segments
     if (recordedSegments.length === 0) {
-      console.error('[Host] No recorded segments available');
-      alert('녹화된 영상이 없습니다.');
+      console.error("[Host] No recorded segments available");
+      alert("녹화된 영상이 없습니다.");
       return;
     }
 
     // Get selected segments (indices are 0-based, photoNumber is 1-based)
     const selectedSegments = selectedPhotoIndices
-      .map(index => recordedSegments.find(seg => seg.photoNumber === index + 1))
+      .map((index) =>
+        recordedSegments.find((seg) => seg.photoNumber === index + 1)
+      )
       .filter((seg): seg is VideoSegment => seg !== undefined);
 
     if (selectedSegments.length !== 4) {
-      console.error(`[Host] Failed to find all segments (${selectedSegments.length}/4)`);
-      alert(`선택한 사진 중 ${4 - selectedSegments.length}개의 영상을 찾을 수 없습니다.`);
+      console.error(
+        `[Host] Failed to find all segments (${selectedSegments.length}/4)`
+      );
+      alert(
+        `선택한 사진 중 ${
+          4 - selectedSegments.length
+        }개의 영상을 찾을 수 없습니다.`
+      );
       return;
     }
 
-    console.log('[Host] 🚀 Auto-composing with WebGL GPU (재인코딩 없음!)');
-    console.log('[Host] Auto-composing video frame with segments:', selectedSegments.map(s => s.photoNumber));
+    console.log("[Host] 🚀 Auto-composing with WebGL GPU (재인코딩 없음!)");
+    console.log(
+      "[Host] Auto-composing video frame with segments:",
+      selectedSegments.map((s) => s.photoNumber)
+    );
 
     setIsComposing(true);
-    setComposeProgress('WebGL GPU 합성 시작...');
+    setComposeProgress("WebGL GPU 합성 시작...");
 
     try {
       // Convert VideoSegment to VideoSource
-      const videoSources: VideoSource[] = selectedSegments.map(seg => ({
+      const videoSources: VideoSource[] = selectedSegments.map((seg) => ({
         blob: seg.blob,
         startTime: seg.startTime,
         endTime: seg.endTime,
@@ -645,32 +725,33 @@ export default function HostPage() {
         },
         (progress) => {
           setComposeProgress(progress);
-          console.log('[Host] WebGL compose progress:', progress);
+          console.log("[Host] WebGL compose progress:", progress);
         }
       );
 
-      console.log('[Host] Composition complete, uploading to server...');
-      setComposeProgress('서버에 업로드 중...');
+      console.log("[Host] Composition complete, uploading to server...");
+      setComposeProgress("서버에 업로드 중...");
 
       // Upload to server
       const formData = new FormData();
-      formData.append('video', composedBlob, 'video-frame.mp4');
-      formData.append('roomId', store.roomId);
-      formData.append('userId', store.userId);
+      formData.append("video", composedBlob, "video-frame.mp4");
+      formData.append("roomId", store.roomId);
+      formData.append("userId", store.userId);
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const API_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
       const response = await fetch(`${API_URL}/api/video/upload`, {
-        method: 'POST',
+        method: "POST",
         headers: getApiHeadersMultipart(),
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        throw new Error("Upload failed");
       }
 
       const result = await response.json();
-      console.log('[Host] Upload complete:', result);
+      console.log("[Host] Upload complete:", result);
 
       // Save composed video locally
       const url = URL.createObjectURL(composedBlob);
@@ -679,49 +760,60 @@ export default function HostPage() {
       }
       setComposedVideo({ blob: composedBlob, url });
 
-      setComposeProgress('완료!');
-      alert('영상 프레임이 생성되어 Guest에게 전송되었습니다! 🎉');
-
+      setComposeProgress("완료!");
+      alert("영상 프레임이 생성되어 Guest에게 전송되었습니다! 🎉");
     } catch (error) {
-      console.error('[Host] Failed to compose/upload video:', error);
-      alert('영상 합성 또는 업로드에 실패했습니다: ' + (error instanceof Error ? error.message : ''));
+      console.error("[Host] Failed to compose/upload video:", error);
+      alert(
+        "영상 합성 또는 업로드에 실패했습니다: " +
+          (error instanceof Error ? error.message : "")
+      );
     } finally {
       setIsComposing(false);
-      setTimeout(() => setComposeProgress(''), 2000);
+      setTimeout(() => setComposeProgress(""), 2000);
     }
   };
 
   const handleComposeVideoFrame = async () => {
     if (peerSelectedPhotos.length !== 4) {
-      alert('Guest가 4장의 사진을 선택해야 합니다.');
+      alert("Guest가 4장의 사진을 선택해야 합니다.");
       return;
     }
 
     // Check if we have recorded segments
     if (recordedSegments.length === 0) {
-      alert('녹화된 영상이 없습니다. 촬영을 먼저 완료해주세요.');
+      alert("녹화된 영상이 없습니다. 촬영을 먼저 완료해주세요.");
       return;
     }
 
     // Get selected segments (Guest's selection is 0-indexed, photoNumber is 1-based)
     const selectedSegments = peerSelectedPhotos
-      .map(index => recordedSegments.find(seg => seg.photoNumber === index + 1))
+      .map((index) =>
+        recordedSegments.find((seg) => seg.photoNumber === index + 1)
+      )
       .filter((seg): seg is VideoSegment => seg !== undefined);
 
     if (selectedSegments.length !== 4) {
-      alert(`선택한 사진 중 ${4 - selectedSegments.length}개의 영상을 찾을 수 없습니다.`);
+      alert(
+        `선택한 사진 중 ${
+          4 - selectedSegments.length
+        }개의 영상을 찾을 수 없습니다.`
+      );
       return;
     }
 
-    console.log('[Host] 🚀 WebGL GPU 합성 시작 (재인코딩 없음!)');
-    console.log('[Host] Composing video frame with segments:', selectedSegments.map(s => s.photoNumber));
+    console.log("[Host] 🚀 WebGL GPU 합성 시작 (재인코딩 없음!)");
+    console.log(
+      "[Host] Composing video frame with segments:",
+      selectedSegments.map((s) => s.photoNumber)
+    );
 
     setIsComposing(true);
-    setComposeProgress('WebGL GPU 합성 시작...');
+    setComposeProgress("WebGL GPU 합성 시작...");
 
     try {
       // Convert VideoSegment to VideoSource
-      const videoSources: VideoSource[] = selectedSegments.map(seg => ({
+      const videoSources: VideoSource[] = selectedSegments.map((seg) => ({
         blob: seg.blob,
         startTime: seg.startTime,
         endTime: seg.endTime,
@@ -738,7 +830,7 @@ export default function HostPage() {
         },
         (progress) => {
           setComposeProgress(progress);
-          console.log('[Host] WebGL compose progress:', progress);
+          console.log("[Host] WebGL compose progress:", progress);
         }
       );
 
@@ -750,27 +842,26 @@ export default function HostPage() {
       }
 
       setComposedVideo({ blob: composedBlob, url });
-      console.log('[Host] ✅ WebGL composition complete (no re-encoding!):', {
+      console.log("[Host] ✅ WebGL composition complete (no re-encoding!):", {
         size: `${(composedBlob.size / 1024 / 1024).toFixed(2)} MB`,
       });
 
-      alert('✨ 영상 프레임이 생성되었습니다! (WebGL GPU 합성 - 재인코딩 없음!)');
+      alert(
+        "✨ 영상 프레임이 생성되었습니다! (WebGL GPU 합성 - 재인코딩 없음!)"
+      );
     } catch (error) {
-      console.error('[Host] Failed to compose video with WebGL:', error);
-      alert('영상 합성에 실패했습니다. ' + (error instanceof Error ? error.message : ''));
+      console.error("[Host] Failed to compose video with WebGL:", error);
+      alert(
+        "영상 합성에 실패했습니다. " +
+          (error instanceof Error ? error.message : "")
+      );
     } finally {
       setIsComposing(false);
-      setComposeProgress('');
+      setComposeProgress("");
     }
   };
 
-  // Auto-start camera when room is created
-  useEffect(() => {
-    if (store.roomId && !isCameraActive && !localStream) {
-      console.log("[Host] Room created, auto-starting camera");
-      startCamera();
-    }
-  }, [store.roomId]);
+  // Manual screen share start (removed auto-start)
 
   // Create offer when peer joins
   useEffect(() => {
@@ -794,7 +885,7 @@ export default function HostPage() {
   // Cleanup - only on component unmount
   useEffect(() => {
     return () => {
-      console.log('[Host] Component unmounting - cleaning up resources');
+      console.log("[Host] Component unmounting - cleaning up resources");
       stopSource();
       if (videoRecorderRef.current) {
         videoRecorderRef.current.dispose();
@@ -807,7 +898,7 @@ export default function HostPage() {
     return () => {
       // Cleanup segment URLs when they change
       if (recordedSegments.length > 0) {
-        recordedSegments.forEach(segment => {
+        recordedSegments.forEach((segment) => {
           URL.revokeObjectURL(segment.url);
         });
       }
@@ -830,321 +921,177 @@ export default function HostPage() {
       <FlashOverlay show={showFlash} />
 
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-4 text-dark">
-            Host {isCameraActive && (sourceType === 'camera' ? '(📹 카메라)' : '(🖥️ 화면 공유)')}
-          </h1>
-          <div className="space-y-3">
-            {store.roomId && (
-              <div className="bg-primary px-6 py-3 rounded-lg inline-block shadow-md">
-                <span className="text-sm opacity-90 text-white">Room ID:</span>
-                <span className="text-2xl font-bold ml-2 text-white">{store.roomId}</span>
-              </div>
-            )}
-            <ConnectionStatus
-              isConnected={isConnected}
-              peerId={store.peerId}
-              remoteStream={remoteStream}
-              role="host"
-            />
-          </div>
-        </div>
-
-        {/* Controls */}
-        <div className="bg-white border-2 border-neutral rounded-lg p-6 mb-6 shadow-md">
-          <div className="flex flex-wrap gap-4 items-center mb-4">
-            {!isCameraActive ? (
-              <>
-                <button
-                  onClick={startCamera}
-                  disabled={!isConnected}
-                  className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50"
-                >
-                  {isConnected ? "📹 카메라 시작" : "연결 중..."}
-                </button>
-                <button
-                  onClick={startScreenShare}
-                  disabled={!isConnected}
-                  className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50"
-                >
-                  {isConnected ? "🖥️ 화면 공유" : "연결 중..."}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={stopSource}
-                  className="px-6 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
-                >
-                  {sourceType === 'camera' ? '📹 카메라 중지' : '🖥️ 화면 공유 중지'}
-                </button>
-                {sourceType === 'camera' && (
-                  <button
-                    onClick={startScreenShare}
-                    className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
-                  >
-                    🖥️ 화면 공유로 전환
-                  </button>
-                )}
-                {sourceType === 'screen' && (
-                  <button
-                    onClick={startCamera}
-                    className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
-                  >
-                    📹 카메라로 전환
-                  </button>
-                )}
-              </>
-            )}
-
-            {isCameraActive && (
-              <button
-                onClick={() => setChromaKeyEnabled(!chromaKeyEnabled)}
-                className={`px-6 py-3 rounded-lg font-semibold transition shadow-md ${
-                  chromaKeyEnabled
-                    ? "bg-primary hover:bg-primary-dark text-white"
-                    : "bg-neutral hover:bg-neutral-dark text-dark"
-                }`}
-              >
-                크로마키: {chromaKeyEnabled ? "ON" : "OFF"}
-              </button>
-            )}
-
-            {isCameraActive && (
-              <button
-                onClick={toggleHostFlip}
-                className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
-                  hostFlipHorizontal
-                    ? 'bg-primary hover:bg-primary-dark text-white shadow-md'
-                    : 'bg-neutral hover:bg-neutral-dark text-dark'
-                }`}
-                title="내 화면 좌우 반전"
-              >
-                {hostFlipHorizontal ? '↔️ Host 반전 ON' : '↔️ Host 반전 OFF'}
-              </button>
-            )}
-          </div>
-
-          {/* Chroma key settings */}
-          {isCameraActive && chromaKeyEnabled && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  민감도 (Sensitivity): {sensitivity}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={sensitivity}
-                  onChange={(e) => setSensitivity(Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  부드러움 (Smoothness): {smoothness}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={smoothness}
-                  onChange={(e) => setSmoothness(Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Timer settings */}
-        {remoteStream && (
-          <div className="bg-white border-2 border-neutral rounded-lg p-6 mb-6 shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-dark">촬영 설정</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  녹화 시간 (Recording Duration): {recordingDuration}초
-                </label>
-                <input
-                  type="range"
-                  min="5"
-                  max="30"
-                  value={recordingDuration}
-                  onChange={(e) => setRecordingDuration(Number(e.target.value))}
-                  disabled={isCapturing}
-                  className="w-full disabled:opacity-50"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  각 사진 촬영 시 녹화할 영상의 길이 및 촬영 카운트다운 시간 (5~30초)
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  촬영 간격 (Capture Interval): {captureInterval}초
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={captureInterval}
-                  onChange={(e) => setCaptureInterval(Number(e.target.value))}
-                  disabled={isCapturing}
-                  className="w-full disabled:opacity-50"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  사진 촬영 사이의 대기 시간 (1~10초)
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Aspect Ratio settings */}
-        {remoteStream && (
-          <div className="bg-white border-2 border-neutral rounded-lg p-6 mb-6 shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-dark">화면 비율 설정</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-3">
-                  촬영 비율 (Aspect Ratio): {ASPECT_RATIOS[aspectRatio].label}
-                </label>
-                <div className="grid grid-cols-5 gap-3">
-                  {(Object.keys(ASPECT_RATIOS) as AspectRatio[]).map((ratio) => (
-                    <button
-                      key={ratio}
-                      onClick={() => updateAspectRatio(ratio)}
-                      disabled={isCapturing}
-                      className={`px-4 py-3 rounded-lg font-semibold text-sm transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
-                        aspectRatio === ratio
-                          ? 'bg-primary hover:bg-primary-dark text-white'
-                          : 'bg-neutral hover:bg-neutral-dark text-dark'
-                      }`}
-                    >
-                      {ratio}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-400 mt-3">
-                  미리보기, 사진 촬영, 영상 녹화, 합성 등 모든 과정에 적용됩니다
-                </p>
-                <div className="mt-2 px-4 py-2 bg-neutral/30 rounded-lg">
-                  <p className="text-xs text-dark/70 font-medium">
-                    해상도: {ASPECT_RATIOS[aspectRatio].width} × {ASPECT_RATIOS[aspectRatio].height}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Video display */}
-        <div className="grid grid-cols-1 gap-6">
-          {/* Hidden video elements for processing */}
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            className="absolute opacity-0 pointer-events-none"
-          />
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="absolute opacity-0 pointer-events-none"
-          />
-
-          {/* Main view - Show own video when alone, composite when connected */}
-          <div className="bg-gray-800 rounded-lg p-4">
-            <h2 className="text-xl font-semibold mb-4">
-              {remoteStream
-                ? "합성 화면 (Guest + Host)"
-                : sourceType === 'camera'
-                  ? "내 영상 (Host)"
-                  : "내 화면 (Host)"}
-            </h2>
-            {/* 1:1 Container to prevent layout shift */}
-            <div className="relative rounded-lg overflow-hidden aspect-square">
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundImage: `
-                    linear-gradient(45deg, #333 25%, transparent 25%),
-                    linear-gradient(-45deg, #333 25%, transparent 25%),
-                    linear-gradient(45deg, transparent 75%, #333 75%),
-                    linear-gradient(-45deg, transparent 75%, #333 75%)
-                  `,
-                  backgroundSize: "20px 20px",
-                  backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
-                }}
-              />
-
-              {/* Canvas container with dynamic aspect ratio */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                {/* Show own chroma key canvas when alone */}
-                <canvas
-                  ref={localCanvasRef}
-                  className={`absolute max-w-full max-h-full transition-opacity ${
-                    remoteStream ? "opacity-0" : "opacity-100"
-                  }`}
-                  style={{
-                    transform: hostFlipHorizontal ? 'scaleX(-1)' : 'scaleX(1)',
-                    aspectRatio: aspectRatio.replace(':', '/'),
-                  }}
-                />
-
-                {/* Show composite when connected */}
-                <canvas
-                  ref={compositeCanvasRef}
-                  className={`absolute max-w-full max-h-full transition-opacity ${
-                    !remoteStream ? "opacity-0" : "opacity-100"
-                  }`}
-                  style={{
-                    aspectRatio: aspectRatio.replace(':', '/'),
-                  }}
-                />
-              </div>
-
-              <CountdownOverlay countdown={countdown} />
-
-              {!isCameraActive && (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-500 bg-black">
-                  카메라 또는 화면 공유를 시작해주세요
+        <div className="mb-2 sm:mb-4 landscape:mb-2">
+          <div className="flex flex-col landscape:flex-row gap-2 landscape:gap-3 items-start landscape:items-center landscape:justify-between">
+            <h1 className="text-lg sm:text-2xl landscape:text-lg font-bold text-dark">
+              Host
+            </h1>
+            <div className="flex flex-wrap gap-2 items-center">
+              {store.roomId && (
+                <div className="bg-secondary px-2 sm:px-4 py-1 sm:py-2 landscape:py-1 rounded-lg shadow-md">
+                  <span className="text-xs opacity-90 text-white">Room:</span>
+                  <span className="text-sm sm:text-lg landscape:text-sm font-bold ml-1 sm:ml-2 text-white">
+                    {store.roomId}
+                  </span>
                 </div>
               )}
+              <ConnectionStatus
+                isConnected={isConnected}
+                peerId={store.peerId}
+                remoteStream={remoteStream}
+                role="host"
+              />
             </div>
           </div>
+        </div>
 
-          {/* Photo capture panel */}
-          {remoteStream && (
-            <div className="bg-white border-2 border-neutral rounded-lg p-6 mt-6 shadow-md">
-              <h2 className="text-xl font-semibold mb-4 text-dark">사진 촬영</h2>
+        {/* Main Layout: Video (left) + Settings (right) on PC, stacked on mobile */}
+        <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-6 mb-6">
+          {/* Left Column: Video Display */}
+          <div className="flex justify-center lg:justify-start">
+            <VideoDisplayPanel
+              role="host"
+              isActive={isCameraActive}
+              remoteStream={remoteStream}
+              localVideoRef={localVideoRef}
+              localCanvasRef={localCanvasRef}
+              remoteVideoRef={remoteVideoRef}
+              compositeCanvasRef={compositeCanvasRef}
+              aspectRatio={aspectRatio}
+              flipHorizontal={hostFlipHorizontal}
+              countdown={countdown}
+            />
+          </div>
 
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-lg text-dark font-semibold">촬영: {photoCount} / 8</div>
+          {/* Right Column: Settings Panel */}
+          <div className="space-y-6 lg:max-h-[90vh] lg:overflow-y-auto lg:pr-2">
+            {/* Controls */}
+            <SettingsPanel>
+              <div className="flex flex-wrap gap-4 items-center mb-4">
+                {!isCameraActive ? (
+                  <button
+                    onClick={startScreenShare}
+                    disabled={!isConnected}
+                    className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50"
+                  >
+                    {isConnected ? "🖥️ 화면 공유 시작" : "연결 중..."}
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopSource}
+                    className="px-6 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
+                  >
+                    🖥️ 화면 공유 중지
+                  </button>
+                )}
+
+                {isCameraActive && (
+                  <button
+                    onClick={() => setChromaKeyEnabled(!chromaKeyEnabled)}
+                    className={`px-6 py-3 rounded-lg font-semibold transition shadow-md ${
+                      chromaKeyEnabled
+                        ? "bg-primary hover:bg-primary-dark text-white"
+                        : "bg-neutral hover:bg-neutral-dark text-dark"
+                    }`}
+                  >
+                    크로마키: {chromaKeyEnabled ? "ON" : "OFF"}
+                  </button>
+                )}
+
+                {isCameraActive && (
+                  <button
+                    onClick={toggleHostFlip}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                      hostFlipHorizontal
+                        ? "bg-primary hover:bg-primary-dark text-white shadow-md"
+                        : "bg-neutral hover:bg-neutral-dark text-dark"
+                    }`}
+                    title="내 화면 좌우 반전"
+                  >
+                    {hostFlipHorizontal
+                      ? "↔️ Host 반전 ON"
+                      : "↔️ Host 반전 OFF"}
+                  </button>
+                )}
+              </div>
+
+              {/* Chroma key settings */}
+              {isCameraActive && chromaKeyEnabled && (
+                <div className="space-y-6">
+                  <SegmentedBar
+                    label="민감도 (Sensitivity)"
+                    value={sensitivity}
+                    values={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
+                    onChange={setSensitivity}
+                    color="primary"
+                  />
+                  <SegmentedBar
+                    label="부드러움 (Smoothness)"
+                    value={smoothness}
+                    values={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
+                    onChange={setSmoothness}
+                    color="primary"
+                  />
+                </div>
+              )}
+            </SettingsPanel>
+
+            {/* Timer settings */}
+            {remoteStream && (
+              <SettingsPanel title="촬영 설정">
+                <div className="space-y-6">
+                  <SegmentedBar
+                    label="녹화 시간"
+                    value={recordingDuration}
+                    values={[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}
+                    onChange={setRecordingDuration}
+                    unit="초"
+                    color="primary"
+                    disabled={isCapturing}
+                    description="촬영 카운트다운 시간 (5~15초)"
+                  />
+                  <SegmentedBar
+                    label="촬영 간격"
+                    value={captureInterval}
+                    values={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+                    onChange={setCaptureInterval}
+                    unit="초"
+                    color="secondary"
+                    disabled={isCapturing}
+                    description="사진 촬영 사이의 대기 시간 (0~10초)"
+                  />
+                </div>
+              </SettingsPanel>
+            )}
+
+            {/* Photo capture panel */}
+            {remoteStream && (
+              <SettingsPanel title="사진 촬영">
+                <div className="mb-4">
+                  <PhotoCounter current={photoCount} total={8} />
+
                   {currentlyRecording !== null && (
-                    <div className="flex items-center gap-2 text-sm text-primary font-medium">
+                    <div className="flex items-center justify-center gap-2 mb-3 text-sm text-primary font-medium">
                       <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                       영상 #{currentlyRecording} 녹화 중
                     </div>
                   )}
+
+                  <button
+                    onClick={startPhotoSession}
+                    disabled={!remoteStream || isCapturing}
+                    className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCapturing ? "촬영 중..." : "촬영 시작 (사진 + 영상)"}
+                  </button>
                 </div>
-                <button
-                  onClick={startPhotoSession}
-                  disabled={!remoteStream || isCapturing}
-                  className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isCapturing ? "촬영 중..." : "촬영 시작 (사진 + 영상)"}
-                </button>
-              </div>
+              </SettingsPanel>
+            )}
+          </div>
+        </div>
 
-              <PhotoThumbnailGrid photos={photos} totalSlots={8} />
-            </div>
-          )}
-
+        {/* Full-width panels below */}
+        <div className="space-y-6">
           <ProcessingIndicator show={isProcessing} />
 
           <PhotoSelectionPanel
@@ -1160,9 +1107,12 @@ export default function HostPage() {
           {/* Video Frame Composition */}
           {recordedSegments.length >= 4 && peerSelectedPhotos.length === 4 && (
             <div className="bg-white border-2 border-neutral rounded-lg p-6 mt-6 shadow-md">
-              <h2 className="text-2xl font-semibold mb-4 text-dark">영상 프레임 생성</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-dark">
+                영상 프레임 생성
+              </h2>
               <p className="text-dark/70 mb-4">
-                Guest가 선택한 4개의 사진에 해당하는 영상을 2x2 그리드로 합성합니다.
+                Guest가 선택한 4개의 사진에 해당하는 영상을 2x2 그리드로
+                합성합니다.
               </p>
 
               {isComposing && (
@@ -1170,7 +1120,7 @@ export default function HostPage() {
                   <div className="flex items-center gap-3">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
                     <div className="text-sm text-dark font-medium">
-                      {composeProgress || '처리 중...'}
+                      {composeProgress || "처리 중..."}
                     </div>
                   </div>
                 </div>
@@ -1181,7 +1131,7 @@ export default function HostPage() {
                 disabled={isComposing}
                 className="w-full px-6 py-4 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold text-lg transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isComposing ? '합성 중...' : '영상 프레임 생성'}
+                {isComposing ? "합성 중..." : "영상 프레임 생성"}
               </button>
 
               {composedVideo && (
@@ -1195,15 +1145,23 @@ export default function HostPage() {
                   </div>
                   <div className="bg-neutral/30 border border-neutral rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-semibold text-primary">합성 완료</span>
+                      <span className="text-sm font-semibold text-primary">
+                        합성 완료
+                      </span>
                       <span className="text-xs text-dark/70 font-medium">
                         {(composedVideo.blob.size / 1024 / 1024).toFixed(2)} MB
                       </span>
                     </div>
                     <button
                       onClick={() => {
-                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                        downloadWebGLComposedVideo(composedVideo.blob, `vshot-frame-${store.roomId}-${timestamp}.webm`);
+                        const timestamp = new Date()
+                          .toISOString()
+                          .replace(/[:.]/g, "-")
+                          .slice(0, -5);
+                        downloadWebGLComposedVideo(
+                          composedVideo.blob,
+                          `vshot-frame-${store.roomId}-${timestamp}.webm`
+                        );
                       }}
                       className="w-full px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
                     >
@@ -1217,21 +1175,22 @@ export default function HostPage() {
               )}
             </div>
           )}
-        </div>
 
-        {/* Usage info */}
-        {!store.peerId && isCameraActive && (
-          <div className="mt-8 bg-white border-2 border-neutral rounded-lg p-6 shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-dark">안내</h2>
-            <ul className="list-disc list-inside space-y-2 text-dark/80">
-              <li>Room ID를 Guest에게 공유하세요</li>
-              <li>Guest가 입장하면 자동으로 연결됩니다</li>
-              <li>카메라와 화면 공유를 자유롭게 전환할 수 있습니다</li>
-              <li>크로마키를 활성화하여 특정 색상 배경을 제거할 수 있습니다</li>
-              {sourceType === 'screen' && <li>화면 공유 중에도 크로마키를 사용하여 배경을 제거할 수 있습니다</li>}
-            </ul>
-          </div>
-        )}
+          {/* Usage info */}
+          {!store.peerId && isCameraActive && (
+            <div className="bg-white border-2 border-neutral rounded-lg p-6 shadow-md">
+              <h2 className="text-xl font-semibold mb-4 text-dark">안내</h2>
+              <ul className="list-disc list-inside space-y-2 text-dark/80">
+                <li>Room ID를 Guest에게 공유하세요</li>
+                <li>Guest가 입장하면 자동으로 연결됩니다</li>
+                <li>화면 공유를 통해 VTuber 화면을 공유합니다</li>
+                <li>
+                  크로마키를 활성화하여 특정 색상 배경을 제거할 수 있습니다
+                </li>
+              </ul>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

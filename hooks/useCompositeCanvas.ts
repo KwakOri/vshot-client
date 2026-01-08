@@ -10,6 +10,7 @@ interface UseCompositeCanvasOptions {
   height?: number;
   guestFlipHorizontal?: boolean;
   hostFlipHorizontal?: boolean;
+  blurGuest?: boolean; // Blur guest (background) video
 }
 
 /**
@@ -25,7 +26,8 @@ export function useCompositeCanvas({
   width = 1920,
   height = 1080,
   guestFlipHorizontal = false,
-  hostFlipHorizontal = false
+  hostFlipHorizontal = false,
+  blurGuest = false
 }: UseCompositeCanvasOptions) {
   const animationFrameRef = useRef<number | undefined>(undefined);
 
@@ -87,6 +89,12 @@ export function useCompositeCanvas({
         }
 
         ctx.save();
+
+        // Apply blur filter if requested
+        if (blurGuest) {
+          ctx.filter = 'blur(10px)';
+        }
+
         if (guestFlipHorizontal) {
           ctx.scale(-1, 1); // Mirror Guest video
           ctx.drawImage(backgroundVideo, -offsetX - drawWidth, offsetY, drawWidth, drawHeight);
@@ -129,7 +137,7 @@ export function useCompositeCanvas({
       }
       backgroundVideo.removeEventListener('loadedmetadata', startComposite);
     };
-  }, [localStream, remoteStream, compositeCanvas, backgroundVideo, foregroundCanvas, width, height, guestFlipHorizontal, hostFlipHorizontal]);
+  }, [localStream, remoteStream, compositeCanvas, backgroundVideo, foregroundCanvas, width, height, guestFlipHorizontal, hostFlipHorizontal, blurGuest]);
 
   return { animationFrameRef };
 }

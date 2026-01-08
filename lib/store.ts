@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { RoomState, CapturedPhoto } from '@/types';
 
 export interface ChromaKeySettings {
@@ -9,6 +10,10 @@ export interface ChromaKeySettings {
 }
 
 interface AppStore extends RoomState {
+  // Hydration status
+  _hasHydrated: boolean;
+  setHasHydrated: (state: boolean) => void;
+
   // Chroma key settings
   chromaKey: ChromaKeySettings;
   setChromaKeyEnabled: (enabled: boolean) => void;
@@ -27,6 +32,7 @@ interface AppStore extends RoomState {
   togglePhotoSelection: (photoNumber: number) => void;
   setPeerSelectedPhotos: (selectedPhotos: number[]) => void;
   reset: () => void;
+  clearSession: () => void; // Clear session-specific data
 }
 
 const initialState: RoomState = {
@@ -47,9 +53,16 @@ const initialChromaKey: ChromaKeySettings = {
   smoothness: 0.1,
 };
 
-export const useAppStore = create<AppStore>((set) => ({
+export const useAppStore = create<AppStore>()(
+  persist(
+    (set) => ({
   ...initialState,
   chromaKey: initialChromaKey,
+  _hasHydrated: false,
+
+  setHasHydrated: (state) => {
+    set({ _hasHydrated: state });
+  },
 
   setChromaKeyEnabled: (enabled) =>
     set((state) => ({
@@ -102,4 +115,29 @@ export const useAppStore = create<AppStore>((set) => ({
     set({ peerSelectedPhotos: selectedPhotos }),
 
   reset: () => set(initialState),
-}));
+
+  clearSession: () =>
+    set({
+      peerId: null,
+      isConnected: false,
+      capturedPhotos: [],
+      selectedPhotos: [],
+      peerSelectedPhotos: [],
+    }),
+}),
+    {
+      name: 'vshot-storage', // localStorage key
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        // Only persist these fields
+        roomId: state.roomId,
+        userId: state.userId,
+        role: state.role,
+      }),
+      onRehydrateStorage: () => (state) => {
+        // Mark hydration as complete
+        state?.setHasHydrated(true);
+      },
+    }
+  )
+);
