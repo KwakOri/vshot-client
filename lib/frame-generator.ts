@@ -1,18 +1,20 @@
-import { ASPECT_RATIOS, type AspectRatio } from '@/types';
+import { ASPECT_RATIOS, type AspectRatio, type FrameLayout } from '@/types';
+import { FRAME_LAYOUT, calculateGridCellDimensions } from '@/constants/constants';
+import { DEFAULT_LAYOUT } from '@/constants/frame-layouts';
 
 /**
- * Generate a 2x2 photo frame from 4 selected photos
- * @param photoUrls Array of 4 photo URLs
- * @param aspectRatio Aspect ratio for the photos
+ * Generate a photo frame with custom layout
+ * @param photoUrls Array of photo URLs (must match layout.slotCount)
+ * @param layout Frame layout configuration
  * @param downloadFilename Optional filename for download
  */
-export async function generatePhotoFrame(
+export async function generatePhotoFrameWithLayout(
   photoUrls: string[],
-  aspectRatio: AspectRatio = '16:9',
+  layout: FrameLayout,
   downloadFilename: string = 'photo-frame.png'
 ): Promise<void> {
-  if (photoUrls.length !== 4) {
-    throw new Error('Exactly 4 photos are required to generate a frame');
+  if (photoUrls.length !== layout.slotCount) {
+    throw new Error(`Expected ${layout.slotCount} photos for layout "${layout.label}", but got ${photoUrls.length}`);
   }
 
   // Create canvas
@@ -23,19 +25,12 @@ export async function generatePhotoFrame(
     throw new Error('Could not get canvas context');
   }
 
-  // Get dimensions from aspect ratio (scale down for frame)
-  const ratioSettings = ASPECT_RATIOS[aspectRatio];
-  const scale = 0.5; // Scale down to half size for frame
-  const photoWidth = ratioSettings.width * scale;  // Each photo width
-  const photoHeight = ratioSettings.height * scale; // Each photo height
-  const gap = 20;          // Gap between photos
-  const padding = 40;      // Padding around the frame
-
-  canvas.width = (photoWidth * 2) + gap + (padding * 2);
-  canvas.height = (photoHeight * 2) + gap + (padding * 2);
+  // Set canvas size (default 1920x1080, can be adjusted based on layout)
+  canvas.width = 1920;
+  canvas.height = 1080;
 
   // Fill background
-  ctx.fillStyle = '#1a1a2e';
+  ctx.fillStyle = FRAME_LAYOUT.backgroundColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Load all images
@@ -43,53 +38,48 @@ export async function generatePhotoFrame(
     photoUrls.map(url => loadImage(url))
   );
 
-  // Draw images in 2x2 grid
-  const positions = [
-    { x: padding, y: padding },                                    // Top-left
-    { x: padding + photoWidth + gap, y: padding },                 // Top-right
-    { x: padding, y: padding + photoHeight + gap },                // Bottom-left
-    { x: padding + photoWidth + gap, y: padding + photoHeight + gap } // Bottom-right
-  ];
+  // Sort positions by zIndex (lower zIndex drawn first = background)
+  const sortedPositions = [...layout.positions].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
 
-  images.forEach((img, index) => {
-    const pos = positions[index];
+  // Draw images according to layout positions
+  sortedPositions.forEach((slot, index) => {
+    const img = images[layout.positions.indexOf(slot)];
 
     // Calculate aspect ratios for object-fit: cover behavior
-    // This ensures the image fills the entire box, cropping if necessary
     const imgAspect = img.width / img.height;
-    const boxAspect = photoWidth / photoHeight;
+    const boxAspect = slot.width / slot.height;
 
     let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
 
     if (imgAspect > boxAspect) {
       // Image is wider than box - fit to height and crop sides
-      drawHeight = photoHeight;
-      drawWidth = photoHeight * imgAspect;
-      drawX = pos.x - (drawWidth - photoWidth) / 2;
-      drawY = pos.y;
+      drawHeight = slot.height;
+      drawWidth = slot.height * imgAspect;
+      drawX = slot.x - (drawWidth - slot.width) / 2;
+      drawY = slot.y;
     } else {
       // Image is taller than box - fit to width and crop top/bottom
-      drawWidth = photoWidth;
-      drawHeight = photoWidth / imgAspect;
-      drawX = pos.x;
-      drawY = pos.y - (drawHeight - photoHeight) / 2;
+      drawWidth = slot.width;
+      drawHeight = slot.width / imgAspect;
+      drawX = slot.x;
+      drawY = slot.y - (drawHeight - slot.height) / 2;
     }
 
-    // Draw image with cover behavior (fills entire box)
+    // Draw image with cover behavior
     ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
 
     // Add border around the box area
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(pos.x, pos.y, photoWidth, photoHeight);
+    ctx.strokeStyle = FRAME_LAYOUT.borderColor;
+    ctx.lineWidth = FRAME_LAYOUT.borderWidth;
+    ctx.strokeRect(slot.x, slot.y, slot.width, slot.height);
   });
 
   // Add frame number indicators
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 24px sans-serif';
-  positions.forEach((pos, index) => {
+  ctx.fillStyle = FRAME_LAYOUT.font.color;
+  ctx.font = `${FRAME_LAYOUT.font.weight} ${FRAME_LAYOUT.font.size}px ${FRAME_LAYOUT.font.family}`;
+  layout.positions.forEach((slot, index) => {
     const number = index + 1;
-    ctx.fillText(`${number}`, pos.x + 16, pos.y + 40);
+    ctx.fillText(`${number}`, slot.x + FRAME_LAYOUT.font.offsetX, slot.y + FRAME_LAYOUT.font.offsetY);
   });
 
   // Convert to blob and download
@@ -110,6 +100,21 @@ export async function generatePhotoFrame(
     // Cleanup
     URL.revokeObjectURL(url);
   }, 'image/png');
+}
+
+/**
+ * Generate a 2x2 photo frame from 4 selected photos (legacy function, uses default layout)
+ * @param photoUrls Array of 4 photo URLs
+ * @param aspectRatio Aspect ratio for the photos (deprecated, layout determines size)
+ * @param downloadFilename Optional filename for download
+ */
+export async function generatePhotoFrame(
+  photoUrls: string[],
+  aspectRatio: AspectRatio = '16:9',
+  downloadFilename: string = 'photo-frame.png'
+): Promise<void> {
+  // Use the new layout-based function with default layout
+  return generatePhotoFrameWithLayout(photoUrls, DEFAULT_LAYOUT, downloadFilename);
 }
 
 /**
@@ -152,14 +157,12 @@ export async function generatePhotoFrameBlob(
   const scale = 0.5; // Scale down to half size for frame
   const photoWidth = ratioSettings.width * scale;  // Each photo width
   const photoHeight = ratioSettings.height * scale; // Each photo height
-  const gap = 20;          // Gap between photos
-  const padding = 40;      // Padding around the frame
 
-  canvas.width = (photoWidth * 2) + gap + (padding * 2);
-  canvas.height = (photoHeight * 2) + gap + (padding * 2);
+  canvas.width = (photoWidth * 2) + FRAME_LAYOUT.gap + (FRAME_LAYOUT.padding * 2);
+  canvas.height = (photoHeight * 2) + FRAME_LAYOUT.gap + (FRAME_LAYOUT.padding * 2);
 
   // Fill background
-  ctx.fillStyle = '#1a1a2e';
+  ctx.fillStyle = FRAME_LAYOUT.backgroundColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Load all images
@@ -167,13 +170,13 @@ export async function generatePhotoFrameBlob(
     photoUrls.map(url => loadImage(url))
   );
 
-  // Draw images in 2x2 grid
-  const positions = [
-    { x: padding, y: padding },                                    // Top-left
-    { x: padding + photoWidth + gap, y: padding },                 // Top-right
-    { x: padding, y: padding + photoHeight + gap },                // Bottom-left
-    { x: padding + photoWidth + gap, y: padding + photoHeight + gap } // Bottom-right
-  ];
+  // Calculate grid positions
+  const { positions } = calculateGridCellDimensions(
+    canvas.width,
+    canvas.height,
+    FRAME_LAYOUT.gap,
+    FRAME_LAYOUT.padding
+  );
 
   images.forEach((img, index) => {
     const pos = positions[index];
@@ -202,17 +205,17 @@ export async function generatePhotoFrameBlob(
     ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
 
     // Add border around the box area
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = FRAME_LAYOUT.borderColor;
+    ctx.lineWidth = FRAME_LAYOUT.borderWidth;
     ctx.strokeRect(pos.x, pos.y, photoWidth, photoHeight);
   });
 
   // Add frame number indicators
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 24px sans-serif';
+  ctx.fillStyle = FRAME_LAYOUT.font.color;
+  ctx.font = `${FRAME_LAYOUT.font.weight} ${FRAME_LAYOUT.font.size}px ${FRAME_LAYOUT.font.family}`;
   positions.forEach((pos, index) => {
     const number = index + 1;
-    ctx.fillText(`${number}`, pos.x + 16, pos.y + 40);
+    ctx.fillText(`${number}`, pos.x + FRAME_LAYOUT.font.offsetX, pos.y + FRAME_LAYOUT.font.offsetY);
   });
 
   // Convert to blob and return URL

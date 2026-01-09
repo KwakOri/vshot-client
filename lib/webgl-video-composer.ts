@@ -3,6 +3,10 @@
  * Replaces FFmpeg.wasm for instant video merging
  */
 
+import { FRAME_LAYOUT } from '@/constants/constants';
+import { FrameLayout } from '@/types';
+import { DEFAULT_LAYOUT } from '@/constants/frame-layouts';
+
 export interface VideoSource {
   blob: Blob;
   startTime: number; // seconds
@@ -14,25 +18,44 @@ export interface WebGLComposeConfig {
   width: number; // Output width (e.g., 1920)
   height: number; // Output height (e.g., 1080)
   frameRate: number; // Output frame rate (e.g., 24)
+  layout?: FrameLayout; // Custom frame layout
 }
 
 /**
- * WebGL-based video compositor for 2x2 grid layout
+ * WebGL-based video compositor with custom layout support
  */
 export class WebGLVideoComposer {
-  private canvas: HTMLCanvasElement;
+  private webglCanvas: HTMLCanvasElement; // WebGL rendering canvas
+  private compositeCanvas: HTMLCanvasElement; // Final composite canvas (for streaming)
   private gl: WebGLRenderingContext;
+  private compositeCtx: CanvasRenderingContext2D;
   private program: WebGLProgram;
   private videoElements: HTMLVideoElement[] = [];
   private textures: WebGLTexture[] = [];
   private isRendering = false;
+  private layout: FrameLayout;
 
-  constructor(width: number, height: number) {
-    this.canvas = document.createElement('canvas');
-    this.canvas.width = width;
-    this.canvas.height = height;
+  constructor(width: number, height: number, layout?: FrameLayout) {
+    // WebGL canvas for video rendering
+    this.webglCanvas = document.createElement('canvas');
+    this.webglCanvas.width = width;
+    this.webglCanvas.height = height;
 
-    const gl = this.canvas.getContext('webgl', {
+    // Final composite canvas (WebGL + borders)
+    this.compositeCanvas = document.createElement('canvas');
+    this.compositeCanvas.width = width;
+    this.compositeCanvas.height = height;
+
+    const compositeCtx = this.compositeCanvas.getContext('2d');
+    if (!compositeCtx) {
+      throw new Error('Canvas 2D context not supported');
+    }
+    this.compositeCtx = compositeCtx;
+
+    // Use provided layout or default
+    this.layout = layout || DEFAULT_LAYOUT;
+
+    const gl = this.webglCanvas.getContext('webgl', {
       preserveDrawingBuffer: true,
       premultipliedAlpha: false,
     });
@@ -42,6 +65,7 @@ export class WebGLVideoComposer {
     }
 
     this.gl = gl;
+
     this.program = this.createShaderProgram();
     this.setupGeometry();
   }
@@ -205,55 +229,95 @@ export class WebGLVideoComposer {
   }
 
   /**
-   * Render 2x2 grid of videos
+   * Render videos according to custom layout with proper zIndex ordering
    */
   private renderFrame(): void {
     if (!this.isRendering) return;
 
     const gl = this.gl;
-    const width = this.canvas.width;
-    const height = this.canvas.height;
-    const cellWidth = Math.floor(width / 2);
-    const cellHeight = Math.floor(height / 2);
+    const height = this.webglCanvas.height;
 
-    // Clear canvas
-    gl.clearColor(0, 0, 0, 1);
+    // Clear WebGL canvas with background color
+    const bgColor = this.hexToRgb(FRAME_LAYOUT.backgroundColor);
+    gl.clearColor(bgColor.r, bgColor.g, bgColor.b, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    // Render each video in its grid cell
-    // Layout:
-    // [0] [1]
-    // [2] [3]
-    const positions = [
-      { x: 0, y: cellHeight }, // Bottom-left (0)
-      { x: cellWidth, y: cellHeight }, // Bottom-right (1)
-      { x: 0, y: 0 }, // Top-left (2)
-      { x: cellWidth, y: 0 }, // Top-right (3)
-    ];
+    // Sort positions by zIndex (lower zIndex drawn first = background)
+    const sortedPositions = [...this.layout.positions].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
 
-    for (let i = 0; i < this.videoElements.length; i++) {
-      const video = this.videoElements[i];
-      const texture = this.textures[i];
-      const pos = positions[i];
+    // Render each video according to sorted positions
+    sortedPositions.forEach((slot) => {
+      const originalIndex = this.layout.positions.indexOf(slot);
+      const video = this.videoElements[originalIndex];
+      const texture = this.textures[originalIndex];
 
-      if (video && texture && pos) {
-        this.renderVideoInCell(video, texture, pos.x, pos.y, cellWidth, cellHeight);
+      if (video && texture) {
+        // Convert Canvas 2D coordinates (origin: top-left) to WebGL coordinates (origin: bottom-left)
+        const webglY = height - slot.y - slot.height;
+        this.renderVideoInCell(video, texture, slot.x, webglY, slot.width, slot.height);
       }
-    }
+    });
+
+    // Composite: Copy WebGL canvas to final canvas and add borders
+    this.compositeFrame();
 
     // Continue rendering
     requestAnimationFrame(() => this.renderFrame());
   }
 
   /**
+   * Composite WebGL canvas with borders onto final canvas
+   */
+  private compositeFrame(): void {
+    const ctx = this.compositeCtx;
+
+    // Draw WebGL canvas onto composite canvas
+    ctx.drawImage(this.webglCanvas, 0, 0);
+
+    // Draw borders for each slot
+    ctx.strokeStyle = FRAME_LAYOUT.borderColor;
+    ctx.lineWidth = FRAME_LAYOUT.borderWidth;
+
+    this.layout.positions.forEach((slot, index) => {
+      // Draw border
+      ctx.strokeRect(slot.x, slot.y, slot.width, slot.height);
+
+      // Draw frame number
+      ctx.fillStyle = FRAME_LAYOUT.font.color;
+      ctx.font = `${FRAME_LAYOUT.font.weight} ${FRAME_LAYOUT.font.size}px ${FRAME_LAYOUT.font.family}`;
+      const number = index + 1;
+      ctx.fillText(
+        `${number}`,
+        slot.x + FRAME_LAYOUT.font.offsetX,
+        slot.y + FRAME_LAYOUT.font.offsetY
+      );
+    });
+  }
+
+  /**
+   * Convert hex color to RGB values (0-1 range)
+   */
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!result) {
+      return { r: 0, g: 0, b: 0 };
+    }
+    return {
+      r: parseInt(result[1], 16) / 255,
+      g: parseInt(result[2], 16) / 255,
+      b: parseInt(result[3], 16) / 255,
+    };
+  }
+
+  /**
    * Load video sources and prepare for rendering
    */
   async loadVideos(sources: VideoSource[]): Promise<void> {
-    if (sources.length !== 4) {
-      throw new Error('Exactly 4 video sources required for 2x2 grid');
+    if (sources.length !== this.layout.slotCount) {
+      throw new Error(`Expected ${this.layout.slotCount} video sources for layout "${this.layout.label}", but got ${sources.length}`);
     }
 
-    console.log('[WebGLVideoComposer] Loading 4 video sources...');
+    console.log(`[WebGLVideoComposer] Loading ${sources.length} video sources...`);
 
     // Create video elements
     this.videoElements = await Promise.all(
@@ -301,9 +365,9 @@ export class WebGLVideoComposer {
     this.isRendering = true;
     this.renderFrame();
 
-    // Capture canvas stream
-    const stream = this.canvas.captureStream(frameRate);
-    console.log('[WebGLVideoComposer] Canvas stream captured');
+    // Capture composite canvas stream (with borders)
+    const stream = this.compositeCanvas.captureStream(frameRate);
+    console.log('[WebGLVideoComposer] Composite canvas stream captured');
 
     return stream;
   }
@@ -359,14 +423,14 @@ export class WebGLVideoComposer {
   }
 
   getCanvas(): HTMLCanvasElement {
-    return this.canvas;
+    return this.compositeCanvas;
   }
 }
 
 /**
- * Compose 4 video segments into a 2x2 grid using WebGL (GPU-accelerated, no re-encoding!)
- * @param sources Array of 4 video sources with timing info
- * @param config Composition configuration
+ * Compose video segments using WebGL with custom layout (GPU-accelerated, no re-encoding!)
+ * @param sources Array of video sources matching layout slot count
+ * @param config Composition configuration (includes optional layout)
  * @param onProgress Progress callback
  * @returns Composed video blob (WebM format, recorded from WebGL canvas)
  */
@@ -375,14 +439,17 @@ export async function composeVideoWithWebGL(
   config: WebGLComposeConfig = { width: 1920, height: 1080, frameRate: 24 },
   onProgress?: (message: string) => void
 ): Promise<Blob> {
+  const layout = config.layout || DEFAULT_LAYOUT;
+
   console.log('[composeVideoWithWebGL] Starting WebGL composition');
   console.log('[composeVideoWithWebGL] Sources:', sources.map(s => `#${s.photoNumber}`));
+  console.log('[composeVideoWithWebGL] Layout:', layout.label);
   console.log('[composeVideoWithWebGL] Config:', config);
 
   onProgress?.('WebGL 초기화 중...');
 
-  // Create WebGL composer
-  const composer = new WebGLVideoComposer(config.width, config.height);
+  // Create WebGL composer with layout
+  const composer = new WebGLVideoComposer(config.width, config.height, layout);
 
   try {
     // Load video sources
