@@ -3,6 +3,110 @@ import { FRAME_LAYOUT, calculateGridCellDimensions } from '@/constants/constants
 import { DEFAULT_LAYOUT } from '@/constants/frame-layouts';
 
 /**
+ * Render frame to canvas with custom layout
+ * This is a core rendering function used by both download and preview features
+ * @param canvas Canvas element to render to
+ * @param layout Frame layout configuration
+ * @param images Array of loaded images (must match layout.slotCount)
+ */
+export function renderFrameToCanvas(
+  canvas: HTMLCanvasElement,
+  layout: FrameLayout,
+  images: HTMLImageElement[]
+): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Could not get canvas context');
+  }
+
+  if (images.length !== layout.slotCount) {
+    throw new Error(`Expected ${layout.slotCount} images for layout "${layout.label}", but got ${images.length}`);
+  }
+
+  // Set canvas size (default 1920x1080, can be adjusted based on layout)
+  canvas.width = 1920;
+  canvas.height = 1080;
+
+  // Fill background
+  ctx.fillStyle = FRAME_LAYOUT.backgroundColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Sort positions by zIndex (lower zIndex drawn first = background)
+  const sortedPositions = [...layout.positions].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+
+  // Draw images according to layout positions
+  sortedPositions.forEach((slot) => {
+    const originalIndex = layout.positions.indexOf(slot);
+    const img = images[originalIndex];
+
+    // Calculate aspect ratios for object-fit: cover behavior
+    const imgAspect = img.width / img.height;
+    const boxAspect = slot.width / slot.height;
+
+    let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
+
+    if (imgAspect > boxAspect) {
+      // Image is wider than box - fit to height and crop sides
+      drawHeight = slot.height;
+      drawWidth = slot.height * imgAspect;
+      drawX = slot.x - (drawWidth - slot.width) / 2;
+      drawY = slot.y;
+    } else {
+      // Image is taller than box - fit to width and crop top/bottom
+      drawWidth = slot.width;
+      drawHeight = slot.width / imgAspect;
+      drawX = slot.x;
+      drawY = slot.y - (drawHeight - slot.height) / 2;
+    }
+
+    // Save context and apply clipping to prevent overflow
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(slot.x, slot.y, slot.width, slot.height);
+    ctx.clip();
+
+    // Draw image with cover behavior (clipped to slot area)
+    ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+
+    // Restore context
+    ctx.restore();
+
+    // Add border around the box area
+    ctx.strokeStyle = FRAME_LAYOUT.borderColor;
+    ctx.lineWidth = FRAME_LAYOUT.borderWidth;
+    ctx.strokeRect(slot.x, slot.y, slot.width, slot.height);
+  });
+
+  // Add frame number indicators
+  ctx.fillStyle = FRAME_LAYOUT.font.color;
+  ctx.font = `${FRAME_LAYOUT.font.weight} ${FRAME_LAYOUT.font.size}px ${FRAME_LAYOUT.font.family}`;
+  layout.positions.forEach((slot, index) => {
+    const number = index + 1;
+    ctx.fillText(`${number}`, slot.x + FRAME_LAYOUT.font.offsetX, slot.y + FRAME_LAYOUT.font.offsetY);
+  });
+}
+
+/**
+ * Render frame preview for testing/preview purposes
+ * @param canvas Canvas element to render to
+ * @param layout Frame layout configuration
+ * @param sampleImageUrl Optional URL to sample image (defaults to /sample.png)
+ */
+export async function renderFramePreview(
+  canvas: HTMLCanvasElement,
+  layout: FrameLayout,
+  sampleImageUrl: string = '/sample.png'
+): Promise<void> {
+  // Load sample images (all using the same sample image)
+  const images = await Promise.all(
+    Array(layout.slotCount).fill(sampleImageUrl).map((url) => loadImage(url))
+  );
+
+  // Use the core rendering function
+  renderFrameToCanvas(canvas, layout, images);
+}
+
+/**
  * Generate a photo frame with custom layout
  * @param photoUrls Array of photo URLs (must match layout.slotCount)
  * @param layout Frame layout configuration
@@ -25,62 +129,13 @@ export async function generatePhotoFrameWithLayout(
     throw new Error('Could not get canvas context');
   }
 
-  // Set canvas size (default 1920x1080, can be adjusted based on layout)
-  canvas.width = 1920;
-  canvas.height = 1080;
-
-  // Fill background
-  ctx.fillStyle = FRAME_LAYOUT.backgroundColor;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
   // Load all images
   const images = await Promise.all(
     photoUrls.map(url => loadImage(url))
   );
 
-  // Sort positions by zIndex (lower zIndex drawn first = background)
-  const sortedPositions = [...layout.positions].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
-
-  // Draw images according to layout positions
-  sortedPositions.forEach((slot, index) => {
-    const img = images[layout.positions.indexOf(slot)];
-
-    // Calculate aspect ratios for object-fit: cover behavior
-    const imgAspect = img.width / img.height;
-    const boxAspect = slot.width / slot.height;
-
-    let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
-
-    if (imgAspect > boxAspect) {
-      // Image is wider than box - fit to height and crop sides
-      drawHeight = slot.height;
-      drawWidth = slot.height * imgAspect;
-      drawX = slot.x - (drawWidth - slot.width) / 2;
-      drawY = slot.y;
-    } else {
-      // Image is taller than box - fit to width and crop top/bottom
-      drawWidth = slot.width;
-      drawHeight = slot.width / imgAspect;
-      drawX = slot.x;
-      drawY = slot.y - (drawHeight - slot.height) / 2;
-    }
-
-    // Draw image with cover behavior
-    ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-
-    // Add border around the box area
-    ctx.strokeStyle = FRAME_LAYOUT.borderColor;
-    ctx.lineWidth = FRAME_LAYOUT.borderWidth;
-    ctx.strokeRect(slot.x, slot.y, slot.width, slot.height);
-  });
-
-  // Add frame number indicators
-  ctx.fillStyle = FRAME_LAYOUT.font.color;
-  ctx.font = `${FRAME_LAYOUT.font.weight} ${FRAME_LAYOUT.font.size}px ${FRAME_LAYOUT.font.family}`;
-  layout.positions.forEach((slot, index) => {
-    const number = index + 1;
-    ctx.fillText(`${number}`, slot.x + FRAME_LAYOUT.font.offsetX, slot.y + FRAME_LAYOUT.font.offsetY);
-  });
+  // Use the core rendering function
+  renderFrameToCanvas(canvas, layout, images);
 
   // Convert to blob and download
   canvas.toBlob((blob) => {
@@ -120,7 +175,7 @@ export async function generatePhotoFrame(
 /**
  * Load an image from URL
  */
-function loadImage(url: string): Promise<HTMLImageElement> {
+export function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -201,8 +256,17 @@ export async function generatePhotoFrameBlob(
       drawY = pos.y - (drawHeight - photoHeight) / 2;
     }
 
-    // Draw image with cover behavior
+    // Save context and apply clipping to prevent overflow
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(pos.x, pos.y, photoWidth, photoHeight);
+    ctx.clip();
+
+    // Draw image with cover behavior (clipped to slot area)
     ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+
+    // Restore context
+    ctx.restore();
 
     // Add border around the box area
     ctx.strokeStyle = FRAME_LAYOUT.borderColor;
