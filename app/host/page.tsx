@@ -26,6 +26,7 @@ import {
   type VideoSource,
 } from "@/lib/webgl-video-composer";
 import { ASPECT_RATIOS, type AspectRatio } from "@/types";
+import { FRAME_LAYOUTS, getLayoutById } from "@/constants/frame-layouts";
 import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -54,6 +55,12 @@ export default function HostPage() {
   const [showFlash, setShowFlash] = useState(false);
   const [peerSelectedPhotos, setPeerSelectedPhotos] = useState<number[]>([]);
   const [isGeneratingFrame, setIsGeneratingFrame] = useState(false);
+
+  // Calculate photo counts based on selected frame layout
+  const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
+  const slotCount = selectedLayout?.slotCount || 4;
+  const totalPhotos = slotCount * 2; // Total photos to capture
+  const selectablePhotos = slotCount; // Photos user can select
 
   // Use shared photo capture hook
   const {
@@ -315,6 +322,26 @@ export default function HostPage() {
     }
   };
 
+  // Broadcast frame layout settings when changed
+  useEffect(() => {
+    if (store.roomId && remoteStream) {
+      const settings = {
+        layoutId: store.selectedFrameLayoutId,
+        slotCount,
+        totalPhotos,
+        selectablePhotos,
+      };
+
+      sendMessage({
+        type: "frame-layout-settings",
+        roomId: store.roomId,
+        settings,
+      });
+
+      console.log("[Host] Sent frame layout settings:", settings);
+    }
+  }, [store.selectedFrameLayoutId, store.roomId, remoteStream, slotCount, totalPhotos, selectablePhotos, sendMessage]);
+
   // Setup remote video
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
@@ -385,7 +412,7 @@ export default function HostPage() {
     const handleVideoFrameRequest = async (message: any) => {
       console.log("[Host] Received video frame request:", message);
 
-      if (message.selectedPhotos && message.selectedPhotos.length === 4) {
+      if (message.selectedPhotos && message.selectedPhotos.length === selectablePhotos) {
         console.log(
           "[Host] Auto-composing video frame for photos:",
           message.selectedPhotos
@@ -404,7 +431,7 @@ export default function HostPage() {
     return () => {
       // Cleanup if needed
     };
-  }, [on, recordedSegments, recordingDuration, captureInterval]);
+  }, [on, recordedSegments, recordingDuration, captureInterval, selectablePhotos]);
 
   // Listen to merged photos from server
   useEffect(() => {
@@ -485,7 +512,7 @@ export default function HostPage() {
   // Photo selection is Guest-only, Host just displays Guest's selections
 
   const takePhoto = (photoNumber: number) => {
-    if (!store.roomId || photoNumber > 8) {
+    if (!store.roomId || photoNumber > totalPhotos) {
       setIsCapturing(false);
       return;
     }
@@ -615,7 +642,7 @@ export default function HostPage() {
         });
 
         // Take next photo or finish session
-        if (photoNumber < 8) {
+        if (photoNumber < totalPhotos) {
           console.log("[Host] Photo", photoNumber, "captured successfully");
           console.log(
             "[Host] ⏱️  Waiting",
@@ -641,19 +668,28 @@ export default function HostPage() {
   };
 
   const handleGenerateFrame = async () => {
-    if (peerSelectedPhotos.length !== 4) {
-      alert("Guest가 4장의 사진을 선택해야 합니다.");
+    if (peerSelectedPhotos.length !== selectablePhotos) {
+      alert(`Guest가 ${selectablePhotos}장의 사진을 선택해야 합니다.`);
       return;
     }
 
     setIsGeneratingFrame(true);
     try {
-      await downloadPhotoFrame(
-        photos,
-        peerSelectedPhotos,
-        store.roomId || "frame",
-        aspectRatio
-      );
+      const layout = getLayoutById(store.selectedFrameLayoutId);
+
+      if (!layout) {
+        throw new Error(`Layout not found: ${store.selectedFrameLayoutId}`);
+      }
+
+      // Use only the number of photos that match the layout's slot count
+      const photosToUse = peerSelectedPhotos.slice(0, layout.slotCount);
+      const selectedPhotoUrls = photosToUse.map((index) => photos[index]);
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      const filename = `vshot-frame-${store.roomId || 'frame'}-${timestamp}.png`;
+
+      await generatePhotoFrameWithLayout(selectedPhotoUrls, layout, filename);
       console.log("[Host] Photo frame generated and downloaded");
     } catch (error) {
       console.error("[Host] Failed to generate frame:", error);
@@ -685,26 +721,27 @@ export default function HostPage() {
       )
       .filter((seg): seg is VideoSegment => seg !== undefined);
 
-    if (selectedSegments.length !== 4) {
+    if (selectedSegments.length !== selectablePhotos) {
       console.error(
-        `[Host] Failed to find all segments (${selectedSegments.length}/4)`
+        `[Host] Failed to find all segments (${selectedSegments.length}/${selectablePhotos})`
       );
       alert(
         `선택한 사진 중 ${
-          4 - selectedSegments.length
+          selectablePhotos - selectedSegments.length
         }개의 영상을 찾을 수 없습니다.`
       );
       return;
     }
 
-    console.log("[Host] 🚀 Auto-composing with WebGL GPU (재인코딩 없음!)");
+    console.log("[Host] 🚀 Auto-composing with Canvas 2D + selected layout");
     console.log(
       "[Host] Auto-composing video frame with segments:",
       selectedSegments.map((s) => s.photoNumber)
     );
+    console.log("[Host] Selected layout:", store.selectedFrameLayoutId);
 
     setIsComposing(true);
-    setComposeProgress("WebGL GPU 합성 시작...");
+    setComposeProgress("영상 합성 시작...");
 
     try {
       // Convert VideoSegment to VideoSource
@@ -715,17 +752,36 @@ export default function HostPage() {
         photoNumber: seg.photoNumber,
       }));
 
-      // Use WebGL composition (GPU-accelerated, no re-encoding!)
+      // Get selected frame layout
+      const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
+
+      if (!selectedLayout) {
+        console.error("[Host] Selected layout not found:", store.selectedFrameLayoutId);
+        alert("선택한 프레임 레이아웃을 찾을 수 없습니다.");
+        setIsComposing(false);
+        return;
+      }
+
+      console.log("[Host] Using layout for auto composition:", {
+        id: selectedLayout.id,
+        label: selectedLayout.label,
+        slotCount: selectedLayout.slotCount,
+        videoSourcesCount: videoSources.length
+      });
+
+      // Use Canvas 2D composition with selected layout
+      // NOTE: Use canvas size from layout configuration
       const composedBlob = await composeVideoWithWebGL(
         videoSources,
         {
-          width: ASPECT_RATIOS[aspectRatio].width,
-          height: ASPECT_RATIOS[aspectRatio].height,
+          width: selectedLayout.canvasWidth,
+          height: selectedLayout.canvasHeight,
           frameRate: 24,
+          layout: selectedLayout,
         },
         (progress) => {
           setComposeProgress(progress);
-          console.log("[Host] WebGL compose progress:", progress);
+          console.log("[Host] Video compose progress:", progress);
         }
       );
 
@@ -734,7 +790,7 @@ export default function HostPage() {
 
       // Upload to server
       const formData = new FormData();
-      formData.append("video", composedBlob, "video-frame.mp4");
+      formData.append("video", composedBlob, "video-frame.webm");
       formData.append("roomId", store.roomId);
       formData.append("userId", store.userId);
 
@@ -775,8 +831,8 @@ export default function HostPage() {
   };
 
   const handleComposeVideoFrame = async () => {
-    if (peerSelectedPhotos.length !== 4) {
-      alert("Guest가 4장의 사진을 선택해야 합니다.");
+    if (peerSelectedPhotos.length !== selectablePhotos) {
+      alert(`Guest가 ${selectablePhotos}장의 사진을 선택해야 합니다.`);
       return;
     }
 
@@ -793,23 +849,24 @@ export default function HostPage() {
       )
       .filter((seg): seg is VideoSegment => seg !== undefined);
 
-    if (selectedSegments.length !== 4) {
+    if (selectedSegments.length !== selectablePhotos) {
       alert(
         `선택한 사진 중 ${
-          4 - selectedSegments.length
+          selectablePhotos - selectedSegments.length
         }개의 영상을 찾을 수 없습니다.`
       );
       return;
     }
 
-    console.log("[Host] 🚀 WebGL GPU 합성 시작 (재인코딩 없음!)");
+    console.log("[Host] 🚀 Canvas 2D 합성 시작 + selected layout");
     console.log(
       "[Host] Composing video frame with segments:",
       selectedSegments.map((s) => s.photoNumber)
     );
+    console.log("[Host] Selected layout:", store.selectedFrameLayoutId);
 
     setIsComposing(true);
-    setComposeProgress("WebGL GPU 합성 시작...");
+    setComposeProgress("영상 합성 시작...");
 
     try {
       // Convert VideoSegment to VideoSource
@@ -820,17 +877,36 @@ export default function HostPage() {
         photoNumber: seg.photoNumber,
       }));
 
-      // Use WebGL composition (GPU-accelerated, no re-encoding!)
+      // Get selected frame layout
+      const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
+
+      if (!selectedLayout) {
+        console.error("[Host] Selected layout not found:", store.selectedFrameLayoutId);
+        alert("선택한 프레임 레이아웃을 찾을 수 없습니다.");
+        setIsComposing(false);
+        return;
+      }
+
+      console.log("[Host] Using layout for manual composition:", {
+        id: selectedLayout.id,
+        label: selectedLayout.label,
+        slotCount: selectedLayout.slotCount,
+        videoSourcesCount: videoSources.length
+      });
+
+      // Use Canvas 2D composition with selected layout
+      // NOTE: Use canvas size from layout configuration
       const composedBlob = await composeVideoWithWebGL(
         videoSources,
         {
-          width: ASPECT_RATIOS[aspectRatio].width,
-          height: ASPECT_RATIOS[aspectRatio].height,
+          width: selectedLayout.canvasWidth,
+          height: selectedLayout.canvasHeight,
           frameRate: 24,
+          layout: selectedLayout,
         },
         (progress) => {
           setComposeProgress(progress);
-          console.log("[Host] WebGL compose progress:", progress);
+          console.log("[Host] Video compose progress:", progress);
         }
       );
 
@@ -842,13 +918,12 @@ export default function HostPage() {
       }
 
       setComposedVideo({ blob: composedBlob, url });
-      console.log("[Host] ✅ WebGL composition complete (no re-encoding!):", {
+      console.log("[Host] ✅ Video composition complete:", {
         size: `${(composedBlob.size / 1024 / 1024).toFixed(2)} MB`,
+        layout: store.selectedFrameLayoutId,
       });
 
-      alert(
-        "✨ 영상 프레임이 생성되었습니다! (WebGL GPU 합성 - 재인코딩 없음!)"
-      );
+      alert("✨ 영상 프레임이 생성되었습니다!");
     } catch (error) {
       console.error("[Host] Failed to compose video with WebGL:", error);
       alert(
@@ -1064,11 +1139,66 @@ export default function HostPage() {
               </SettingsPanel>
             )}
 
+            {/* Frame Layout Selection */}
+            {remoteStream && (
+              <SettingsPanel title="프레임 레이아웃">
+                <div className="space-y-4">
+                  <p className="text-sm text-dark/70">
+                    영상 프레임 생성 시 사용할 레이아웃을 선택하세요
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {FRAME_LAYOUTS.filter((layout) => layout.isActive).map(
+                      (layout) => {
+                        const isSelected =
+                          store.selectedFrameLayoutId === layout.id;
+                        return (
+                          <button
+                            key={layout.id}
+                            onClick={() =>
+                              store.setSelectedFrameLayoutId(layout.id)
+                            }
+                            disabled={isCapturing}
+                            className={`
+                              relative p-3 rounded-lg border-2 transition
+                              ${
+                                isSelected
+                                  ? "border-primary bg-primary/10"
+                                  : "border-neutral hover:border-primary/50"
+                              }
+                              disabled:opacity-50 disabled:cursor-not-allowed
+                            `}
+                          >
+                            <div className="text-left">
+                              <div
+                                className={`text-sm font-semibold mb-1 ${
+                                  isSelected ? "text-primary" : "text-dark"
+                                }`}
+                              >
+                                {layout.label}
+                              </div>
+                              <div className="text-xs text-dark/60">
+                                {layout.description}
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <div className="absolute top-2 right-2 w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                                <span className="text-white text-xs">✓</span>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
+                </div>
+              </SettingsPanel>
+            )}
+
             {/* Photo capture panel */}
             {remoteStream && (
               <SettingsPanel title="사진 촬영">
                 <div className="mb-4">
-                  <PhotoCounter current={photoCount} total={8} />
+                  <PhotoCounter current={photoCount} total={totalPhotos} />
 
                   {currentlyRecording !== null && (
                     <div className="flex items-center justify-center gap-2 mb-3 text-sm text-primary font-medium">
@@ -1102,16 +1232,17 @@ export default function HostPage() {
             role="host"
             peerSelectedPhotos={peerSelectedPhotos}
             isGenerating={isGeneratingFrame}
+            maxSelection={selectablePhotos}
           />
 
           {/* Video Frame Composition */}
-          {recordedSegments.length >= 4 && peerSelectedPhotos.length === 4 && (
+          {recordedSegments.length >= selectablePhotos && peerSelectedPhotos.length === selectablePhotos && (
             <div className="bg-white border-2 border-neutral rounded-lg p-6 mt-6 shadow-md">
               <h2 className="text-2xl font-semibold mb-4 text-dark">
                 영상 프레임 생성
               </h2>
               <p className="text-dark/70 mb-4">
-                Guest가 선택한 4개의 사진에 해당하는 영상을 2x2 그리드로
+                Guest가 선택한 {selectablePhotos}개의 사진에 해당하는 영상을 {selectedLayout?.label || '프레임'}으로
                 합성합니다.
               </p>
 
@@ -1158,6 +1289,7 @@ export default function HostPage() {
                           .toISOString()
                           .replace(/[:.]/g, "-")
                           .slice(0, -5);
+
                         downloadWebGLComposedVideo(
                           composedVideo.blob,
                           `vshot-frame-${store.roomId}-${timestamp}.webm`
@@ -1168,7 +1300,7 @@ export default function HostPage() {
                       📥 영상 프레임 다운로드
                     </button>
                     <p className="text-xs text-dark/70 mt-3 text-center">
-                      Guest가 선택한 4개 영상을 2x2 그리드로 합성한 파일입니다.
+                      Guest가 선택한 {selectablePhotos}개 영상을 {selectedLayout?.label || '프레임'}으로 합성한 파일입니다.
                     </p>
                   </div>
                 </div>

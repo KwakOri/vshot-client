@@ -24,6 +24,7 @@ export type SignalMessage =
   | { type: 'host-display-options'; roomId: string; options: { flipHorizontal: boolean } }
   | { type: 'guest-display-options'; roomId: string; options: { flipHorizontal: boolean } }
   | { type: 'aspect-ratio-settings'; roomId: string; settings: AspectRatioSettings }
+  | { type: 'frame-layout-settings'; roomId: string; settings: FrameLayoutSettings }
   | { type: 'error'; message: string };
 
 export interface ChromaKeySettings {
@@ -44,6 +45,13 @@ export interface AspectRatioSettings {
   ratio: AspectRatio;
   width: number;
   height: number;
+}
+
+export interface FrameLayoutSettings {
+  layoutId: string;
+  slotCount: number;
+  totalPhotos: number;
+  selectablePhotos: number;
 }
 
 export const ASPECT_RATIOS: Record<AspectRatio, { width: number; height: number; label: string }> = {
@@ -105,6 +113,9 @@ export interface FrameLayout {
   slotCount: number;             // Number of slots (e.g., 4 for 2x2 grid)
   positions: FrameSlot[];        // Position data for each slot
   thumbnailSrc: string;          // Path to preview image (e.g., "/frames/2x2-grid.png")
+  canvasWidth: number;           // Canvas width in pixels (e.g., 1920)
+  canvasHeight: number;          // Canvas height in pixels (e.g., 1080)
+  frameSrc: string;              // Path to frame overlay image (rendered on top with highest z-index)
 
   // Optional metadata for DB
   description?: string;          // Description of the layout

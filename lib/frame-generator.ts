@@ -9,11 +9,11 @@ import { DEFAULT_LAYOUT } from '@/constants/frame-layouts';
  * @param layout Frame layout configuration
  * @param images Array of loaded images (must match layout.slotCount)
  */
-export function renderFrameToCanvas(
+export async function renderFrameToCanvas(
   canvas: HTMLCanvasElement,
   layout: FrameLayout,
   images: HTMLImageElement[]
-): void {
+): Promise<void> {
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     throw new Error('Could not get canvas context');
@@ -23,9 +23,9 @@ export function renderFrameToCanvas(
     throw new Error(`Expected ${layout.slotCount} images for layout "${layout.label}", but got ${images.length}`);
   }
 
-  // Set canvas size (default 1920x1080, can be adjusted based on layout)
-  canvas.width = 1920;
-  canvas.height = 1080;
+  // Set canvas size from layout configuration
+  canvas.width = layout.canvasWidth;
+  canvas.height = layout.canvasHeight;
 
   // Fill background
   ctx.fillStyle = FRAME_LAYOUT.backgroundColor;
@@ -70,20 +70,26 @@ export function renderFrameToCanvas(
 
     // Restore context
     ctx.restore();
-
-    // Add border around the box area
-    ctx.strokeStyle = FRAME_LAYOUT.borderColor;
-    ctx.lineWidth = FRAME_LAYOUT.borderWidth;
-    ctx.strokeRect(slot.x, slot.y, slot.width, slot.height);
   });
 
-  // Add frame number indicators
-  ctx.fillStyle = FRAME_LAYOUT.font.color;
-  ctx.font = `${FRAME_LAYOUT.font.weight} ${FRAME_LAYOUT.font.size}px ${FRAME_LAYOUT.font.family}`;
-  layout.positions.forEach((slot, index) => {
-    const number = index + 1;
-    ctx.fillText(`${number}`, slot.x + FRAME_LAYOUT.font.offsetX, slot.y + FRAME_LAYOUT.font.offsetY);
-  });
+  // Draw frame overlay on top (if frameSrc exists)
+  if (layout.frameSrc && layout.frameSrc !== '') {
+    const frameImage = new Image();
+    frameImage.crossOrigin = 'anonymous';
+
+    return new Promise<void>((resolve, reject) => {
+      frameImage.onload = () => {
+        // Draw frame overlay covering the entire canvas
+        ctx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
+        resolve();
+      };
+      frameImage.onerror = () => {
+        console.error(`Failed to load frame image: ${layout.frameSrc}`);
+        resolve(); // Continue even if frame fails to load
+      };
+      frameImage.src = layout.frameSrc;
+    });
+  }
 }
 
 /**
@@ -103,7 +109,7 @@ export async function renderFramePreview(
   );
 
   // Use the core rendering function
-  renderFrameToCanvas(canvas, layout, images);
+  await renderFrameToCanvas(canvas, layout, images);
 }
 
 /**
@@ -135,7 +141,7 @@ export async function generatePhotoFrameWithLayout(
   );
 
   // Use the core rendering function
-  renderFrameToCanvas(canvas, layout, images);
+  await renderFrameToCanvas(canvas, layout, images);
 
   // Convert to blob and download
   canvas.toBlob((blob) => {
@@ -267,20 +273,51 @@ export async function generatePhotoFrameBlob(
 
     // Restore context
     ctx.restore();
-
-    // Add border around the box area
-    ctx.strokeStyle = FRAME_LAYOUT.borderColor;
-    ctx.lineWidth = FRAME_LAYOUT.borderWidth;
-    ctx.strokeRect(pos.x, pos.y, photoWidth, photoHeight);
   });
 
-  // Add frame number indicators
-  ctx.fillStyle = FRAME_LAYOUT.font.color;
-  ctx.font = `${FRAME_LAYOUT.font.weight} ${FRAME_LAYOUT.font.size}px ${FRAME_LAYOUT.font.family}`;
-  positions.forEach((pos, index) => {
-    const number = index + 1;
-    ctx.fillText(`${number}`, pos.x + FRAME_LAYOUT.font.offsetX, pos.y + FRAME_LAYOUT.font.offsetY);
+  // Convert to blob and return URL
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Failed to generate image blob'));
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      resolve(url);
+    }, 'image/png');
   });
+}
+
+/**
+ * Generate a photo frame with custom layout and return blob URL (without downloading)
+ * @param photoUrls Array of photo URLs (must match layout.slotCount)
+ * @param layout Frame layout configuration
+ * @returns Blob URL of the generated frame
+ */
+export async function generatePhotoFrameBlobWithLayout(
+  photoUrls: string[],
+  layout: FrameLayout
+): Promise<string> {
+  if (photoUrls.length !== layout.slotCount) {
+    throw new Error(`Expected ${layout.slotCount} photos for layout "${layout.label}", but got ${photoUrls.length}`);
+  }
+
+  // Create canvas
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx) {
+    throw new Error('Could not get canvas context');
+  }
+
+  // Load all images
+  const images = await Promise.all(
+    photoUrls.map(url => loadImage(url))
+  );
+
+  // Use the core rendering function
+  await renderFrameToCanvas(canvas, layout, images);
 
   // Convert to blob and return URL
   return new Promise((resolve, reject) => {

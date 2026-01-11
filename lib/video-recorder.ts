@@ -165,23 +165,27 @@ export class VideoRecorder {
 
   /**
    * Get supported mime type for video recording
+   * Priority: MP4 (H.264 + AAC) for maximum compatibility
    */
   private getSupportedMimeType(): string {
     const types = [
+      'video/mp4; codecs="avc1.424028, mp4a.40.2"', // H.264 High Profile + AAC - best compatibility
+      'video/mp4',
       'video/webm;codecs=vp9',
       'video/webm;codecs=vp8',
-      'video/webm',
-      'video/mp4'
+      'video/webm'
     ];
 
     for (const type of types) {
       if (MediaRecorder.isTypeSupported(type)) {
+        console.log('[VideoRecorder] Using codec:', type);
         return type;
       }
     }
 
-    // Fallback
-    return 'video/webm';
+    // Fallback to MP4 for better compatibility than WebM
+    console.warn('[VideoRecorder] No supported codecs found, using fallback: video/mp4');
+    return 'video/mp4';
   }
 
   /**

@@ -1,7 +1,18 @@
+'use client';
+
 import Link from 'next/link';
 import { Monitor, Camera } from 'lucide-react';
+import { useAppStore } from '@/lib/store';
 
 export default function Home() {
+  const store = useAppStore();
+
+  const handleRoleSelect = (role: 'host' | 'guest') => {
+    // Clear all previous session data when starting fresh from main page
+    store.reset();
+    console.log(`[Main] Cleared session data before navigating to ${role}`);
+  };
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 bg-light">
       <div className="max-w-2xl w-full bg-white rounded-2xl shadow-lg p-8 border-2 border-neutral">
@@ -15,6 +26,7 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Link
             href="/host"
+            onClick={() => handleRoleSelect('host')}
             className="bg-primary hover:bg-primary-dark text-white font-bold py-8 px-6 rounded-xl text-center transition-colors shadow-md flex flex-col items-center"
           >
             <Monitor size={48} className="mb-3" strokeWidth={2} />
@@ -24,6 +36,7 @@ export default function Home() {
 
           <Link
             href="/guest"
+            onClick={() => handleRoleSelect('guest')}
             className="bg-secondary hover:bg-secondary-dark text-white font-bold py-8 px-6 rounded-xl text-center transition-colors shadow-md flex flex-col items-center"
           >
             <Camera size={48} className="mb-3" strokeWidth={2} />

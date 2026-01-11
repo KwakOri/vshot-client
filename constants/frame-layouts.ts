@@ -1,8 +1,8 @@
 /**
- * Frame Layout Presets
+ * Frame Layout Presets - 인생네컷 스타일 (세로형)
  * DB-ready structure for custom photo/video frame compositions
  *
- * Base canvas size: 1920x1080 (16:9)
+ * Base canvas size: 1200x1600 (3:4 세로 비율)
  * All positions use FRAME_LAYOUT constants for consistency
  */
 
@@ -14,8 +14,8 @@ import { FRAME_LAYOUT } from './constants';
  * Helper function for consistent spacing
  */
 function calculateGridPositions(
-  canvasWidth: number = 1920,
-  canvasHeight: number = 1080,
+  canvasWidth: number = 1200,
+  canvasHeight: number = 1600,
   cols: number = 2,
   rows: number = 2
 ) {
@@ -44,229 +44,273 @@ function calculateGridPositions(
 }
 
 /**
- * Predefined frame layouts
+ * Predefined frame layouts (인생네컷 스타일)
  * These can be synced with a database
  */
 export const FRAME_LAYOUTS: FrameLayout[] = [
-  // 1. Standard 2x2 Grid
+  // 1. Classic Life 4-Cut (2x2 Grid)
   {
     id: '2x2-grid-standard',
-    label: '2x2 균등 그리드',
+    label: '인생네컷 (2x2)',
     slotCount: 4,
-    positions: calculateGridPositions(1920, 1080, 2, 2),
+    positions: calculateGridPositions(1200, 1600, 2, 2),
+    canvasWidth: 1200,
+    canvasHeight: 1600,
     thumbnailSrc: '/frames/2x2-grid.png',
-    description: '4개의 동일한 크기 칸으로 구성된 기본 레이아웃',
+    frameSrc: '', // No frame overlay
+    description: '2x2 배열의 클래식 인생네컷 스타일',
     category: 'grid',
     isActive: true,
     sortOrder: 1,
-    tags: ['grid', 'equal', 'standard'],
+    tags: ['grid', 'equal', 'standard', 'life4cut'],
     createdAt: new Date().toISOString(),
   },
 
-  // 2. Main with Thumbnails (Right)
+  // 2. Vertical 4-Cut (1x4 Strip)
   {
-    id: 'main-thumbnails-right',
-    label: '메인 + 우측 섬네일',
+    id: '1x4-vertical-strip',
+    label: '세로 4단 (1x4)',
     slotCount: 4,
-    positions: [
-      // Main (large, left side)
-      {
-        x: FRAME_LAYOUT.padding,
-        y: FRAME_LAYOUT.padding,
-        width: 1200,
-        height: 1000,
-        zIndex: 0,
-      },
-      // Thumbnail 1 (top right)
-      {
-        x: 1200 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
-        y: FRAME_LAYOUT.padding,
-        width: 640,
-        height: 310,
-        zIndex: 1,
-      },
-      // Thumbnail 2 (middle right)
-      {
-        x: 1200 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
-        y: FRAME_LAYOUT.padding + 310 + FRAME_LAYOUT.gap,
-        width: 640,
-        height: 310,
-        zIndex: 2,
-      },
-      // Thumbnail 3 (bottom right)
-      {
-        x: 1200 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
-        y: FRAME_LAYOUT.padding + 310 * 2 + FRAME_LAYOUT.gap * 2,
-        width: 640,
-        height: 310,
-        zIndex: 3,
-      },
-    ],
-    thumbnailSrc: '/frames/main-thumbnails-right.png',
-    description: '큰 메인 이미지와 우측의 3개 섬네일',
-    category: 'spotlight',
+    positions: calculateGridPositions(1200, 1600, 1, 4),
+    canvasWidth: 1200,
+    canvasHeight: 1600,
+    thumbnailSrc: '/frames/1x4-strip.png',
+    frameSrc: '', // No frame overlay
+    description: '세로로 4개가 나열된 스트립 레이아웃',
+    category: 'grid',
     isActive: true,
     sortOrder: 2,
-    tags: ['main', 'spotlight', 'asymmetric'],
+    tags: ['vertical', 'strip', 'sequential', 'life4cut'],
     createdAt: new Date().toISOString(),
   },
 
-  // 3. Spotlight Top
+  // 3. Polaroid Single (Vertical)
   {
-    id: 'spotlight-top',
-    label: '상단 스포트라이트',
+    id: 'polaroid-single',
+    label: '폴라로이드 (단일)',
+    slotCount: 1,
+    positions: [
+      {
+        x: 100, // Centered with margin
+        y: 200, // Top margin for polaroid effect
+        width: 1000,
+        height: 1200,
+        zIndex: 0,
+      },
+    ],
+    canvasWidth: 1200,
+    canvasHeight: 1600,
+    thumbnailSrc: '/frames/polaroid-single.png',
+    frameSrc: '', // No frame overlay
+    description: '단일 사진을 위한 세로형 폴라로이드 스타일',
+    category: 'single',
+    isActive: true,
+    sortOrder: 3,
+    tags: ['polaroid', 'single', 'classic', 'vintage'],
+    createdAt: new Date().toISOString(),
+  },
+
+  // 4. Main + 3 Thumbnails (Top Main)
+  {
+    id: 'main-top-thumbnails',
+    label: '메인 + 하단 3컷',
     slotCount: 4,
     positions: [
-      // Spotlight (large, top)
+      // Main (large, top)
       {
         x: FRAME_LAYOUT.padding,
         y: FRAME_LAYOUT.padding,
-        width: 1840,
-        height: 600,
+        width: 1120,
+        height: 840,
         zIndex: 0,
       },
       // Thumbnail 1 (bottom left)
       {
         x: FRAME_LAYOUT.padding,
-        y: 600 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
-        width: 600,
-        height: 400,
+        y: 840 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
+        width: 360,
+        height: 360,
         zIndex: 1,
       },
       // Thumbnail 2 (bottom center)
       {
-        x: FRAME_LAYOUT.padding + 600 + FRAME_LAYOUT.gap,
-        y: 600 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
-        width: 600,
-        height: 400,
+        x: FRAME_LAYOUT.padding + 360 + FRAME_LAYOUT.gap,
+        y: 840 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
+        width: 360,
+        height: 360,
         zIndex: 2,
       },
       // Thumbnail 3 (bottom right)
       {
-        x: FRAME_LAYOUT.padding + 1200 + FRAME_LAYOUT.gap * 2,
-        y: 600 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
-        width: 600,
-        height: 400,
+        x: FRAME_LAYOUT.padding + 720 + FRAME_LAYOUT.gap * 2,
+        y: 840 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
+        width: 360,
+        height: 360,
         zIndex: 3,
       },
     ],
-    thumbnailSrc: '/frames/spotlight-top.png',
-    description: '상단에 큰 이미지, 하단에 3개 섬네일',
+    canvasWidth: 1200,
+    canvasHeight: 1600,
+    thumbnailSrc: '/frames/main-top-thumbnails.png',
+    frameSrc: '', // No frame overlay
+    description: '상단에 큰 메인 사진, 하단에 3개 섬네일',
     category: 'spotlight',
     isActive: true,
-    sortOrder: 3,
-    tags: ['spotlight', 'top', 'hero'],
-    createdAt: new Date().toISOString(),
-  },
-
-  // 4. Side by Side (2 columns)
-  {
-    id: 'side-by-side-2col',
-    label: '좌우 2단 분할',
-    slotCount: 4,
-    positions: calculateGridPositions(1920, 1080, 2, 2),
-    thumbnailSrc: '/frames/side-by-side-2col.png',
-    description: '좌우 2개 컬럼으로 나뉜 레이아웃',
-    category: 'grid',
-    isActive: true,
     sortOrder: 4,
-    tags: ['columns', 'split', 'vertical'],
+    tags: ['main', 'spotlight', 'asymmetric'],
     createdAt: new Date().toISOString(),
   },
 
-  // 5. Collage Style (Free positioning)
+  // 5. Collage Style (Free positioning - Vertical)
   {
-    id: 'collage-free',
-    label: '콜라주 스타일',
+    id: 'collage-vertical',
+    label: '세로 콜라주',
     slotCount: 4,
     positions: [
-      // Top left (large)
+      // Top (wide)
       {
         x: FRAME_LAYOUT.padding,
         y: FRAME_LAYOUT.padding,
-        width: 900,
-        height: 500,
-        zIndex: 1,
-      },
-      // Top right (medium)
-      {
-        x: 900 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
-        y: FRAME_LAYOUT.padding,
-        width: 940,
+        width: 1120,
         height: 500,
         zIndex: 0,
       },
-      // Bottom left (medium)
+      // Middle left (tall)
       {
         x: FRAME_LAYOUT.padding,
         y: 500 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
-        width: 600,
-        height: 520,
+        width: 550,
+        height: 700,
+        zIndex: 1,
+      },
+      // Middle right (tall)
+      {
+        x: 550 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
+        y: 500 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
+        width: 550,
+        height: 700,
         zIndex: 2,
       },
-      // Bottom right (large)
+      // Bottom (wide)
       {
-        x: 600 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
-        y: 500 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap,
-        width: 1240,
-        height: 520,
+        x: FRAME_LAYOUT.padding,
+        y: 1200 + FRAME_LAYOUT.padding + FRAME_LAYOUT.gap * 2,
+        width: 1120,
+        height: 300,
         zIndex: 3,
       },
     ],
-    thumbnailSrc: '/frames/collage-free.png',
-    description: '자유로운 크기와 배치의 콜라주 레이아웃',
+    canvasWidth: 1200,
+    canvasHeight: 1600,
+    thumbnailSrc: '/frames/collage-vertical.png',
+    frameSrc: '', // No frame overlay
+    description: '세로형 자유 배치 콜라주',
     category: 'collage',
     isActive: true,
     sortOrder: 5,
-    tags: ['collage', 'free', 'creative', 'asymmetric'],
+    tags: ['collage', 'free', 'creative', 'vertical'],
     createdAt: new Date().toISOString(),
   },
 
-  // 6. Picture in Picture
+  // 6. Picture in Picture (Vertical)
   {
-    id: 'picture-in-picture',
-    label: 'PIP (화면 속 화면)',
+    id: 'picture-in-picture-vertical',
+    label: 'PIP (세로형)',
     slotCount: 4,
     positions: [
       // Background (full)
       {
         x: FRAME_LAYOUT.padding,
         y: FRAME_LAYOUT.padding,
-        width: 1840,
-        height: 1000,
+        width: 1120,
+        height: 1520,
         zIndex: 0,
       },
       // PIP 1 (top right)
       {
-        x: 1920 - 400 - FRAME_LAYOUT.padding - 20,
+        x: 1200 - 300 - FRAME_LAYOUT.padding - 20,
         y: FRAME_LAYOUT.padding + 20,
-        width: 400,
-        height: 250,
+        width: 300,
+        height: 400,
         zIndex: 1,
       },
       // PIP 2 (middle right)
       {
-        x: 1920 - 400 - FRAME_LAYOUT.padding - 20,
-        y: FRAME_LAYOUT.padding + 250 + 40,
-        width: 400,
-        height: 250,
+        x: 1200 - 300 - FRAME_LAYOUT.padding - 20,
+        y: FRAME_LAYOUT.padding + 440,
+        width: 300,
+        height: 400,
         zIndex: 2,
       },
       // PIP 3 (bottom right)
       {
-        x: 1920 - 400 - FRAME_LAYOUT.padding - 20,
-        y: FRAME_LAYOUT.padding + 500 + 60,
-        width: 400,
-        height: 250,
+        x: 1200 - 300 - FRAME_LAYOUT.padding - 20,
+        y: FRAME_LAYOUT.padding + 860,
+        width: 300,
+        height: 400,
         zIndex: 3,
       },
     ],
-    thumbnailSrc: '/frames/picture-in-picture.png',
-    description: '전체 배경 위에 작은 화면들이 겹쳐진 레이아웃',
+    canvasWidth: 1200,
+    canvasHeight: 1600,
+    thumbnailSrc: '/frames/picture-in-picture-vertical.png',
+    frameSrc: '', // No frame overlay
+    description: '세로형 화면 속 화면 레이아웃',
     category: 'overlay',
     isActive: true,
     sortOrder: 6,
-    tags: ['pip', 'overlay', 'layered'],
+    tags: ['pip', 'overlay', 'layered', 'vertical'],
+    createdAt: new Date().toISOString(),
+  },
+
+  // 7. Quokka Frame (Custom Event Frame)
+  {
+    id: 'quokka-frame',
+    label: '쿼카 프레임',
+    slotCount: 4,
+    positions: [
+      // Slot 1 (top left)
+      {
+        x: 153,
+        y: 973,
+        width: 1155,
+        height: 1375,
+        zIndex: 0,
+      },
+      // Slot 2 (bottom left)
+      {
+        x: 153,
+        y: 2420,
+        width: 1155,
+        height: 1375,
+        zIndex: 1,
+      },
+      // Slot 3 (top right)
+      {
+        x: 1446,
+        y: 287,
+        width: 1155,
+        height: 1375,
+        zIndex: 2,
+      },
+      // Slot 4 (bottom right)
+      {
+        x: 1446,
+        y: 1734,
+        width: 1155,
+        height: 1375,
+        zIndex: 3,
+      },
+    ],
+    canvasWidth: 2731,
+    canvasHeight: 4096,
+    thumbnailSrc: '/sample-frame.png',
+    frameSrc: '/sample-frame.png', // Quokka frame overlay
+    description: '쿼카 테마 커스텀 이벤트 프레임',
+    category: 'event',
+    isActive: true,
+    sortOrder: 7,
+    tags: ['quokka', 'event', 'custom', 'themed'],
     createdAt: new Date().toISOString(),
   },
 ];
@@ -306,4 +350,4 @@ export function searchLayoutsByTag(tag: string): FrameLayout[] {
 /**
  * Default layout (fallback)
  */
-export const DEFAULT_LAYOUT = FRAME_LAYOUTS[0]; // 2x2 grid
+export const DEFAULT_LAYOUT = FRAME_LAYOUTS[0]; // 2x2 grid (인생네컷)

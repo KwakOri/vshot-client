@@ -17,8 +17,10 @@ import { useWebRTC } from "@/hooks/useWebRTC";
 import {
   downloadPhotoFrameFromBlob,
   generatePhotoFrameBlob,
+  generatePhotoFrameBlobWithLayout,
 } from "@/lib/frame-generator";
 import { useAppStore } from "@/lib/store";
+import { getLayoutById } from "@/constants/frame-layouts";
 import { ASPECT_RATIOS, type AspectRatio } from "@/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -47,6 +49,17 @@ export default function GuestPage() {
 
   // Aspect ratio settings (received from Host)
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("3:4");
+
+  // Frame layout settings (received from Host)
+  // Initialize with function to avoid recalculation on every render
+  const [totalPhotos, setTotalPhotos] = useState(() => {
+    const layout = getLayoutById(store.selectedFrameLayoutId);
+    return (layout?.slotCount || 4) * 2;
+  });
+  const [selectablePhotos, setSelectablePhotos] = useState(() => {
+    const layout = getLayoutById(store.selectedFrameLayoutId);
+    return layout?.slotCount || 4;
+  });
 
   // Photo capture state
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -132,6 +145,26 @@ export default function GuestPage() {
       setRoomIdInput(existingRoomId);
     }
   }, []);
+
+  // Update photo counts when frame layout changes
+  useEffect(() => {
+    const layout = getLayoutById(store.selectedFrameLayoutId);
+    if (layout) {
+      const newSlotCount = layout.slotCount;
+      setTotalPhotos(newSlotCount * 2);
+      setSelectablePhotos(newSlotCount);
+
+      // If current selection exceeds new limit, trim it
+      setSelectedPhotos((prev) => {
+        if (prev.length > newSlotCount) {
+          return prev.slice(0, newSlotCount);
+        }
+        return prev;
+      });
+
+      console.log(`[Guest] Frame layout changed to ${layout.label}: ${newSlotCount} slots`);
+    }
+  }, [store.selectedFrameLayoutId]);
 
   // Join room (media already started)
   const joinRoom = async () => {
@@ -397,6 +430,24 @@ export default function GuestPage() {
       }
     };
 
+    const handleFrameLayoutSettings = (message: any) => {
+      console.log("[Guest] Received frame layout settings:", message.settings);
+      if (message.settings) {
+        // Update store with the layout ID from host
+        store.setSelectedFrameLayoutId(message.settings.layoutId);
+        setTotalPhotos(message.settings.totalPhotos);
+        setSelectablePhotos(message.settings.selectablePhotos);
+        console.log(
+          "[Guest] Updated frame layout:",
+          message.settings.layoutId,
+          "- total photos:",
+          message.settings.totalPhotos,
+          "selectable:",
+          message.settings.selectablePhotos
+        );
+      }
+    };
+
     on("photo-session-start", handlePhotoSessionStart);
     on("countdown-tick", handleCountdownTick);
     on("capture-now", handleCaptureNow);
@@ -404,6 +455,7 @@ export default function GuestPage() {
     on("session-settings", handleSessionSettings);
     on("host-display-options", handleHostDisplayOptions);
     on("aspect-ratio-settings", handleAspectRatioSettings);
+    on("frame-layout-settings", handleFrameLayoutSettings);
 
     console.log("[Guest] Event handlers registered");
 
@@ -431,8 +483,8 @@ export default function GuestPage() {
 
         return newSelection;
       } else {
-        // Select only if less than 4 selected
-        if (prev.length < 4) {
+        // Select only if less than max selected
+        if (prev.length < selectablePhotos) {
           const newSelection = [...prev, index];
 
           // Broadcast selection to Host
@@ -453,8 +505,8 @@ export default function GuestPage() {
   };
 
   const handleGenerateFrame = async () => {
-    if (selectedPhotos.length !== 4) {
-      alert("4장의 사진을 선택해주세요.");
+    if (selectedPhotos.length !== selectablePhotos) {
+      alert(`${selectablePhotos}장의 사진을 선택해주세요.`);
       return;
     }
 
@@ -469,11 +521,20 @@ export default function GuestPage() {
     setVideoFrameUrl(null);
 
     try {
-      // 1. Generate photo frame (blob URL)
-      const selectedPhotoUrls = selectedPhotos.map((index) => photos[index]);
-      const photoBlobUrl = await generatePhotoFrameBlob(
+      // 1. Generate photo frame (blob URL) with layout
+      const layout = getLayoutById(store.selectedFrameLayoutId);
+
+      if (!layout) {
+        throw new Error(`Layout not found: ${store.selectedFrameLayoutId}`);
+      }
+
+      // Use only the number of photos that match the layout's slot count
+      const photosToUse = selectedPhotos.slice(0, layout.slotCount);
+      const selectedPhotoUrls = photosToUse.map((index) => photos[index]);
+
+      const photoBlobUrl = await generatePhotoFrameBlobWithLayout(
         selectedPhotoUrls,
-        aspectRatio
+        layout
       );
       setPhotoFrameUrl(photoBlobUrl);
       console.log("[Guest] Photo frame generated");
@@ -766,13 +827,13 @@ export default function GuestPage() {
             {remoteStream && (
               <SettingsPanel title="사진 촬영">
                 <div className="mb-4">
-                  <PhotoCounter current={photoCount} total={8} />
+                  <PhotoCounter current={photoCount} total={totalPhotos} />
 
                   {isPhotoSession ? (
                     <div className="px-6 py-3 bg-secondary text-white rounded-lg text-center text-base font-semibold shadow-md">
                       촬영 중...
                     </div>
-                  ) : photoCount >= 8 ? (
+                  ) : photoCount >= totalPhotos ? (
                     <div className="px-6 py-3 bg-primary text-white rounded-lg text-center text-base font-semibold shadow-md">
                       촬영 완료!
                     </div>
@@ -797,7 +858,7 @@ export default function GuestPage() {
               selectedPhotos={selectedPhotos}
               onPhotoSelect={togglePhotoSelection}
               onGenerateFrame={handleGenerateFrame}
-              maxSelection={4}
+              maxSelection={selectablePhotos}
               readOnly={false}
               role="guest"
               isGenerating={isComposing}
@@ -805,7 +866,7 @@ export default function GuestPage() {
           </div>
 
           {/* Composition Status and Download Section */}
-          {selectedPhotos.length === 4 && photos.length >= 8 && (
+          {selectedPhotos.length === selectablePhotos && photos.length >= totalPhotos && (
             <div className="bg-primary/10 rounded-lg p-3 sm:p-6 landscape:p-3 landscape:col-span-2 landscape:order-4 border-2 border-primary shadow-md">
               <div className="flex items-start gap-2 sm:gap-4 landscape:gap-2">
                 <div className="text-2xl sm:text-4xl landscape:text-2xl">
@@ -898,13 +959,13 @@ export default function GuestPage() {
                   {!isComposing && !photoFrameUrl && !videoFrameUrl && (
                     <div>
                       <p className="text-xs sm:text-base landscape:text-[10px] text-dark/70 mb-2 sm:mb-4 landscape:mb-2">
-                        선택한 4개의 사진과 영상을 2x2 그리드로 합성하여
+                        선택한 {selectablePhotos}개의 사진과 영상을 {getLayoutById(store.selectedFrameLayoutId)?.label || '프레임'}으로 합성하여
                         제공합니다.
                       </p>
                       <div className="bg-neutral/30 border border-neutral rounded-lg p-2 sm:p-4 landscape:p-2 space-y-1 sm:space-y-2 landscape:space-y-1">
                         <div className="flex items-center gap-2 text-xs sm:text-sm landscape:text-[10px] text-dark">
                           <span className="text-primary font-bold">1.</span>
-                          <span>사진 프레임을 2x2 그리드로 생성</span>
+                          <span>사진 프레임을 {getLayoutById(store.selectedFrameLayoutId)?.label || '프레임'}으로 생성</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs sm:text-sm landscape:text-[10px] text-dark">
                           <span className="text-primary font-bold">2.</span>

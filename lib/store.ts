@@ -14,6 +14,10 @@ interface AppStore extends RoomState {
   _hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
 
+  // Frame layout selection
+  selectedFrameLayoutId: string;
+  setSelectedFrameLayoutId: (layoutId: string) => void;
+
   // Chroma key settings
   chromaKey: ChromaKeySettings;
   setChromaKeyEnabled: (enabled: boolean) => void;
@@ -58,11 +62,14 @@ export const useAppStore = create<AppStore>()(
     (set) => ({
   ...initialState,
   chromaKey: initialChromaKey,
+  selectedFrameLayoutId: '2x2-grid-standard', // Default layout
   _hasHydrated: false,
 
   setHasHydrated: (state) => {
     set({ _hasHydrated: state });
   },
+
+  setSelectedFrameLayoutId: (layoutId) => set({ selectedFrameLayoutId: layoutId }),
 
   setChromaKeyEnabled: (enabled) =>
     set((state) => ({
@@ -133,6 +140,7 @@ export const useAppStore = create<AppStore>()(
         roomId: state.roomId,
         userId: state.userId,
         role: state.role,
+        selectedFrameLayoutId: state.selectedFrameLayoutId,
       }),
       onRehydrateStorage: () => (state) => {
         // Mark hydration as complete
