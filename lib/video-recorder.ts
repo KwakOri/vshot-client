@@ -165,27 +165,43 @@ export class VideoRecorder {
 
   /**
    * Get supported mime type for video recording
-   * Priority: MP4 (H.264 + AAC) for maximum compatibility
+   * Priority: MP4 (H.264) with hardware acceleration on Mac M1/M2 (VideoToolbox)
+   * Fallback: WebM (VP9/VP8) for maximum compatibility
    */
   private getSupportedMimeType(): string {
     const types = [
-      'video/mp4; codecs="avc1.424028, mp4a.40.2"', // H.264 High Profile + AAC - best compatibility
-      'video/mp4',
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm'
+      // 1st Priority: AVC1 - Fixed Resolution (Best compatibility with Mac/Safari)
+      'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',  // H.264 Baseline Profile + AAC (Chrome 126+)
+      'video/mp4; codecs="avc1.424028, mp4a.40.2"',  // H.264 Constrained Baseline + AAC
+      'video/mp4',                                    // MP4 fallback (browser picks best)
+
+      // 2nd Priority: AVC3 - Variable Resolution (Fallback for dynamic canvas sizes)
+      'video/mp4; codecs="avc3.42E01E, mp4a.40.2"',  // H.264 Variable Resolution + AAC (Chrome 133+)
+      'video/mp4; codecs="avc3.640028, mp4a.40.2"',  // H.264 High Profile Variable + AAC
+
+      // 3rd Priority: WebM (Software encoding fallback)
+      'video/webm;codecs=vp9,opus',     // VP9 + Opus - best quality
+      'video/webm;codecs=vp9',          // VP9 video only
+      'video/webm;codecs=vp8,opus',     // VP8 + Opus - wide support
+      'video/webm;codecs=vp8',          // VP8 video only
+      'video/webm',                      // WebM fallback
     ];
 
     for (const type of types) {
       if (MediaRecorder.isTypeSupported(type)) {
-        console.log('[VideoRecorder] Using codec:', type);
+        // Log hardware acceleration info
+        if (type.includes('mp4') || type.includes('avc')) {
+          console.log('✅ [VideoRecorder] Using H.264 hardware encoder (VideoToolbox on Mac M1/M2):', type);
+        } else {
+          console.log('⚠️ [VideoRecorder] Using software encoder:', type);
+        }
         return type;
       }
     }
 
-    // Fallback to MP4 for better compatibility than WebM
-    console.warn('[VideoRecorder] No supported codecs found, using fallback: video/mp4');
-    return 'video/mp4';
+    // Fallback to WebM (most browsers support this)
+    console.warn('[VideoRecorder] No specific codec supported, using fallback: video/webm');
+    return 'video/webm';
   }
 
   /**

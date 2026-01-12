@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(npm run build:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFeat: UI 컴포넌트 분리 및 레이아웃 개선\n\n- 재사용 가능한 UI 컴포넌트 분리 \\(PhotoCounter, SegmentedBar, SettingsPanel, VideoDisplayPanel\\)\n- Guest/Host 페이지 레이아웃 재구성 \\(PC 2컬럼, 모바일 스택 레이아웃\\)\n- 반응형 디자인 개선 및 사용자 경험 향상\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }

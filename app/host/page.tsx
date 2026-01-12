@@ -23,10 +23,11 @@ import { type VideoSegment } from "@/lib/video-splitter";
 import {
   composeVideoWithWebGL,
   downloadWebGLComposedVideo,
+  checkCodecSupport,
   type VideoSource,
 } from "@/lib/webgl-video-composer";
-import { ASPECT_RATIOS, type AspectRatio } from "@/types";
 import { FRAME_LAYOUTS, getLayoutById } from "@/constants/frame-layouts";
+import { RESOLUTION } from "@/constants/constants";
 import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -45,9 +46,6 @@ export default function HostPage() {
   // Display options (flip horizontal)
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
   const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
-
-  // Aspect ratio settings (must be declared before usePhotoCapture)
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("3:4");
 
   // Photo capture state
   const [isCapturing, setIsCapturing] = useState(false);
@@ -74,7 +72,7 @@ export default function HostPage() {
   } = usePhotoCapture({
     roomId: store.roomId,
     userId: store.userId,
-    aspectRatio: aspectRatio,
+    selectedLayout: selectedLayout,
     onFlash: () => {
       setShowFlash(true);
       setTimeout(() => setShowFlash(false), 300);
@@ -114,8 +112,8 @@ export default function HostPage() {
     enabled: chromaKeyEnabled,
     sensitivity,
     smoothness,
-    width: ASPECT_RATIOS[aspectRatio].width,
-    height: ASPECT_RATIOS[aspectRatio].height,
+    width: RESOLUTION.VIDEO_WIDTH,
+    height: RESOLUTION.VIDEO_HEIGHT,
   });
 
   // Use shared composite canvas hook
@@ -125,8 +123,8 @@ export default function HostPage() {
     foregroundCanvas: localCanvasRef.current,
     localStream,
     remoteStream,
-    width: ASPECT_RATIOS[aspectRatio].width,
-    height: ASPECT_RATIOS[aspectRatio].height,
+    width: RESOLUTION.VIDEO_WIDTH,
+    height: RESOLUTION.VIDEO_HEIGHT,
     guestFlipHorizontal,
     hostFlipHorizontal,
     blurGuest: true, // Blur guest video on host screen
@@ -298,27 +296,6 @@ export default function HostPage() {
       console.log("[Host] Sent display options:", {
         flipHorizontal: newFlipState,
       });
-    }
-  };
-
-  // Update aspect ratio settings and broadcast
-  const updateAspectRatio = (ratio: AspectRatio) => {
-    setAspectRatio(ratio);
-
-    if (store.roomId) {
-      const settings = {
-        ratio,
-        width: ASPECT_RATIOS[ratio].width,
-        height: ASPECT_RATIOS[ratio].height,
-      };
-
-      sendMessage({
-        type: "aspect-ratio-settings",
-        roomId: store.roomId,
-        settings,
-      });
-
-      console.log("[Host] Sent aspect ratio settings:", settings);
     }
   };
 
@@ -788,11 +765,17 @@ export default function HostPage() {
       console.log("[Host] Composition complete, uploading to server...");
       setComposeProgress("서버에 업로드 중...");
 
+      // Determine file extension based on blob MIME type
+      const extension = composedBlob.type.includes('mp4') ? 'mp4' : 'webm';
+      const filename = `video-frame.${extension}`;
+
       // Upload to server
       const formData = new FormData();
-      formData.append("video", composedBlob, "video-frame.webm");
+      formData.append("video", composedBlob, filename);
       formData.append("roomId", store.roomId);
       formData.append("userId", store.userId);
+
+      console.log(`[Host] Uploading ${extension.toUpperCase()} video (${(composedBlob.size / 1024 / 1024).toFixed(2)} MB)`);
 
       const API_URL =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
@@ -815,6 +798,13 @@ export default function HostPage() {
         URL.revokeObjectURL(composedVideo.url);
       }
       setComposedVideo({ blob: composedBlob, url });
+
+      console.log("[Host] ✅ Video composition & upload complete:", {
+        codec: composedBlob.type,
+        size: `${(composedBlob.size / 1024 / 1024).toFixed(2)} MB`,
+        format: composedBlob.type.includes('mp4') ? 'MP4 (H.264 Hardware)' : 'WebM (Software)',
+        serverUrl: result.videoUrl,
+      });
 
       setComposeProgress("완료!");
       alert("영상 프레임이 생성되어 Guest에게 전송되었습니다! 🎉");
@@ -919,7 +909,9 @@ export default function HostPage() {
 
       setComposedVideo({ blob: composedBlob, url });
       console.log("[Host] ✅ Video composition complete:", {
+        codec: composedBlob.type,
         size: `${(composedBlob.size / 1024 / 1024).toFixed(2)} MB`,
+        format: composedBlob.type.includes('mp4') ? 'MP4 (H.264 Hardware)' : 'WebM (Software)',
         layout: store.selectedFrameLayoutId,
       });
 
@@ -989,6 +981,12 @@ export default function HostPage() {
     };
   }, [composedVideo]);
 
+  // Check codec support on mount
+  useEffect(() => {
+    console.log('[Host] Checking MediaRecorder codec support...');
+    checkCodecSupport();
+  }, []);
+
   console.log("HOST: isProcessing", isProcessing);
 
   return (
@@ -1032,7 +1030,6 @@ export default function HostPage() {
               localCanvasRef={localCanvasRef}
               remoteVideoRef={remoteVideoRef}
               compositeCanvasRef={compositeCanvasRef}
-              aspectRatio={aspectRatio}
               flipHorizontal={hostFlipHorizontal}
               countdown={countdown}
             />
@@ -1290,9 +1287,12 @@ export default function HostPage() {
                           .replace(/[:.]/g, "-")
                           .slice(0, -5);
 
+                        // Auto-detect file extension based on blob MIME type
+                        const extension = composedVideo.blob.type.includes('mp4') ? 'mp4' : 'webm';
+
                         downloadWebGLComposedVideo(
                           composedVideo.blob,
-                          `vshot-frame-${store.roomId}-${timestamp}.webm`
+                          `vshot-frame-${store.roomId}-${timestamp}.${extension}`
                         );
                       }}
                       className="w-full px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"

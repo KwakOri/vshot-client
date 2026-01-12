@@ -21,7 +21,7 @@ import {
 } from "@/lib/frame-generator";
 import { useAppStore } from "@/lib/store";
 import { getLayoutById } from "@/constants/frame-layouts";
-import { ASPECT_RATIOS, type AspectRatio } from "@/types";
+import { RESOLUTION } from "@/constants/constants";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 export default function GuestPage() {
@@ -47,9 +47,6 @@ export default function GuestPage() {
   const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
 
-  // Aspect ratio settings (received from Host)
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("3:4");
-
   // Frame layout settings (received from Host)
   // Initialize with function to avoid recalculation on every render
   const [totalPhotos, setTotalPhotos] = useState(() => {
@@ -73,6 +70,9 @@ export default function GuestPage() {
   const [photoFrameUrl, setPhotoFrameUrl] = useState<string | null>(null);
   const [videoFrameUrl, setVideoFrameUrl] = useState<string | null>(null);
 
+  // Get selected layout
+  const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
+
   // Use shared photo capture hook
   const {
     photoCount,
@@ -85,7 +85,7 @@ export default function GuestPage() {
   } = usePhotoCapture({
     roomId: store.roomId,
     userId: store.userId,
-    aspectRatio: aspectRatio,
+    selectedLayout: selectedLayout,
     onFlash: () => {
       setShowFlash(true);
       setTimeout(() => setShowFlash(false), 300);
@@ -93,6 +93,7 @@ export default function GuestPage() {
   });
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const localCanvasRef = useRef<HTMLCanvasElement>(null); // Guest's canvas for photo capture
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteCanvasRef = useRef<HTMLCanvasElement>(null);
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -100,6 +101,19 @@ export default function GuestPage() {
     ((photoNumber: number) => Promise<void>) | null
   >(null);
   const initializedRef = useRef(false);
+
+  // Render Guest's local video to canvas (for high-quality photo capture)
+  // No chroma key needed - just copy video to canvas
+  useChromaKey({
+    videoElement: localVideoRef.current,
+    canvasElement: localCanvasRef.current,
+    stream: localStream,
+    enabled: false, // No chroma key for Guest's background video
+    sensitivity: 0,
+    smoothness: 0,
+    width: RESOLUTION.PHOTO_WIDTH, // Use photo resolution for capture
+    height: RESOLUTION.PHOTO_HEIGHT,
+  });
 
   // Use shared chroma key hook for remote video (Host's video)
   useChromaKey({
@@ -109,8 +123,8 @@ export default function GuestPage() {
     enabled: hostChromaKeyEnabled,
     sensitivity: hostSensitivity,
     smoothness: hostSmoothness,
-    width: ASPECT_RATIOS[aspectRatio].width,
-    height: ASPECT_RATIOS[aspectRatio].height,
+    width: RESOLUTION.VIDEO_WIDTH,
+    height: RESOLUTION.VIDEO_HEIGHT,
   });
 
   // Use shared composite canvas hook
@@ -120,8 +134,8 @@ export default function GuestPage() {
     foregroundCanvas: remoteCanvasRef.current,
     localStream,
     remoteStream,
-    width: ASPECT_RATIOS[aspectRatio].width,
-    height: ASPECT_RATIOS[aspectRatio].height,
+    width: RESOLUTION.VIDEO_WIDTH,
+    height: RESOLUTION.VIDEO_HEIGHT,
     guestFlipHorizontal,
     hostFlipHorizontal,
   });
@@ -280,13 +294,42 @@ export default function GuestPage() {
   // Wrap capturePhoto in useCallback to prevent stale closures in event handlers
   const capturePhoto = useCallback(
     async (photoNumber: number) => {
+      const localCanvas = localCanvasRef.current;
       const localVideo = localVideoRef.current;
-      if (localVideo && store.roomId) {
+
+      console.log('[Guest] capturePhoto called:', {
+        photoNumber,
+        hasCanvas: !!localCanvas,
+        hasVideo: !!localVideo,
+        canvasSize: localCanvas ? `${localCanvas.width}x${localCanvas.height}` : 'N/A',
+        videoSize: localVideo ? `${localVideo.videoWidth}x${localVideo.videoHeight}` : 'N/A',
+        videoReady: localVideo?.readyState,
+      });
+
+      if (localCanvas && store.roomId) {
+        // Check if canvas has actual content
+        const ctx = localCanvas.getContext('2d');
+        if (ctx) {
+          const imageData = ctx.getImageData(0, 0, Math.min(localCanvas.width, 100), Math.min(localCanvas.height, 100));
+          const data = imageData.data;
+          let hasNonBlackPixel = false;
+          for (let i = 0; i < data.length; i += 4) {
+            if (data[i] > 0 || data[i+1] > 0 || data[i+2] > 0) {
+              hasNonBlackPixel = true;
+              break;
+            }
+          }
+          console.log('[Guest] Canvas content check:', {
+            hasNonBlackPixel,
+            samplePixels: `rgba(${data[0]}, ${data[1]}, ${data[2]}, ${data[3]})`,
+          });
+        }
+
         try {
           await captureAndUpload({
             photoNumber,
-            canvasOrVideo: localVideo,
-            isCanvas: false,
+            canvasOrVideo: localCanvas,
+            isCanvas: true,
           });
 
           if (photoNumber >= 8) {
@@ -423,13 +466,6 @@ export default function GuestPage() {
       }
     };
 
-    const handleAspectRatioSettings = (message: any) => {
-      console.log("[Guest] Received aspect ratio settings:", message.settings);
-      if (message.settings && message.settings.ratio) {
-        setAspectRatio(message.settings.ratio);
-      }
-    };
-
     const handleFrameLayoutSettings = (message: any) => {
       console.log("[Guest] Received frame layout settings:", message.settings);
       if (message.settings) {
@@ -454,7 +490,6 @@ export default function GuestPage() {
     on("chromakey-settings", handleChromaKeySettings);
     on("session-settings", handleSessionSettings);
     on("host-display-options", handleHostDisplayOptions);
-    on("aspect-ratio-settings", handleAspectRatioSettings);
     on("frame-layout-settings", handleFrameLayoutSettings);
 
     console.log("[Guest] Event handlers registered");
@@ -579,17 +614,21 @@ export default function GuestPage() {
 
       const blob = await response.blob();
 
+      // Determine file extension based on blob MIME type
+      const extension = blob.type.includes('mp4') ? 'mp4' : 'webm';
+      console.log(`[Guest] Video blob type: ${blob.type}, using extension: ${extension}`);
+
       // Download blob directly
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `vshot-video-${store.roomId}-${Date.now()}.mp4`;
+      link.download = `vshot-video-${store.roomId}-${Date.now()}.${extension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      console.log("[Guest] Video frame downloaded");
+      console.log(`[Guest] Video frame downloaded as ${extension.toUpperCase()}`);
     } catch (error) {
       console.error("[Guest] Failed to download video:", error);
       alert("영상 다운로드에 실패했습니다.");
@@ -668,7 +707,7 @@ export default function GuestPage() {
                 <h2 className="text-xl font-semibold mb-4">미리보기</h2>
                 <div
                   className="relative bg-black rounded-lg overflow-hidden w-full lg:h-[calc(90vh-12rem)]"
-                  style={{ aspectRatio: "3/4" }}
+                  style={{ aspectRatio: "2/3" }}
                 >
                   <div
                     className="absolute inset-0"
@@ -782,10 +821,10 @@ export default function GuestPage() {
               isActive={isCameraActive}
               remoteStream={remoteStream}
               localVideoRef={localVideoRef}
+              localCanvasRef={localCanvasRef}
               remoteVideoRef={remoteVideoRef}
               remoteCanvasRef={remoteCanvasRef}
               compositeCanvasRef={compositeCanvasRef}
-              aspectRatio={aspectRatio}
               flipHorizontal={guestFlipHorizontal}
               countdown={countdown}
             />

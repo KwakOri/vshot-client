@@ -62,7 +62,7 @@ export const useAppStore = create<AppStore>()(
     (set) => ({
   ...initialState,
   chromaKey: initialChromaKey,
-  selectedFrameLayoutId: '2x2-grid-standard', // Default layout
+  selectedFrameLayoutId: '4cut-grid', // Default layout (2:3 vertical, 4-cut)
   _hasHydrated: false,
 
   setHasHydrated: (state) => {

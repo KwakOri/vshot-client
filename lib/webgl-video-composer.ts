@@ -4,7 +4,7 @@
  * Supports dynamic canvas sizes from layout configuration (e.g., 1200x1600 for vertical layouts)
  */
 
-import { FRAME_LAYOUT } from '@/constants/constants';
+import { FRAME_LAYOUT, RESOLUTION } from '@/constants/constants';
 import { FrameLayout } from '@/types';
 import { DEFAULT_LAYOUT } from '@/constants/frame-layouts';
 
@@ -35,6 +35,7 @@ export class WebGLVideoComposer {
   private textures: WebGLTexture[] = [];
   private isRendering = false;
   private layout: FrameLayout;
+  private scaledPositions: Array<{ x: number; y: number; width: number; height: number; zIndex?: number }>; // Scaled positions for video canvas
   private frameImage: HTMLImageElement | null = null; // Frame overlay image
 
   constructor(width: number, height: number, layout?: FrameLayout) {
@@ -56,6 +57,25 @@ export class WebGLVideoComposer {
 
     // Use provided layout or default
     this.layout = layout || DEFAULT_LAYOUT;
+
+    // Scale positions from photo resolution (3000x4500) to video resolution (720x1080)
+    const scaleX = width / this.layout.canvasWidth;
+    const scaleY = height / this.layout.canvasHeight;
+
+    this.scaledPositions = this.layout.positions.map(pos => ({
+      x: Math.round(pos.x * scaleX),
+      y: Math.round(pos.y * scaleY),
+      width: Math.round(pos.width * scaleX),
+      height: Math.round(pos.height * scaleY),
+      zIndex: pos.zIndex,
+    }));
+
+    console.log('[WebGLVideoComposer] Scaling positions:');
+    console.log(`  Original canvas: ${this.layout.canvasWidth}x${this.layout.canvasHeight}`);
+    console.log(`  Video canvas: ${width}x${height}`);
+    console.log(`  Scale factors: ${scaleX.toFixed(4)}x, ${scaleY.toFixed(4)}y`);
+    console.log(`  Original positions:`, this.layout.positions);
+    console.log(`  Scaled positions:`, this.scaledPositions);
 
     // Load frame overlay image if frameSrc is provided
     if (this.layout.frameSrc && this.layout.frameSrc !== '') {
@@ -248,13 +268,13 @@ export class WebGLVideoComposer {
     ctx.fillStyle = FRAME_LAYOUT.backgroundColor;
     ctx.fillRect(0, 0, this.compositeCanvas.width, this.compositeCanvas.height);
 
-    // Sort positions by zIndex (lower zIndex drawn first = background)
-    const sortedPositions = [...this.layout.positions].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+    // Sort SCALED positions by zIndex (lower zIndex drawn first = background)
+    const sortedPositions = [...this.scaledPositions].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
 
     let drawnCount = 0;
-    // Draw each video according to sorted positions
+    // Draw each video according to sorted scaled positions
     sortedPositions.forEach((slot, sortedIndex) => {
-      const originalIndex = this.layout.positions.indexOf(slot);
+      const originalIndex = this.scaledPositions.indexOf(slot);
       const video = this.videoElements[originalIndex];
 
       if (!video) {
@@ -263,8 +283,31 @@ export class WebGLVideoComposer {
       }
 
       if (video.readyState >= video.HAVE_CURRENT_DATA) {
-        // Draw video at exact position and size
-        ctx.drawImage(video, slot.x, slot.y, slot.width, slot.height);
+        // Draw video with cover-fit (maintain aspect ratio, crop to fill slot)
+        const videoWidth = video.videoWidth || 720;
+        const videoHeight = video.videoHeight || 1080;
+        const videoAspect = videoWidth / videoHeight;
+        const slotAspect = slot.width / slot.height;
+
+        // Calculate source rectangle (which part of video to draw)
+        let sx = 0, sy = 0, sWidth = videoWidth, sHeight = videoHeight;
+
+        if (videoAspect > slotAspect) {
+          // Video is wider than slot - crop sides
+          sWidth = videoHeight * slotAspect;
+          sx = (videoWidth - sWidth) / 2;
+        } else {
+          // Video is taller than slot - crop top/bottom
+          sHeight = videoWidth / slotAspect;
+          sy = (videoHeight - sHeight) / 2;
+        }
+
+        // Draw cropped video to fill slot completely
+        ctx.drawImage(
+          video,
+          sx, sy, sWidth, sHeight,  // Source rectangle (cropped from video)
+          slot.x, slot.y, slot.width, slot.height  // Destination rectangle (slot)
+        );
         drawnCount++;
       } else {
         // Draw placeholder for not-ready videos
@@ -480,10 +523,17 @@ export async function composeVideoWithWebGL(
   console.log('[composeVideoWithWebGL] Layout:', layout.label);
   console.log('[composeVideoWithWebGL] Config:', config);
 
+  // Use fixed 2:3 vertical resolution (720x1080) for all video compositions
+  // This provides good quality while ensuring MediaRecorder compatibility
+  const videoWidth = RESOLUTION.VIDEO_WIDTH;
+  const videoHeight = RESOLUTION.VIDEO_HEIGHT;
+
+  console.log(`[composeVideoWithWebGL] Using fixed video resolution: ${videoWidth}x${videoHeight} (photos remain at ${RESOLUTION.PHOTO_WIDTH}x${RESOLUTION.PHOTO_HEIGHT})`);
+
   onProgress?.('WebGL 초기화 중...');
 
-  // Create WebGL composer with layout
-  const composer = new WebGLVideoComposer(config.width, config.height, layout);
+  // Create WebGL composer with fixed video resolution
+  const composer = new WebGLVideoComposer(videoWidth, videoHeight, layout);
 
   try {
     // Load video sources
@@ -586,11 +636,21 @@ function recordStream(
 
 /**
  * Get supported mime type for video recording
- * Priority: WebM (VP9/VP8) for best browser support
- * Note: Will be converted to MP4 on server for compatibility
+ * Priority: MP4 (H.264) with hardware acceleration on Mac M1/M2 (VideoToolbox)
+ * Fallback: WebM (VP9/VP8) for maximum compatibility
  */
 function getSupportedMimeType(): string {
   const types = [
+    // 1st Priority: AVC1 - Fixed Resolution (Best compatibility with Mac/Safari)
+    'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',  // H.264 Baseline Profile + AAC (Chrome 126+)
+    'video/mp4; codecs="avc1.424028, mp4a.40.2"',  // H.264 Constrained Baseline + AAC
+    'video/mp4',                                    // MP4 fallback (browser picks best)
+
+    // 2nd Priority: AVC3 - Variable Resolution (Fallback for dynamic canvas sizes)
+    'video/mp4; codecs="avc3.42E01E, mp4a.40.2"',  // H.264 Variable Resolution + AAC (Chrome 133+)
+    'video/mp4; codecs="avc3.640028, mp4a.40.2"',  // H.264 High Profile Variable + AAC
+
+    // 3rd Priority: WebM (Software encoding fallback)
     'video/webm;codecs=vp9,opus',     // VP9 + Opus - best quality
     'video/webm;codecs=vp9',          // VP9 video only
     'video/webm;codecs=vp8,opus',     // VP8 + Opus - wide support
@@ -600,7 +660,12 @@ function getSupportedMimeType(): string {
 
   for (const type of types) {
     if (MediaRecorder.isTypeSupported(type)) {
-      console.log('[WebGLVideoComposer] Using codec:', type);
+      // Log hardware acceleration info
+      if (type.includes('mp4') || type.includes('avc')) {
+        console.log('✅ [WebGLVideoComposer] Using H.264 hardware encoder (VideoToolbox on Mac M1/M2):', type);
+      } else {
+        console.log('⚠️ [WebGLVideoComposer] Using software encoder:', type);
+      }
       return type;
     }
   }
@@ -623,5 +688,32 @@ export function downloadWebGLComposedVideo(blob: Blob, filename: string): void {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-  console.log('[WebGLVideoComposer] Video downloaded:', filename);
+  console.log('[WebGLVideoComposer] Video downloaded:', filename, `(${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
+}
+
+/**
+ * Check browser codec support and log details
+ */
+export function checkCodecSupport(): void {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📹 MediaRecorder Codec Support Check');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  const codecs = [
+    { name: 'AVC3 Variable Baseline (MP4)', type: 'video/mp4; codecs="avc3.42E01E, mp4a.40.2"' },
+    { name: 'AVC3 Variable High (MP4)', type: 'video/mp4; codecs="avc3.640028, mp4a.40.2"' },
+    { name: 'AVC1 Fixed Baseline (MP4)', type: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"' },
+    { name: 'AVC1 Fixed Main (MP4)', type: 'video/mp4; codecs="avc1.4D401E, mp4a.40.2"' },
+    { name: 'AVC1 Fixed High (MP4)', type: 'video/mp4; codecs="avc1.64001E, mp4a.40.2"' },
+    { name: 'VP9 (WebM)', type: 'video/webm;codecs=vp9' },
+    { name: 'VP8 (WebM)', type: 'video/webm;codecs=vp8' },
+  ];
+
+  codecs.forEach(({ name, type }) => {
+    const supported = MediaRecorder.isTypeSupported(type);
+    const icon = supported ? '✅' : '❌';
+    console.log(`${icon} ${name}: ${type}`);
+  });
+
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }

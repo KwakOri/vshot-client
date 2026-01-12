@@ -104,11 +104,14 @@ export async function composeVideoGrid(
       '-filter_complex', filterComplex,
       '-map', '[out]',
       '-c:v', 'libx264', // H.264 codec for MP4
+      '-profile:v', 'baseline', // QuickTime compatibility - use baseline profile
+      '-level', '3.0', // Compatibility level
       '-preset', 'fast', // Fast encoding preset
       '-crf', '23', // Quality (lower = better, 23 is good default)
       '-r', config.frameRate.toString(), // Frame rate
       '-pix_fmt', 'yuv420p', // Pixel format for compatibility
       '-movflags', '+faststart', // Enable streaming (moov atom at start)
+      '-brand', 'mp42', // MP4 v2 brand for better compatibility
       '-metadata', 'title=VShot Video Grid',
       '-metadata', 'encoder=FFmpeg.wasm',
       '-metadata', 'comment=Created with VShot',
@@ -218,11 +221,14 @@ export async function composeTwoVideos(
       '-filter_complex', filterComplex,
       '-map', '[out]',
       '-c:v', 'libx264',
+      '-profile:v', 'baseline', // QuickTime compatibility
+      '-level', '3.0',
       '-preset', 'fast',
       '-crf', '23',
       '-r', config.frameRate.toString(),
       '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart', // Enable streaming
+      '-brand', 'mp42', // MP4 v2 brand
       '-metadata', 'title=VShot Video Side-by-Side',
       '-metadata', 'encoder=FFmpeg.wasm',
       '-metadata', 'comment=Created with VShot',
@@ -301,10 +307,13 @@ export async function convertToMP4(
     await ffmpeg.exec([
       '-i', inputFile,
       '-c:v', 'libx264',
+      '-profile:v', 'baseline', // QuickTime compatibility
+      '-level', '3.0',
       '-preset', 'fast',
       '-crf', '23',
       '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart',
+      '-brand', 'mp42', // MP4 v2 brand
       '-metadata', 'title=VShot Video',
       '-metadata', 'encoder=FFmpeg.wasm',
       '-metadata', 'comment=Created with VShot',

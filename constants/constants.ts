@@ -1,4 +1,29 @@
 /**
+ * Fixed Resolution Constants
+ * All frames use 2:3 aspect ratio (vertical)
+ */
+export const RESOLUTION = {
+  /**
+   * Photo capture resolution (high quality)
+   * Used for final photo frames
+   */
+  PHOTO_WIDTH: 3000,
+  PHOTO_HEIGHT: 4500,
+
+  /**
+   * Video composition resolution (MediaRecorder safe)
+   * Used for video frames (maintains 2:3 ratio)
+   */
+  VIDEO_WIDTH: 720,
+  VIDEO_HEIGHT: 1080,
+
+  /**
+   * Aspect ratio (width:height)
+   */
+  ASPECT_RATIO: 2 / 3,
+} as const;
+
+/**
  * Frame Layout Constants
  * Shared between photo frame generation and video composition
  * for consistent design across all outputs

@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react';
-import { ASPECT_RATIOS, type AspectRatio } from '@/types';
+import { type AspectRatio, type FrameLayout } from '@/types';
 import { getApiHeaders } from '@/lib/api';
+import { RESOLUTION } from '@/constants/constants';
 
 interface UsePhotoCaptureOptions {
   roomId: string | null;
   userId: string;
-  aspectRatio: AspectRatio;
+  selectedLayout?: FrameLayout; // Optional, kept for future use
   onFlash?: () => void;
 }
 
@@ -19,7 +20,7 @@ interface CapturePhotoParams {
  * Shared hook for photo capture and upload functionality
  * Used by both host and guest pages
  */
-export function usePhotoCapture({ roomId, userId, aspectRatio, onFlash }: UsePhotoCaptureOptions) {
+export function usePhotoCapture({ roomId, userId, selectedLayout, onFlash }: UsePhotoCaptureOptions) {
   const [photoCount, setPhotoCount] = useState(0);
   const [photos, setPhotos] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -39,9 +40,11 @@ export function usePhotoCapture({ roomId, userId, aspectRatio, onFlash }: UsePho
 
     try {
       let photoData: string;
-      const targetRatio = ASPECT_RATIOS[aspectRatio];
-      const targetWidth = targetRatio.width;
-      const targetHeight = targetRatio.height;
+
+      // Use fixed 2:3 vertical resolution (3000x4500) for all photo captures
+      const targetWidth = RESOLUTION.PHOTO_WIDTH;
+      const targetHeight = RESOLUTION.PHOTO_HEIGHT;
+      console.log(`[PhotoCapture] Using fixed resolution: ${targetWidth}x${targetHeight}`);
 
       if (isCanvas && canvasOrVideo instanceof HTMLCanvasElement) {
         // Capture from canvas - canvas should already be at correct aspect ratio
@@ -130,7 +133,6 @@ export function usePhotoCapture({ roomId, userId, aspectRatio, onFlash }: UsePho
           userId,
           photoNumber,
           imageData: photoData,
-          aspectRatio: aspectRatio
         })
       });
 
@@ -148,7 +150,7 @@ export function usePhotoCapture({ roomId, userId, aspectRatio, onFlash }: UsePho
       console.error(`[PhotoCapture] Failed to upload photo ${photoNumber}:`, error);
       throw error;
     }
-  }, [roomId, userId, aspectRatio, onFlash]);
+  }, [roomId, userId, selectedLayout, onFlash]);
 
   const resetCapture = useCallback(() => {
     setPhotoCount(0);

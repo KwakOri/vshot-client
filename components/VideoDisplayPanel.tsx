@@ -1,6 +1,5 @@
 import { RefObject } from 'react';
 import { CountdownOverlay } from './CountdownOverlay';
-import { AspectRatio } from '@/types';
 
 interface VideoDisplayPanelProps {
   role: 'host' | 'guest';
@@ -11,13 +10,12 @@ interface VideoDisplayPanelProps {
 
   // Refs
   localVideoRef: RefObject<HTMLVideoElement>;
-  localCanvasRef?: RefObject<HTMLCanvasElement>; // Host only
+  localCanvasRef?: RefObject<HTMLCanvasElement>; // Used by both Host and Guest for photo capture
   remoteVideoRef: RefObject<HTMLVideoElement>;
-  remoteCanvasRef?: RefObject<HTMLCanvasElement>; // Guest only
+  remoteCanvasRef?: RefObject<HTMLCanvasElement>; // Guest only - for Host's chroma key
   compositeCanvasRef: RefObject<HTMLCanvasElement>;
 
   // Display settings
-  aspectRatio: AspectRatio;
   flipHorizontal: boolean;
 
   // UI state
@@ -33,7 +31,6 @@ export function VideoDisplayPanel({
   remoteVideoRef,
   remoteCanvasRef,
   compositeCanvasRef,
-  aspectRatio,
   flipHorizontal,
   countdown,
 }: VideoDisplayPanelProps) {
@@ -56,7 +53,7 @@ export function VideoDisplayPanel({
 
       <div
         className="relative bg-black rounded-lg overflow-hidden w-full lg:h-[calc(90vh-8rem)]"
-        style={{ aspectRatio: '3/4' }}
+        style={{ aspectRatio: '2/3' }}
       >
         {/* Checkerboard background pattern */}
         <div
@@ -85,7 +82,7 @@ export function VideoDisplayPanel({
               }`}
               style={{
                 transform: flipHorizontal ? 'scaleX(-1)' : 'scaleX(1)',
-                aspectRatio: aspectRatio.replace(':', '/'),
+                aspectRatio: '2/3',
               }}
             />
 
@@ -96,7 +93,7 @@ export function VideoDisplayPanel({
                 !remoteStream ? "opacity-0" : "opacity-100"
               }`}
               style={{
-                aspectRatio: aspectRatio.replace(':', '/'),
+                aspectRatio: '2/3',
               }}
             />
           </div>
@@ -125,7 +122,7 @@ export function VideoDisplayPanel({
                 ref={compositeCanvasRef}
                 className="absolute max-w-full max-h-full"
                 style={{
-                  aspectRatio: aspectRatio.replace(':', '/'),
+                  aspectRatio: '2/3',
                 }}
               />
             </div>
@@ -163,6 +160,13 @@ export function VideoDisplayPanel({
         {isGuest && remoteCanvasRef && (
           <canvas
             ref={remoteCanvasRef}
+            className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+          />
+        )}
+
+        {isGuest && localCanvasRef && (
+          <canvas
+            ref={localCanvasRef}
             className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
           />
         )}

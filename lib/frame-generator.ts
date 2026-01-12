@@ -3,6 +3,39 @@ import { FRAME_LAYOUT, calculateGridCellDimensions } from '@/constants/constants
 import { DEFAULT_LAYOUT } from '@/constants/frame-layouts';
 
 /**
+ * Get recommended capture resolution for a frame layout
+ * If layout has explicit recommendedCaptureWidth/Height, use those.
+ * Otherwise, automatically calculate based on the largest slot with 1.5x safety margin.
+ *
+ * @param layout Frame layout configuration
+ * @returns { width, height } Recommended capture resolution in pixels
+ */
+export function getRecommendedCaptureResolution(layout: FrameLayout): { width: number; height: number } {
+  // Use explicit recommended resolution if available
+  if (layout.recommendedCaptureWidth && layout.recommendedCaptureHeight) {
+    return {
+      width: layout.recommendedCaptureWidth,
+      height: layout.recommendedCaptureHeight,
+    };
+  }
+
+  // Auto-calculate: Find the largest slot
+  const maxSlot = layout.positions.reduce((max, pos) => {
+    const maxArea = max.width * max.height;
+    const posArea = pos.width * pos.height;
+    return posArea > maxArea ? pos : max;
+  }, layout.positions[0]);
+
+  // Apply 1.5x safety margin to ensure sufficient quality
+  const safetyMargin = 1.5;
+
+  return {
+    width: Math.ceil(maxSlot.width * safetyMargin),
+    height: Math.ceil(maxSlot.height * safetyMargin),
+  };
+}
+
+/**
  * Render frame to canvas with custom layout
  * This is a core rendering function used by both download and preview features
  * @param canvas Canvas element to render to

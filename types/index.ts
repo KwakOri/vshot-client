@@ -125,6 +125,10 @@ export interface FrameLayout {
   isActive?: boolean;            // Whether this layout is available
   sortOrder?: number;            // Display order in UI
   tags?: string[];               // Search tags
+
+  // Recommended capture resolution (for high-quality photo capture)
+  recommendedCaptureWidth?: number;  // Recommended width for capturing photos
+  recommendedCaptureHeight?: number; // Recommended height for capturing photos
 }
 
 /**

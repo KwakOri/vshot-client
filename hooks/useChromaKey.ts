@@ -31,7 +31,16 @@ export function useChromaKey({
     const video = videoElement;
     const canvas = canvasElement;
 
-    if (!stream || !video || !canvas) return;
+    if (!stream || !video || !canvas) {
+      console.log('[useChromaKey] Missing dependencies:', {
+        hasStream: !!stream,
+        hasVideo: !!video,
+        hasCanvas: !!canvas,
+        targetSize: `${width}x${height}`,
+        chromaKeyEnabled: enabled,
+      });
+      return;
+    }
 
     // Cancel any existing animation frame
     if (animationFrameRef.current) {
@@ -40,6 +49,12 @@ export function useChromaKey({
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
+
+    console.log('[useChromaKey] Starting canvas rendering:', {
+      targetSize: `${width}x${height}`,
+      chromaKeyEnabled: enabled,
+      videoReadyState: video.readyState,
+    });
 
     const draw = () => {
       if (!video || !canvas || !ctx) return;
@@ -85,6 +100,17 @@ export function useChromaKey({
       }
 
       ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
+
+      // Log occasionally to verify rendering (every ~2 seconds at 30fps)
+      if (Math.random() < 0.01) {
+        console.log('[useChromaKey] Rendering frame:', {
+          canvasSize: `${canvas.width}x${canvas.height}`,
+          videoSize: `${videoWidth}x${videoHeight}`,
+          drawSize: `${drawWidth.toFixed(0)}x${drawHeight.toFixed(0)}`,
+          offset: `${offsetX.toFixed(0)}, ${offsetY.toFixed(0)}`,
+          chromaKeyEnabled: enabled,
+        });
+      }
 
       // Apply chroma key if enabled
       if (enabled) {
