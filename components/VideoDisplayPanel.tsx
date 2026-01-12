@@ -9,11 +9,11 @@ interface VideoDisplayPanelProps {
   remoteStream: MediaStream | null;
 
   // Refs
-  localVideoRef: RefObject<HTMLVideoElement>;
-  localCanvasRef?: RefObject<HTMLCanvasElement>; // Used by both Host and Guest for photo capture
-  remoteVideoRef: RefObject<HTMLVideoElement>;
-  remoteCanvasRef?: RefObject<HTMLCanvasElement>; // Guest only - for Host's chroma key
-  compositeCanvasRef: RefObject<HTMLCanvasElement>;
+  localVideoRef: RefObject<HTMLVideoElement | null>;
+  localCanvasRef?: RefObject<HTMLCanvasElement | null>; // Used by both Host and Guest for photo capture
+  remoteVideoRef: RefObject<HTMLVideoElement | null>;
+  remoteCanvasRef?: RefObject<HTMLCanvasElement | null>; // Guest only - for Host's chroma key
+  compositeCanvasRef: RefObject<HTMLCanvasElement | null>;
 
   // Display settings
   flipHorizontal: boolean;

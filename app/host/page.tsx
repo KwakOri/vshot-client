@@ -16,7 +16,7 @@ import { usePhotoCapture } from "@/hooks/usePhotoCapture";
 import { useSignaling } from "@/hooks/useSignaling";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { getApiHeadersMultipart } from "@/lib/api";
-import { downloadPhotoFrame } from "@/lib/frame-generator";
+import { downloadPhotoFrame, generatePhotoFrameWithLayout } from "@/lib/frame-generator";
 import { useAppStore } from "@/lib/store";
 import { VideoRecorder } from "@/lib/video-recorder";
 import { type VideoSegment } from "@/lib/video-splitter";
@@ -219,7 +219,7 @@ export default function HostPage() {
           cursor: "never", // Hide mouse cursor in screen share
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-        },
+        } as MediaTrackConstraints & { cursor: string },
         audio: true,
       });
 
