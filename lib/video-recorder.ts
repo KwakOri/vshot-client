@@ -22,11 +22,11 @@ export class VideoRecorder {
    * @param duration Recording duration in milliseconds (default: 10000ms)
    * @param onComplete Callback when recording completes
    */
-  startRecording(
+  async startRecording(
     photoNumber: number,
     duration: number = 10000,
     onComplete?: (blob: Blob, photoNumber: number) => void
-  ): void {
+  ): Promise<void> {
     const canvas = this.getCanvas();
     console.log('[VideoRecorder] startRecording called - photoNumber:', photoNumber);
     console.log('[VideoRecorder] canvas from getter:', canvas);
@@ -45,6 +45,9 @@ export class VideoRecorder {
     this.currentPhotoNumber = photoNumber;
     this.onVideoComplete = onComplete || null;
     this.chunks = [];
+
+    // Wait for canvas to stabilize before starting recording
+    await this.waitForCanvasStable(canvas);
 
     // Capture canvas stream at 24 FPS
     // Reuse existing stream if available to avoid interrupting real-time display
@@ -96,6 +99,79 @@ export class VideoRecorder {
     } catch (error) {
       console.error('[VideoRecorder] Failed to start recording:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Wait for canvas to have stable content before recording
+   * This prevents AVC1 codec errors from frame property changes
+   */
+  private async waitForCanvasStable(canvas: HTMLCanvasElement): Promise<void> {
+    console.log('[VideoRecorder] Waiting for canvas to stabilize...');
+
+    // Wait for at least 3 stable frames (50ms between checks)
+    const maxAttempts = 20; // Max 1 second wait
+    let stableFrames = 0;
+    const requiredStableFrames = 3;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      // Check if canvas has non-empty content
+      const hasContent = this.canvasHasContent(canvas);
+
+      if (hasContent) {
+        stableFrames++;
+        console.log(`[VideoRecorder] Canvas stable frame ${stableFrames}/${requiredStableFrames}`);
+
+        if (stableFrames >= requiredStableFrames) {
+          console.log('[VideoRecorder] ✅ Canvas stabilized and ready for recording');
+          return;
+        }
+      } else {
+        stableFrames = 0; // Reset if unstable frame detected
+      }
+
+      // Wait one frame (assuming 60fps = ~16ms, we wait 50ms to be safe)
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    console.warn('[VideoRecorder] Canvas stabilization timeout - proceeding anyway');
+  }
+
+  /**
+   * Check if canvas has actual content (not empty/black)
+   */
+  private canvasHasContent(canvas: HTMLCanvasElement): boolean {
+    try {
+      // Check canvas dimensions
+      if (canvas.width === 0 || canvas.height === 0) {
+        return false;
+      }
+
+      // Sample a small area of the canvas to check if it has content
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return false;
+
+      // Sample center 4x4 pixels
+      const centerX = Math.floor(canvas.width / 2);
+      const centerY = Math.floor(canvas.height / 2);
+      const imageData = ctx.getImageData(centerX - 2, centerY - 2, 4, 4);
+
+      // Check if any pixel has non-zero RGB values
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        const r = imageData.data[i];
+        const g = imageData.data[i + 1];
+        const b = imageData.data[i + 2];
+
+        // If any RGB value is non-zero, canvas has content
+        if (r > 0 || g > 0 || b > 0) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.warn('[VideoRecorder] Error checking canvas content:', error);
+      return true; // Assume it has content if we can't check
     }
   }
 

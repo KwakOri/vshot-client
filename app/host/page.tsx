@@ -488,7 +488,7 @@ export default function HostPage() {
 
   // Photo selection is Guest-only, Host just displays Guest's selections
 
-  const takePhoto = (photoNumber: number) => {
+  const takePhoto = async (photoNumber: number) => {
     if (!store.roomId || photoNumber > totalPhotos) {
       setIsCapturing(false);
       return;
@@ -504,7 +504,7 @@ export default function HostPage() {
       const recordingStartTime = Date.now();
 
       try {
-        videoRecorderRef.current.startRecording(
+        await videoRecorderRef.current.startRecording(
           photoNumber,
           recordingDuration * 1000, // Convert seconds to milliseconds
           (blob, completedPhotoNumber) => {
