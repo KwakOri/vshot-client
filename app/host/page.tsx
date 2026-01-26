@@ -27,7 +27,7 @@ import {
   type VideoSource,
 } from "@/lib/webgl-video-composer";
 import { FRAME_LAYOUTS, getLayoutById } from "@/constants/frame-layouts";
-import { RESOLUTION } from "@/constants/constants";
+import { RESOLUTION, scaleLayoutForVideo } from "@/constants/constants";
 import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -746,15 +746,16 @@ export default function HostPage() {
         videoSourcesCount: videoSources.length
       });
 
-      // Use Canvas 2D composition with selected layout
-      // NOTE: Use canvas size from layout configuration
+      // Scale layout from photo resolution (3000×4500) to video resolution (720×1080)
+      const videoLayout = scaleLayoutForVideo(selectedLayout);
+
       const composedBlob = await composeVideoWithWebGL(
         videoSources,
         {
-          width: selectedLayout.canvasWidth,
-          height: selectedLayout.canvasHeight,
+          width: videoLayout.canvasWidth,
+          height: videoLayout.canvasHeight,
           frameRate: 24,
-          layout: selectedLayout,
+          layout: videoLayout,
         },
         (progress) => {
           setComposeProgress(progress);
@@ -884,15 +885,16 @@ export default function HostPage() {
         videoSourcesCount: videoSources.length
       });
 
-      // Use Canvas 2D composition with selected layout
-      // NOTE: Use canvas size from layout configuration
+      // Scale layout from photo resolution (3000×4500) to video resolution (720×1080)
+      const videoLayout = scaleLayoutForVideo(selectedLayout);
+
       const composedBlob = await composeVideoWithWebGL(
         videoSources,
         {
-          width: selectedLayout.canvasWidth,
-          height: selectedLayout.canvasHeight,
+          width: videoLayout.canvasWidth,
+          height: videoLayout.canvasHeight,
           frameRate: 24,
-          layout: selectedLayout,
+          layout: videoLayout,
         },
         (progress) => {
           setComposeProgress(progress);

@@ -1,3 +1,5 @@
+import type { FrameLayout } from '@/types';
+
 /**
  * Fixed Resolution Constants
  * All frames use 2:3 aspect ratio (vertical)
@@ -67,6 +69,27 @@ export const FRAME_LAYOUT = {
     offsetY: 40,
   },
 } as const;
+
+/**
+ * Scale a photo-resolution layout (3000×4500) to video resolution (720×1080)
+ * for use with video composition (WebGL/Canvas).
+ */
+export function scaleLayoutForVideo(layout: FrameLayout): FrameLayout {
+  const scale = RESOLUTION.VIDEO_WIDTH / layout.canvasWidth;
+  if (scale >= 1) return layout;
+  return {
+    ...layout,
+    canvasWidth: RESOLUTION.VIDEO_WIDTH,
+    canvasHeight: RESOLUTION.VIDEO_HEIGHT,
+    positions: layout.positions.map((pos) => ({
+      ...pos,
+      x: Math.round(pos.x * scale),
+      y: Math.round(pos.y * scale),
+      width: Math.round(pos.width * scale),
+      height: Math.round(pos.height * scale),
+    })),
+  };
+}
 
 /**
  * Calculate grid cell dimensions with gap and padding
