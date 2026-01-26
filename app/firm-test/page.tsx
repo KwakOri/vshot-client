@@ -20,12 +20,7 @@ import { useChromaKey } from "@/hooks/useChromaKey";
 import { getApiHeaders, getApiHeadersMultipart } from "@/lib/api";
 import { VideoRecorder } from "@/lib/video-recorder";
 import { type VideoSegment } from "@/lib/video-splitter";
-import {
-  composeVideoWithWebGL,
-  downloadWebGLComposedVideo,
-  checkCodecSupport,
-  type VideoSource,
-} from "@/lib/webgl-video-composer";
+import { checkCodecSupport } from "@/lib/webgl-video-composer";
 import { FRAME_LAYOUTS, getLayoutById } from "@/constants/frame-layouts";
 import { RESOLUTION } from "@/constants/constants";
 import { useEffect, useRef, useState } from "react";
@@ -43,15 +38,21 @@ interface TimingResult {
 interface VideoTimingResult {
   testId: string;
   uploadTimeMs: number;
-  convertTimeMs?: number;
+  composeTimeMs: number;
   totalTimeMs: number;
   inputSizeMB: number;
-  outputSizeMB?: number;
-  url?: string;
+  outputSizeMB: number;
+  duration: number;
+  url: string;
 }
 
 export default function FirmTestPage() {
-  const [testId] = useState(() => uuidv4().slice(0, 8));
+  // Generate testId only on client side to avoid hydration mismatch
+  const [testId, setTestId] = useState<string>("");
+
+  useEffect(() => {
+    setTestId(uuidv4().slice(0, 8));
+  }, []);
 
   // Camera/Screen state
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -84,6 +85,10 @@ export default function FirmTestPage() {
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
   const videoRecorderRef = useRef<VideoRecorder | null>(null);
 
+  // State to track DOM elements for hooks (refs don't trigger re-renders)
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null);
+
   // Video recording state
   const [recordedSegments, setRecordedSegments] = useState<VideoSegment[]>([]);
   const [currentlyRecording, setCurrentlyRecording] = useState<number | null>(null);
@@ -103,12 +108,17 @@ export default function FirmTestPage() {
   // Timing results
   const [photoTimings, setPhotoTimings] = useState<TimingResult[]>([]);
   const [videoTiming, setVideoTiming] = useState<VideoTimingResult | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+
+  // Set DOM element references after mount
+  useEffect(() => {
+    setVideoElement(localVideoRef.current);
+    setCanvasElement(localCanvasRef.current);
+  }, []);
 
   // Use chroma key hook
   useChromaKey({
-    videoElement: localVideoRef.current,
-    canvasElement: localCanvasRef.current,
+    videoElement,
+    canvasElement,
     stream: localStream,
     enabled: chromaKeyEnabled,
     sensitivity,
@@ -143,6 +153,7 @@ export default function FirmTestPage() {
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        await localVideoRef.current.play().catch(() => {});
       }
 
       setLocalStream(stream);
@@ -175,6 +186,7 @@ export default function FirmTestPage() {
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        await localVideoRef.current.play().catch(() => {});
       }
 
       setLocalStream(stream);
@@ -396,49 +408,7 @@ export default function FirmTestPage() {
     }
   };
 
-  // Upload composed video to server
-  const uploadVideoToServer = async (blob: Blob) => {
-    setIsUploading(true);
-
-    try {
-      const extension = blob.type.includes("mp4") ? "mp4" : "webm";
-      const filename = `test-video.${extension}`;
-
-      const formData = new FormData();
-      formData.append("video", blob, filename);
-
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-      const response = await fetch(`${API_URL}/api/test/video-upload`, {
-        method: "POST",
-        headers: getApiHeadersMultipart(),
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Video upload failed");
-      }
-
-      const result = await response.json();
-      console.log("[FirmTest] Video uploaded:", result);
-
-      setVideoTiming({
-        testId: result.testId,
-        uploadTimeMs: result.timing.uploadTimeMs,
-        totalTimeMs: result.timing.uploadTimeMs,
-        inputSizeMB: result.fileInfo.sizeMB,
-        url: result.videoUrl,
-      });
-
-      alert("영상 업로드 완료!");
-    } catch (error) {
-      console.error("[FirmTest] Video upload error:", error);
-      alert("영상 업로드 실패: " + (error instanceof Error ? error.message : ""));
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  // Compose video locally
+  // Compose video on server (FFmpeg)
   const handleComposeVideo = async () => {
     if (recordedSegments.length < slotCount) {
       alert(`최소 ${slotCount}개의 영상 세그먼트가 필요합니다.`);
@@ -448,36 +418,72 @@ export default function FirmTestPage() {
     // Select first slotCount segments
     const selectedSegments = recordedSegments.slice(0, slotCount);
 
-    console.log("[FirmTest] Composing video with segments:", selectedSegments.map((s) => s.photoNumber));
+    console.log("[FirmTest] Uploading segments for server composition:", selectedSegments.map((s) => s.photoNumber));
 
     setIsComposing(true);
-    setComposeProgress("영상 합성 시작...");
+    setComposeProgress("영상 세그먼트 업로드 중...");
 
     try {
-      const videoSources: VideoSource[] = selectedSegments.map((seg) => ({
-        blob: seg.blob,
-        startTime: seg.startTime,
-        endTime: seg.endTime,
-        photoNumber: seg.photoNumber,
-      }));
-
       if (!selectedLayout) {
         throw new Error("Layout not found");
       }
 
-      const composedBlob = await composeVideoWithWebGL(
-        videoSources,
-        {
-          width: selectedLayout.canvasWidth,
-          height: selectedLayout.canvasHeight,
-          frameRate: 24,
-          layout: selectedLayout,
-        },
-        (progress) => {
-          setComposeProgress(progress);
-        }
-      );
+      // Map client layout ID to server layout ID
+      const layoutIdMap: Record<string, string> = {
+        "layout-4-grid": "4cut-grid",
+        "4cut-grid": "4cut-grid",
+        "layout-1-polaroid": "1cut-polaroid",
+        "1cut-polaroid": "1cut-polaroid",
+        "layout-4-quoka": "4cut-quoka",
+        "4cut-quoka": "4cut-quoka",
+      };
 
+      const serverLayoutId = layoutIdMap[selectedFrameLayoutId] || "4cut-grid";
+
+      // Create FormData with all video segments
+      const formData = new FormData();
+
+      for (const seg of selectedSegments) {
+        const extension = seg.blob.type.includes("mp4") ? "mp4" : "webm";
+        formData.append("videos", seg.blob, `segment-${seg.photoNumber}.${extension}`);
+      }
+
+      formData.append("layoutId", serverLayoutId);
+
+      const totalInputSize = selectedSegments.reduce((sum, seg) => sum + seg.blob.size, 0);
+      console.log("[FirmTest] Uploading to server:", {
+        segmentCount: selectedSegments.length,
+        layoutId: serverLayoutId,
+        totalSizeMB: (totalInputSize / 1024 / 1024).toFixed(2),
+      });
+
+      setComposeProgress("서버에서 영상 합성 중...");
+
+      // Call server compose API
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      const response = await fetch(`${API_URL}/api/test/video-compose`, {
+        method: "POST",
+        headers: getApiHeadersMultipart(),
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("[FirmTest] Server composition complete:", result);
+
+      // Fetch the composed video from server
+      setComposeProgress("합성된 영상 다운로드 중...");
+
+      const videoResponse = await fetch(`${API_URL}${result.videoUrl}`);
+      if (!videoResponse.ok) {
+        throw new Error("Failed to download composed video");
+      }
+
+      const composedBlob = await videoResponse.blob();
       const url = URL.createObjectURL(composedBlob);
 
       if (composedVideo) {
@@ -485,15 +491,30 @@ export default function FirmTestPage() {
       }
 
       setComposedVideo({ blob: composedBlob, url });
-      console.log("[FirmTest] Video composition complete:", {
-        size: `${(composedBlob.size / 1024 / 1024).toFixed(2)} MB`,
-        type: composedBlob.type,
+
+      // Update timing result
+      setVideoTiming({
+        testId: result.testId,
+        uploadTimeMs: result.timing.uploadTimeMs,
+        composeTimeMs: result.timing.composeTimeMs,
+        totalTimeMs: result.timing.totalTimeMs,
+        inputSizeMB: result.fileInfo.inputTotalSizeMB,
+        outputSizeMB: result.fileInfo.outputSizeMB,
+        duration: result.fileInfo.duration,
+        url: result.videoUrl,
+      });
+
+      console.log("[FirmTest] Video ready:", {
+        serverTime: `${result.timing.totalTimeMs}ms`,
+        composeTime: `${result.timing.composeTimeMs}ms`,
+        outputSize: `${result.fileInfo.outputSizeMB} MB`,
+        duration: `${result.fileInfo.duration}s`,
       });
 
       setComposeProgress("완료!");
     } catch (error) {
-      console.error("[FirmTest] Video composition error:", error);
-      alert("영상 합성 실패: " + (error instanceof Error ? error.message : ""));
+      console.error("[FirmTest] Server composition error:", error);
+      alert("서버 영상 합성 실패: " + (error instanceof Error ? error.message : ""));
     } finally {
       setIsComposing(false);
       setTimeout(() => setComposeProgress(""), 2000);
@@ -564,13 +585,13 @@ export default function FirmTestPage() {
               <h2 className="text-lg font-semibold mb-4">미리보기</h2>
 
               <div className="relative aspect-[2/3] bg-dark rounded-lg overflow-hidden">
-                {/* Hidden video for source */}
+                {/* Video source (visually hidden but still renders) */}
                 <video
                   ref={localVideoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="hidden"
+                  className="absolute w-1 h-1 opacity-0 pointer-events-none"
                 />
 
                 {/* Chroma key processed canvas */}
@@ -578,7 +599,7 @@ export default function FirmTestPage() {
                   ref={localCanvasRef}
                   width={RESOLUTION.VIDEO_WIDTH}
                   height={RESOLUTION.VIDEO_HEIGHT}
-                  className={`w-full h-full object-cover ${
+                  className={`absolute inset-0 w-full h-full object-cover ${
                     flipHorizontal ? "scale-x-[-1]" : ""
                   }`}
                 />
@@ -832,12 +853,12 @@ export default function FirmTestPage() {
               </SettingsPanel>
             )}
 
-            {/* Video Composition */}
+            {/* Video Composition (Server-side FFmpeg) */}
             {recordedSegments.length >= slotCount && (
-              <SettingsPanel title="영상 합성">
+              <SettingsPanel title="서버 영상 합성">
                 <div className="space-y-4">
                   <p className="text-sm text-dark/70">
-                    녹화된 {recordedSegments.length}개 세그먼트 중 {slotCount}개를 합성합니다.
+                    녹화된 {recordedSegments.length}개 세그먼트 중 {slotCount}개를 서버에서 FFmpeg로 합성합니다.
                   </p>
 
                   {isComposing && (
@@ -852,7 +873,7 @@ export default function FirmTestPage() {
                     disabled={isComposing}
                     className="w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition disabled:opacity-50"
                   >
-                    {isComposing ? "합성 중..." : "영상 합성 시작"}
+                    {isComposing ? "서버 합성 중..." : "서버 영상 합성 시작"}
                   </button>
 
                   {composedVideo && (
@@ -864,27 +885,18 @@ export default function FirmTestPage() {
                           className="w-full aspect-[2/3]"
                         />
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            const ext = composedVideo.blob.type.includes("mp4") ? "mp4" : "webm";
-                            downloadWebGLComposedVideo(
-                              composedVideo.blob,
-                              `firm-test-${testId}.${ext}`
-                            );
-                          }}
-                          className="flex-1 px-4 py-2 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-medium transition"
-                        >
-                          다운로드
-                        </button>
-                        <button
-                          onClick={() => uploadVideoToServer(composedVideo.blob)}
-                          disabled={isUploading}
-                          className="flex-1 px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition disabled:opacity-50"
-                        >
-                          {isUploading ? "업로드 중..." : "서버 업로드"}
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => {
+                          const ext = composedVideo.blob.type.includes("mp4") ? "mp4" : "webm";
+                          const link = document.createElement("a");
+                          link.href = composedVideo.url;
+                          link.download = `firm-test-${testId}.${ext}`;
+                          link.click();
+                        }}
+                        className="w-full px-4 py-2 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-medium transition"
+                      >
+                        다운로드
+                      </button>
 
                       <div className="text-sm text-dark/70 text-center">
                         크기: {(composedVideo.blob.size / 1024 / 1024).toFixed(2)} MB
@@ -896,24 +908,40 @@ export default function FirmTestPage() {
               </SettingsPanel>
             )}
 
-            {/* Video Upload Result */}
+            {/* Server Composition Timing Result */}
             {videoTiming && (
-              <SettingsPanel title="영상 업로드 결과">
-                <div className="grid grid-cols-2 gap-4 text-center">
-                  <div className="bg-primary/10 rounded-lg p-3">
-                    <div className="text-2xl font-bold text-primary">{videoTiming.uploadTimeMs}</div>
-                    <div className="text-xs text-dark/70">업로드(ms)</div>
+              <SettingsPanel title="서버 합성 결과">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3 text-center">
+                    <div className="bg-primary/10 rounded-lg p-3">
+                      <div className="text-xl font-bold text-primary">{videoTiming.uploadTimeMs}</div>
+                      <div className="text-xs text-dark/70">업로드(ms)</div>
+                    </div>
+                    <div className="bg-secondary/10 rounded-lg p-3">
+                      <div className="text-xl font-bold text-secondary">{videoTiming.composeTimeMs}</div>
+                      <div className="text-xs text-dark/70">합성(ms)</div>
+                    </div>
+                    <div className="bg-neutral rounded-lg p-3">
+                      <div className="text-xl font-bold text-dark">{videoTiming.totalTimeMs}</div>
+                      <div className="text-xs text-dark/70">총 시간(ms)</div>
+                    </div>
+                    <div className="bg-neutral rounded-lg p-3">
+                      <div className="text-xl font-bold text-dark">{videoTiming.duration.toFixed(1)}s</div>
+                      <div className="text-xs text-dark/70">영상 길이</div>
+                    </div>
                   </div>
-                  <div className="bg-secondary/10 rounded-lg p-3">
-                    <div className="text-2xl font-bold text-secondary">{videoTiming.inputSizeMB.toFixed(1)}</div>
-                    <div className="text-xs text-dark/70">크기(MB)</div>
+
+                  <div className="bg-neutral/30 rounded-lg p-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-dark/70">입력 크기:</span>
+                      <span className="font-mono">{videoTiming.inputSizeMB.toFixed(2)} MB</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-dark/70">출력 크기:</span>
+                      <span className="font-mono">{videoTiming.outputSizeMB.toFixed(2)} MB</span>
+                    </div>
                   </div>
                 </div>
-                {videoTiming.url && (
-                  <p className="text-sm text-dark/70 mt-4 text-center break-all">
-                    URL: {videoTiming.url}
-                  </p>
-                )}
               </SettingsPanel>
             )}
           </div>
