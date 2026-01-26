@@ -77,6 +77,8 @@ export const FRAME_LAYOUT = {
 export function scaleLayoutForVideo(layout: FrameLayout): FrameLayout {
   const scale = RESOLUTION.VIDEO_WIDTH / layout.canvasWidth;
   if (scale >= 1) return layout;
+  // Round width/height down to even numbers (required for yuv420p / H.264)
+  const toEven = (n: number) => { const r = Math.round(n); return r % 2 === 0 ? r : r - 1; };
   return {
     ...layout,
     canvasWidth: RESOLUTION.VIDEO_WIDTH,
@@ -85,8 +87,8 @@ export function scaleLayoutForVideo(layout: FrameLayout): FrameLayout {
       ...pos,
       x: Math.round(pos.x * scale),
       y: Math.round(pos.y * scale),
-      width: Math.round(pos.width * scale),
-      height: Math.round(pos.height * scale),
+      width: toEven(pos.width * scale),
+      height: toEven(pos.height * scale),
     })),
   };
 }
