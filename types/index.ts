@@ -91,7 +91,7 @@ export interface WebRTCConfig {
  */
 
 /**
- * Individual frame slot position and styling
+ * Individual frame slot position and styling (pixel-based, resolved)
  */
 export interface FrameSlot {
   x: number;          // X position in pixels
@@ -101,6 +101,18 @@ export interface FrameSlot {
   zIndex?: number;    // Stacking order (higher = on top)
   rotation?: number;  // Rotation in degrees (for future use)
   borderRadius?: number; // Corner radius in pixels (for future use)
+}
+
+/**
+ * Frame slot position defined as ratios (0-1)
+ * Resolution-independent layout definition
+ */
+export interface FrameSlotRatio {
+  x: number;          // X position as ratio (0-1)
+  y: number;          // Y position as ratio (0-1)
+  width: number;      // Width as ratio (0-1)
+  height: number;     // Height as ratio (0-1)
+  zIndex?: number;    // Stacking order (higher = on top)
 }
 
 /**

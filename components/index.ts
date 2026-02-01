@@ -1,3 +1,4 @@
+export { AppViewLayout } from './AppViewLayout';
 export { ConnectionStatus } from './ConnectionStatus';
 export { FlashOverlay } from './FlashOverlay';
 export { CountdownOverlay } from './CountdownOverlay';

@@ -37,22 +37,14 @@ export function VideoDisplayPanel({
   const isHost = role === 'host';
   const isGuest = role === 'guest';
 
-  const title = remoteStream
-    ? '합성 화면 (Guest + Host)'
-    : isHost
-    ? '내 화면 (Host)'
-    : '내 영상 (Guest)';
-
   const inactiveMessage = isHost
     ? '화면 공유를 시작해주세요'
     : '카메라를 준비하는 중...';
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4 w-full max-w-[90vw] lg:max-w-none mx-auto lg:mx-0">
-      <h2 className="text-xl font-semibold mb-4">{title}</h2>
-
+    <div className="bg-gray-800 rounded-lg p-2 w-full h-full flex items-center justify-center">
       <div
-        className="relative bg-black rounded-lg overflow-hidden w-full lg:h-[calc(90vh-8rem)]"
+        className="relative bg-black rounded-lg overflow-hidden h-full"
         style={{ aspectRatio: '2/3' }}
       >
         {/* Checkerboard background pattern */}
