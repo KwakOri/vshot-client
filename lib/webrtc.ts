@@ -160,7 +160,7 @@ export async function getCameraStream(constraints?: MediaStreamConstraints): Pro
       height: { ideal: 1080 },
       facingMode: 'user'
     },
-    audio: false
+    audio: true
   };
 
   return await navigator.mediaDevices.getUserMedia(constraints || defaultConstraints);
@@ -172,7 +172,7 @@ export async function getDisplayStream(): Promise<MediaStream> {
       width: { ideal: 1920 },
       height: { ideal: 1080 }
     },
-    audio: false
+    audio: true
   });
 }
 

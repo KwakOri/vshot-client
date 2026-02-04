@@ -20,6 +20,9 @@ interface VideoDisplayPanelProps {
 
   // UI state
   countdown: number | null;
+
+  // Audio settings
+  remoteAudioEnabled?: boolean;
 }
 
 export function VideoDisplayPanel({
@@ -33,6 +36,7 @@ export function VideoDisplayPanel({
   compositeCanvasRef,
   flipHorizontal,
   countdown,
+  remoteAudioEnabled = true,
 }: VideoDisplayPanelProps) {
   const isHost = role === 'host';
   const isGuest = role === 'guest';
@@ -132,11 +136,13 @@ export function VideoDisplayPanel({
         )}
 
         {/* Hidden video elements for processing - positioned inside container */}
+        {/* Remote video: muted=false to enable audio playback from peer */}
         <video
           ref={remoteVideoRef}
           autoPlay
           playsInline
-          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+          muted={!remoteAudioEnabled}
+          className="absolute top-0 left-0 w-px h-px opacity-0 pointer-events-none"
         />
 
         {isHost && (

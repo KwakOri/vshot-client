@@ -18,6 +18,14 @@ interface AppStore extends RoomState {
   selectedFrameLayoutId: string;
   setSelectedFrameLayoutId: (layoutId: string) => void;
 
+  // Device selection (persisted)
+  selectedVideoDeviceId: string | null;
+  selectedAudioDeviceId: string | null;
+  selectedAudioOutputDeviceId: string | null;
+  setSelectedVideoDeviceId: (deviceId: string | null) => void;
+  setSelectedAudioDeviceId: (deviceId: string | null) => void;
+  setSelectedAudioOutputDeviceId: (deviceId: string | null) => void;
+
   // Chroma key settings
   chromaKey: ChromaKeySettings;
   setChromaKeyEnabled: (enabled: boolean) => void;
@@ -65,11 +73,20 @@ export const useAppStore = create<AppStore>()(
   selectedFrameLayoutId: '4cut-grid', // Default layout (2:3 vertical, 4-cut)
   _hasHydrated: false,
 
+  // Device selection
+  selectedVideoDeviceId: null,
+  selectedAudioDeviceId: null,
+  selectedAudioOutputDeviceId: null,
+
   setHasHydrated: (state) => {
     set({ _hasHydrated: state });
   },
 
   setSelectedFrameLayoutId: (layoutId) => set({ selectedFrameLayoutId: layoutId }),
+
+  setSelectedVideoDeviceId: (deviceId) => set({ selectedVideoDeviceId: deviceId }),
+  setSelectedAudioDeviceId: (deviceId) => set({ selectedAudioDeviceId: deviceId }),
+  setSelectedAudioOutputDeviceId: (deviceId) => set({ selectedAudioOutputDeviceId: deviceId }),
 
   setChromaKeyEnabled: (enabled) =>
     set((state) => ({
@@ -141,6 +158,9 @@ export const useAppStore = create<AppStore>()(
         userId: state.userId,
         role: state.role,
         selectedFrameLayoutId: state.selectedFrameLayoutId,
+        selectedVideoDeviceId: state.selectedVideoDeviceId,
+        selectedAudioDeviceId: state.selectedAudioDeviceId,
+        selectedAudioOutputDeviceId: state.selectedAudioOutputDeviceId,
       }),
       onRehydrateStorage: () => (state) => {
         // Mark hydration as complete
