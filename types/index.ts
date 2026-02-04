@@ -25,6 +25,7 @@ export type SignalMessage =
   | { type: 'guest-display-options'; roomId: string; options: { flipHorizontal: boolean } }
   | { type: 'aspect-ratio-settings'; roomId: string; settings: AspectRatioSettings }
   | { type: 'frame-layout-settings'; roomId: string; settings: FrameLayoutSettings }
+  | { type: 'session-restart'; roomId: string; userId?: string; fromUserId?: string }
   | { type: 'error'; message: string };
 
 export interface ChromaKeySettings {
