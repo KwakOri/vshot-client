@@ -570,6 +570,13 @@ export default function GuestRoomPage() {
     console.log('[Guest Room] Session restarted');
   };
 
+  // Get video extension from URL
+  const getVideoExtension = (url: string): string => {
+    const ext = url.split('.').pop()?.toLowerCase();
+    if (ext === 'mp4' || ext === 'webm') return ext;
+    return 'mp4'; // 기본값
+  };
+
   // Download file from URL (handles cross-origin)
   const downloadFile = async (url: string, filename: string) => {
     try {
@@ -870,7 +877,7 @@ export default function GuestRoomPage() {
                     사진 다운로드
                   </button>
                   <button
-                    onClick={() => videoFrameUrl && downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.webm`)}
+                    onClick={() => videoFrameUrl && downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.${getVideoExtension(videoFrameUrl)}`)}
                     className="flex-1 px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md text-center"
                   >
                     영상 다운로드
@@ -1086,7 +1093,7 @@ export default function GuestRoomPage() {
                             사진 다운로드
                           </button>
                           <button
-                            onClick={() => videoFrameUrl && downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.webm`)}
+                            onClick={() => videoFrameUrl && downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.${getVideoExtension(videoFrameUrl)}`)}
                             className="flex-1 px-3 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold text-sm transition shadow-md text-center"
                           >
                             영상 다운로드

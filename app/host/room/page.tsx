@@ -53,6 +53,8 @@ export default function HostRoomPage() {
 
   const [sensitivity, setSensitivity] = useState(50);
   const [smoothness, setSmoothness] = useState(10);
+  const [chromaKeyColor, setChromaKeyColor] = useState("#00ff00"); // 크로마키 색상
+  const [guestBlurAmount, setGuestBlurAmount] = useState(10); // 블러 강도 (픽셀)
 
   // Display options (flip horizontal)
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
@@ -169,7 +171,7 @@ export default function HostRoomPage() {
     height: RESOLUTION.VIDEO_HEIGHT,
     guestFlipHorizontal,
     hostFlipHorizontal,
-    blurGuest: true, // Blur guest video on host screen
+    guestBlurAmount, // 동적 블러 강도
   });
 
   // 녹화 전용 composite canvas hook - blur 없음
@@ -183,7 +185,7 @@ export default function HostRoomPage() {
     height: RESOLUTION.VIDEO_HEIGHT,
     guestFlipHorizontal,
     hostFlipHorizontal,
-    blurGuest: false, // 녹화용은 blur 없이 원본 사용
+    guestBlurAmount: 0, // 녹화용은 blur 없이 원본 사용
   });
 
   // Initialize video recorder once - 녹화 전용 canvas 사용 (blur 없음)
@@ -1875,8 +1877,37 @@ export default function HostRoomPage() {
                   {/* Chroma key settings */}
                   {isCameraActive && chromaKeyEnabled && (
                     <div className="space-y-6">
+                      {/* 크로마키 색상 선택 */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-dark">크로마키 색상</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="color"
+                            value={chromaKeyColor}
+                            onChange={(e) => setChromaKeyColor(e.target.value)}
+                            className="w-12 h-10 rounded-lg border-2 border-neutral cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={chromaKeyColor}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              // # 자동 추가 및 유효한 hex 형식만 허용
+                              if (value === "" || value === "#") {
+                                setChromaKeyColor("#");
+                              } else if (/^#[0-9A-Fa-f]{0,6}$/.test(value)) {
+                                setChromaKeyColor(value.toLowerCase());
+                              } else if (/^[0-9A-Fa-f]{1,6}$/.test(value)) {
+                                setChromaKeyColor(`#${value.toLowerCase()}`);
+                              }
+                            }}
+                            placeholder="#00ff00"
+                            className="w-24 px-3 py-2 text-sm font-mono border-2 border-neutral rounded-lg focus:border-primary focus:outline-none"
+                          />
+                        </div>
+                      </div>
                       <SegmentedBar
-                        label="민감도 (Sensitivity)"
+                        label="민감도 (Similarity)"
                         value={sensitivity}
                         values={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
                         onChange={setSensitivity}
@@ -1888,6 +1919,21 @@ export default function HostRoomPage() {
                         values={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
                         onChange={setSmoothness}
                         color="primary"
+                      />
+                    </div>
+                  )}
+
+                  {/* Guest 블러 설정 */}
+                  {remoteStream && (
+                    <div className="space-y-2">
+                      <SegmentedBar
+                        label="Guest 블러 강도"
+                        value={guestBlurAmount}
+                        values={[0, 5, 10, 15, 20, 25, 30]}
+                        onChange={setGuestBlurAmount}
+                        unit="px"
+                        color="secondary"
+                        description="Host 화면에서 Guest 영상의 블러 강도 (0 = 블러 없음)"
                       />
                     </div>
                   )}
