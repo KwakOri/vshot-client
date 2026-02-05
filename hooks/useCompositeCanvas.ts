@@ -105,15 +105,9 @@ export function useCompositeCanvas({
       }
 
       // Draw foreground (Host with chroma key)
+      // Note: flip is already applied in useChromaKey canvas drawing, no additional flip needed here
       if (foregroundCanvas.width > 0 && foregroundCanvas.height > 0) {
-        ctx.save();
-        if (hostFlipHorizontal) {
-          ctx.scale(-1, 1); // Mirror Host canvas
-          ctx.drawImage(foregroundCanvas, -width, 0, width, height);
-        } else {
-          ctx.drawImage(foregroundCanvas, 0, 0, width, height);
-        }
-        ctx.restore();
+        ctx.drawImage(foregroundCanvas, 0, 0, width, height);
       }
 
       animationFrameRef.current = requestAnimationFrame(drawComposite);

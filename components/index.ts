@@ -1,5 +1,6 @@
 export { AppViewLayout } from './AppViewLayout';
 export { ConnectionStatus } from './ConnectionStatus';
+export { HostRoomHeader } from './HostRoomHeader';
 export { DeviceSelector } from './DeviceSelector';
 export { FlashOverlay } from './FlashOverlay';
 export { CountdownOverlay } from './CountdownOverlay';

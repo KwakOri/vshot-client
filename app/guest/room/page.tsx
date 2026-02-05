@@ -39,6 +39,7 @@ export default function GuestRoomPage() {
   const [hostChromaKeyEnabled, setHostChromaKeyEnabled] = useState(true);
   const [hostSensitivity, setHostSensitivity] = useState(50);
   const [hostSmoothness, setHostSmoothness] = useState(10);
+  const [hostChromaKeyColor, setHostChromaKeyColor] = useState('#00ff00');
 
   // Display options (flip horizontal)
   const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
@@ -126,6 +127,7 @@ export default function GuestRoomPage() {
   const initializedRef = useRef(false);
 
   // Render Guest's local video to canvas (for high-quality photo capture)
+  // flipHorizontal applied so captured photos match the mirrored preview
   useChromaKey({
     videoElement: localVideoRef.current,
     canvasElement: localCanvasRef.current,
@@ -135,9 +137,12 @@ export default function GuestRoomPage() {
     smoothness: 0,
     width: RESOLUTION.PHOTO_WIDTH,
     height: RESOLUTION.PHOTO_HEIGHT,
+    flipHorizontal: guestFlipHorizontal,
   });
 
   // Use shared chroma key hook for remote video (Host's video)
+  // isRemoteStream: true enables compensation for WebRTC compression color loss
+  // flipHorizontal applied so captured photos match the mirrored preview
   useChromaKey({
     videoElement: remoteVideoRef.current,
     canvasElement: remoteCanvasRef.current,
@@ -145,8 +150,11 @@ export default function GuestRoomPage() {
     enabled: hostChromaKeyEnabled,
     sensitivity: hostSensitivity,
     smoothness: hostSmoothness,
+    keyColor: hostChromaKeyColor,
     width: RESOLUTION.VIDEO_WIDTH,
     height: RESOLUTION.VIDEO_HEIGHT,
+    isRemoteStream: true,
+    flipHorizontal: hostFlipHorizontal,
   });
 
   // Use shared composite canvas hook
@@ -429,10 +437,20 @@ export default function GuestRoomPage() {
     };
 
     const handleChromaKeySettings = (message: any) => {
+      console.log('[Guest Room] Received chromakey-settings:', message);
       if (message.settings) {
+        console.log('[Guest Room] Applying chromakey settings:', {
+          enabled: message.settings.enabled,
+          color: message.settings.color,
+          similarity: message.settings.similarity,
+          smoothness: message.settings.smoothness,
+        });
         setHostChromaKeyEnabled(message.settings.enabled);
         setHostSensitivity(message.settings.similarity);
         setHostSmoothness(message.settings.smoothness);
+        if (message.settings.color) {
+          setHostChromaKeyColor(message.settings.color);
+        }
       }
     };
 

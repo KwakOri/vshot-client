@@ -71,13 +71,13 @@ export function VideoDisplayPanel({
           // Host: Show canvas (chroma key processed)
           <div className="absolute inset-0 flex items-center justify-center">
             {/* Show own chroma key canvas when alone */}
+            {/* Note: flip is already applied in useChromaKey canvas drawing, no CSS transform needed */}
             <canvas
               ref={localCanvasRef}
               className={`absolute max-w-full max-h-full transition-opacity ${
                 remoteStream ? "opacity-0" : "opacity-100"
               }`}
               style={{
-                transform: flipHorizontal ? 'scaleX(-1)' : 'scaleX(1)',
                 aspectRatio: '2/3',
               }}
             />
