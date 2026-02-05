@@ -1076,6 +1076,7 @@ export default function GuestRoomPage() {
               role="guest"
               isGenerating={isComposing}
               isComplete={!!(photoFrameUrl && videoFrameUrl)}
+              frameLayout={selectedLayout}
             />
 
             {selectedPhotos.length === selectablePhotos && (

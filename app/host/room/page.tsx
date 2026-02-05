@@ -16,6 +16,7 @@ import { RESOLUTION } from '@/constants/constants';
 import { FRAME_LAYOUTS, getLayoutById } from '@/constants/frame-layouts';
 import { useChromaKey } from '@/hooks/useChromaKey';
 import { useCompositeCanvas } from '@/hooks/useCompositeCanvas';
+import { useHostSettings } from '@/hooks/useHostSettings';
 import { useMediaDevices } from '@/hooks/useMediaDevices';
 import { usePhotoCapture } from '@/hooks/usePhotoCapture';
 import { useSignaling } from '@/hooks/useSignaling';
@@ -46,6 +47,9 @@ export default function HostRoomPage() {
   const { connect, sendMessage, on, off, isConnected } = useSignaling();
   const { localStream, remoteStream, startLocalStream, createOffer } =
     useWebRTC({ sendMessage, on });
+
+  // Load persisted settings from localStorage
+  const { settings: savedSettings, isLoaded: settingsLoaded, updateSetting } = useHostSettings();
 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [sourceType, setSourceType] = useState<'camera' | 'screen'>('camera'); // Track source type
@@ -206,6 +210,79 @@ export default function HostRoomPage() {
       );
     }
   }, []);
+
+  // Sync loaded settings from localStorage to state
+  useEffect(() => {
+    if (!settingsLoaded) return;
+
+    setChromaKeyEnabled(savedSettings.chromaKeyEnabled);
+    setSensitivity(savedSettings.sensitivity);
+    setSmoothness(savedSettings.smoothness);
+    setChromaKeyColor(savedSettings.chromaKeyColor);
+    setHostFlipHorizontal(savedSettings.hostFlipHorizontal);
+    setGuestFlipHorizontal(savedSettings.guestFlipHorizontal);
+    setGuestBlurAmount(savedSettings.guestBlurAmount);
+    setRecordingDuration(savedSettings.recordingDuration);
+    setCaptureInterval(savedSettings.captureInterval);
+
+    // Update store with saved frame layout
+    if (savedSettings.selectedFrameLayoutId) {
+      store.setSelectedFrameLayoutId(savedSettings.selectedFrameLayoutId);
+    }
+
+    console.log('[Host Room] Loaded settings from localStorage:', savedSettings);
+  }, [settingsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save settings to localStorage when they change
+  useEffect(() => {
+    if (!settingsLoaded) return; // Don't save during initial load
+    updateSetting('chromaKeyEnabled', chromaKeyEnabled);
+  }, [chromaKeyEnabled, settingsLoaded, updateSetting]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    updateSetting('sensitivity', sensitivity);
+  }, [sensitivity, settingsLoaded, updateSetting]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    updateSetting('smoothness', smoothness);
+  }, [smoothness, settingsLoaded, updateSetting]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    updateSetting('chromaKeyColor', chromaKeyColor);
+  }, [chromaKeyColor, settingsLoaded, updateSetting]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    updateSetting('hostFlipHorizontal', hostFlipHorizontal);
+  }, [hostFlipHorizontal, settingsLoaded, updateSetting]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    updateSetting('guestFlipHorizontal', guestFlipHorizontal);
+  }, [guestFlipHorizontal, settingsLoaded, updateSetting]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    updateSetting('guestBlurAmount', guestBlurAmount);
+  }, [guestBlurAmount, settingsLoaded, updateSetting]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    updateSetting('recordingDuration', recordingDuration);
+  }, [recordingDuration, settingsLoaded, updateSetting]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    updateSetting('captureInterval', captureInterval);
+  }, [captureInterval, settingsLoaded, updateSetting]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    updateSetting('selectedFrameLayoutId', store.selectedFrameLayoutId);
+  }, [store.selectedFrameLayoutId, settingsLoaded, updateSetting]);
 
   // Initialize AFTER Zustand persist hydration is complete
   useEffect(() => {
@@ -1733,6 +1810,7 @@ export default function HostRoomPage() {
                   peerSelectedPhotos={peerSelectedPhotos}
                   isGenerating={isGeneratingFrame}
                   maxSelection={selectablePhotos}
+                  frameLayout={selectedLayout}
                 />
 
                 {/* Video Frame Composition - integrated here */}

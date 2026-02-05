@@ -1,5 +1,7 @@
 import { Image } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
+import { FrameLayout } from '@/types';
+import { FramePreview } from './FramePreview';
 
 interface PhotoItemProps {
   photo: string;
@@ -75,6 +77,7 @@ interface PhotoSelectionPanelProps {
   peerSelectedPhotos?: number[];
   isGenerating?: boolean;
   isComplete?: boolean; // Whether photo/video generation is complete
+  frameLayout?: FrameLayout; // Frame layout for preview
 }
 
 /**
@@ -92,7 +95,8 @@ export const PhotoSelectionPanel = memo(function PhotoSelectionPanel({
   role,
   peerSelectedPhotos = [],
   isGenerating = false,
-  isComplete = false
+  isComplete = false,
+  frameLayout,
 }: PhotoSelectionPanelProps) {
   if (photos.length === 0) return null;
 
@@ -130,26 +134,43 @@ export const PhotoSelectionPanel = memo(function PhotoSelectionPanel({
         )}
       </p>
 
-      {/* Photo grid */}
-      <div className="grid grid-cols-4 gap-4">
-        {photos.map((photo, index) => {
-          const isSelected = selectionSet.has(index);
-          const selectionOrder = isSelected ? displaySelections.indexOf(index) + 1 : 0;
-          const canSelect = !readOnly && !!onPhotoSelect;
-
-          return (
-            <PhotoItem
-              key={index}
-              photo={photo}
-              index={index}
-              isSelected={isSelected}
-              selectionOrder={selectionOrder}
-              canSelect={canSelect}
-              readOnly={readOnly}
-              onSelect={handlePhotoSelect}
+      {/* Layout with frame preview on left */}
+      <div className={`flex gap-6 ${frameLayout ? 'flex-col lg:flex-row' : ''}`}>
+        {/* Frame Preview */}
+        {frameLayout && (
+          <div className="flex-shrink-0 flex justify-center lg:justify-start">
+            <FramePreview
+              photos={photos}
+              selectedPhotos={displaySelections}
+              frameLayout={frameLayout}
+              size="large"
             />
-          );
-        })}
+          </div>
+        )}
+
+        {/* Photo grid */}
+        <div className="flex-1">
+          <div className="grid grid-cols-4 gap-4">
+            {photos.map((photo, index) => {
+              const isSelected = selectionSet.has(index);
+              const selectionOrder = isSelected ? displaySelections.indexOf(index) + 1 : 0;
+              const canSelect = !readOnly && !!onPhotoSelect;
+
+              return (
+                <PhotoItem
+                  key={index}
+                  photo={photo}
+                  index={index}
+                  isSelected={isSelected}
+                  selectionOrder={selectionOrder}
+                  canSelect={canSelect}
+                  readOnly={readOnly}
+                  onSelect={handlePhotoSelect}
+                />
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Generate frame button - hidden when complete */}
