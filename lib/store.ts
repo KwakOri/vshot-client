@@ -70,7 +70,7 @@ export const useAppStore = create<AppStore>()(
     (set) => ({
   ...initialState,
   chromaKey: initialChromaKey,
-  selectedFrameLayoutId: '4cut-grid', // Default layout (2:3 vertical, 4-cut)
+  selectedFrameLayoutId: '1cut-polaroid', // Default layout (single polaroid)
   _hasHydrated: false,
 
   // Device selection
@@ -153,10 +153,8 @@ export const useAppStore = create<AppStore>()(
       name: 'vshot-storage', // localStorage key
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Only persist these fields
-        roomId: state.roomId,
-        userId: state.userId,
-        role: state.role,
+        // Only persist device/layout preferences - NOT session data (roomId, userId, role)
+        // Session data should be fresh on each page load to avoid stale room references
         selectedFrameLayoutId: state.selectedFrameLayoutId,
         selectedVideoDeviceId: state.selectedVideoDeviceId,
         selectedAudioDeviceId: state.selectedAudioDeviceId,

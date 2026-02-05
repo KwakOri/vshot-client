@@ -36,29 +36,31 @@ export interface FrameLayoutDefinition {
  * Predefined layout definitions (ratio-based)
  */
 export const LAYOUT_DEFINITIONS: FrameLayoutDefinition[] = [
-  // 1. Classic Life 4-Cut (2x2 Grid)
-  {
-    id: '4cut-grid',
-    label: '인생네컷 (2x2)',
-    slotCount: 4,
-    positionRatios: calculateGridRatios(2, 2),
-    thumbnailSrc: '/frames/4cut-grid.png',
-    frameSrc: '',
-    description: '2x2 배열의 클래식 인생네컷 스타일',
-    category: 'grid',
-    isActive: true,
-    sortOrder: 1,
-    tags: ['grid', 'equal', 'standard', 'life4cut'],
-  },
+  // // 1. Classic Life 4-Cut (2x2 Grid)
+  // {
+  //   id: '4cut-grid',
+  //   label: '인생네컷 (2x2)',
+  //   slotCount: 4,
+  //   positionRatios: calculateGridRatios(2, 2),
+  //   thumbnailSrc: '/frames/4cut-grid.png',
+  //   frameSrc: '',
+  //   description: '2x2 배열의 클래식 인생네컷 스타일',
+  //   category: 'grid',
+  //   isActive: true,
+  //   sortOrder: 1,
+  //   tags: ['grid', 'equal', 'standard', 'life4cut'],
+  // },
 
-  // 2. Polaroid Single
+  // 2. Polaroid Single (one-cut frame: 2000x3000, slot: 1200x1800 at 400,700)
   {
     id: '1cut-polaroid',
     label: '폴라로이드 (단일)',
     slotCount: 1,
-    positionRatios: calculateSingleSlotRatio(),
-    thumbnailSrc: '/frames/1cut-polaroid.png',
-    frameSrc: '',
+    positionRatios: [
+      { x: 400 / 2000, y: 700 / 3000, width: 1200 / 2000, height: 1800 / 3000, zIndex: 0 },
+    ],
+    thumbnailSrc: '/frames/one-cut.png',
+    frameSrc: '/frames/one-cut.png',
     description: '단일 사진을 위한 세로형 폴라로이드 스타일',
     category: 'single',
     isActive: true,
@@ -66,27 +68,27 @@ export const LAYOUT_DEFINITIONS: FrameLayoutDefinition[] = [
     tags: ['polaroid', 'single', 'classic'],
   },
 
-  // 3. Quoka Frame (custom positions for specific frame overlay)
-  // This uses fixed pixel positions relative to a 3000x4500 frame image
-  {
-    id: '4cut-quoka',
-    label: '쿼카 4컷',
-    slotCount: 4,
-    // Quoka frame positions as ratios (original: 3000x4500)
-    positionRatios: [
-      { x: 153 / 3000, y: 1068 / 4500, width: 1280 / 3000, height: 1520 / 4500, zIndex: 0 },
-      { x: 153 / 3000, y: 2673 / 4500, width: 1280 / 3000, height: 1520 / 4500, zIndex: 1 },
-      { x: 1587 / 3000, y: 307 / 4500, width: 1280 / 3000, height: 1520 / 4500, zIndex: 2 },
-      { x: 1587 / 3000, y: 1912 / 4500, width: 1280 / 3000, height: 1520 / 4500, zIndex: 3 },
-    ],
-    thumbnailSrc: '/frames/quoka.png',
-    frameSrc: '/frames/quoka.png',
-    description: '쿼카 테마의 4컷 프레임',
-    category: 'themed',
-    isActive: true,
-    sortOrder: 3,
-    tags: ['quoka', 'themed', '4cut', 'custom'],
-  },
+  // // 3. Quoka Frame (custom positions for specific frame overlay)
+  // // This uses fixed pixel positions relative to a 3000x4500 frame image
+  // {
+  //   id: '4cut-quoka',
+  //   label: '쿼카 4컷',
+  //   slotCount: 4,
+  //   // Quoka frame positions as ratios (original: 3000x4500)
+  //   positionRatios: [
+  //     { x: 153 / 3000, y: 1068 / 4500, width: 1280 / 3000, height: 1520 / 4500, zIndex: 0 },
+  //     { x: 153 / 3000, y: 2673 / 4500, width: 1280 / 3000, height: 1520 / 4500, zIndex: 1 },
+  //     { x: 1587 / 3000, y: 307 / 4500, width: 1280 / 3000, height: 1520 / 4500, zIndex: 2 },
+  //     { x: 1587 / 3000, y: 1912 / 4500, width: 1280 / 3000, height: 1520 / 4500, zIndex: 3 },
+  //   ],
+  //   thumbnailSrc: '/frames/quoka.png',
+  //   frameSrc: '/frames/quoka.png',
+  //   description: '쿼카 테마의 4컷 프레임',
+  //   category: 'themed',
+  //   isActive: true,
+  //   sortOrder: 3,
+  //   tags: ['quoka', 'themed', '4cut', 'custom'],
+  // },
 ];
 
 /**

@@ -34,7 +34,7 @@ const DEFAULT_SETTINGS: HostSettings = {
   guestBlurAmount: 10,
   recordingDuration: 10,
   captureInterval: 3,
-  selectedFrameLayoutId: '4cut-grid',
+  selectedFrameLayoutId: '1cut-polaroid',
 };
 
 /**
