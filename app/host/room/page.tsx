@@ -5,8 +5,6 @@ import {
   FullScreenPhotoSelection,
   HostRoomHeader,
   PhotoCounter,
-  PhotoSelectionPanel,
-  ProcessingIndicator,
   SegmentedBar,
   SettingsModal,
   SettingsPanel,
@@ -24,11 +22,17 @@ import { useWebRTC } from '@/hooks/useWebRTC';
 import { getApiHeaders, getApiHeadersMultipart } from '@/lib/api';
 import { batchMergeImages } from '@/lib/client-image-merger';
 import { uploadBlob } from '@/lib/files';
-import { generatePhotoFrameWithLayout, generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
+import {
+  generatePhotoFrameBlobWithLayout,
+  generatePhotoFrameWithLayout,
+} from '@/lib/frame-generator';
 import { useAppStore } from '@/lib/store';
 import { VideoRecorder } from '@/lib/video-recorder';
 import { type VideoSegment } from '@/lib/video-splitter';
-import { composeVideoWithWebGL, type VideoSource } from '@/lib/webgl-video-composer';
+import {
+  composeVideoWithWebGL,
+  type VideoSource,
+} from '@/lib/webgl-video-composer';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -47,11 +51,20 @@ export default function HostRoomPage() {
   const router = useRouter();
   const store = useAppStore();
   const { connect, sendMessage, on, off, isConnected } = useSignaling();
-  const { localStream, remoteStream, startLocalStream, createOffer, resetForNextGuest } =
-    useWebRTC({ sendMessage, on });
+  const {
+    localStream,
+    remoteStream,
+    startLocalStream,
+    createOffer,
+    resetForNextGuest,
+  } = useWebRTC({ sendMessage, on });
 
   // Load persisted settings from localStorage
-  const { settings: savedSettings, isLoaded: settingsLoaded, updateSetting } = useHostSettings();
+  const {
+    settings: savedSettings,
+    isLoaded: settingsLoaded,
+    updateSetting,
+  } = useHostSettings();
 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [sourceType, setSourceType] = useState<'camera' | 'screen'>('camera'); // Track source type
@@ -83,7 +96,9 @@ export default function HostRoomPage() {
   const selectablePhotos = slotCount; // Photos user can select
 
   // Client-side photo merge state
-  const [guestPhotos, setGuestPhotos] = useState<Map<number, string>>(new Map());
+  const [guestPhotos, setGuestPhotos] = useState<Map<number, string>>(
+    new Map()
+  );
   const [hostPhotos, setHostPhotos] = useState<Map<number, string>>(new Map());
 
   // Use shared photo capture hook
@@ -143,7 +158,9 @@ export default function HostRoomPage() {
   // Host preview photos (blurred guest for privacy)
   const [blurredMergedPhotos, setBlurredMergedPhotos] = useState<string[]>([]);
   // Host result photo frame (blurred)
-  const [blurredPhotoFrameUrl, setBlurredPhotoFrameUrl] = useState<string | null>(null);
+  const [blurredPhotoFrameUrl, setBlurredPhotoFrameUrl] = useState<
+    string | null
+  >(null);
 
   // Timer settings
   const [recordingDuration, setRecordingDuration] = useState(10); // seconds
@@ -241,7 +258,10 @@ export default function HostRoomPage() {
       store.setSelectedFrameLayoutId(savedSettings.selectedFrameLayoutId);
     }
 
-    console.log('[Host Room] Loaded settings from localStorage:', savedSettings);
+    console.log(
+      '[Host Room] Loaded settings from localStorage:',
+      savedSettings
+    );
   }, [settingsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save settings to localStorage when they change
@@ -658,9 +678,13 @@ export default function HostRoomPage() {
   // Listen to guest photo data (for client-side merging)
   useEffect(() => {
     const handleGuestPhotoData = (message: any) => {
-      console.log(`[Host Room] Received guest-photo-data #${message.photoNumber}`);
+      console.log(
+        `[Host Room] Received guest-photo-data #${message.photoNumber}`
+      );
       if (message.photoNumber && message.imageData) {
-        setGuestPhotos(prev => new Map(prev).set(message.photoNumber, message.imageData));
+        setGuestPhotos((prev) =>
+          new Map(prev).set(message.photoNumber, message.imageData)
+        );
       }
     };
 
@@ -761,13 +785,17 @@ export default function HostRoomPage() {
       }
 
       // All photos ready - perform client-side merge
-      console.log(`[Host Room] All photos ready (host: ${hostPhotos.size}, guest: ${guestPhotos.size}), starting client-side merge...`);
+      console.log(
+        `[Host Room] All photos ready (host: ${hostPhotos.size}, guest: ${guestPhotos.size}), starting client-side merge...`
+      );
       startProcessing();
 
       try {
         // 1. 일반 합성 (Guest용) - Guest에게 전송
         const mergedResults = await batchMergeImages(guestPhotos, hostPhotos);
-        console.log(`[Host Room] Client-side merge complete: ${mergedResults.length} photos`);
+        console.log(
+          `[Host Room] Client-side merge complete: ${mergedResults.length} photos`
+        );
 
         // 2. 블러 합성 (Host 미리보기용) - Guest 신상 보호
         const blurredResults = await batchMergeImages(guestPhotos, hostPhotos, {
@@ -789,8 +817,8 @@ export default function HostRoomPage() {
         // Update local state
         // - mergedPhotos: 일반 합성 (최종 결과물 생성에 사용)
         // - blurredMergedPhotos: 블러 합성 (Host 미리보기용)
-        const mergedPhotoUrls = mergedResults.map(m => m.imageData);
-        const blurredPhotoUrls = blurredResults.map(m => m.imageData);
+        const mergedPhotoUrls = mergedResults.map((m) => m.imageData);
+        const blurredPhotoUrls = blurredResults.map((m) => m.imageData);
         setMergedPhotos(mergedPhotoUrls);
         setBlurredMergedPhotos(blurredPhotoUrls);
         setShowPhotoSelection(true);
@@ -801,12 +829,24 @@ export default function HostRoomPage() {
     };
 
     performClientMerge();
-  }, [hostPhotos.size, guestPhotos.size, totalPhotos, store.roomId, sendMessage, setMergedPhotos, setBlurredMergedPhotos, startProcessing]);
+  }, [
+    hostPhotos.size,
+    guestPhotos.size,
+    totalPhotos,
+    store.roomId,
+    sendMessage,
+    setMergedPhotos,
+    setBlurredMergedPhotos,
+    startProcessing,
+  ]);
 
   // Listen to merged photos from server (fallback for legacy mode)
   useEffect(() => {
     const handlePhotosMerged = (message: any) => {
-      console.log('[Host Room] Received merged photos from server (legacy):', message);
+      console.log(
+        '[Host Room] Received merged photos from server (legacy):',
+        message
+      );
 
       if (message.photos && Array.isArray(message.photos)) {
         // Create photos array with merged images
@@ -922,7 +962,10 @@ export default function HostRoomPage() {
             roomId: store.roomId,
             videoUrl: uploadResult.file.url,
           } as any);
-          console.log('[Host Room] Sent video URL to Guest:', uploadResult.file.url);
+          console.log(
+            '[Host Room] Sent video URL to Guest:',
+            uploadResult.file.url
+          );
         }
 
         setUploadComposedComplete(true);
@@ -960,18 +1003,35 @@ export default function HostRoomPage() {
 
       try {
         const photosToUse = peerSelectedPhotos.slice(0, layout.slotCount);
-        const selectedPhotoUrls = photosToUse.map((index) => blurredMergedPhotos[index]);
+        const selectedPhotoUrls = photosToUse.map(
+          (index) => blurredMergedPhotos[index]
+        );
 
-        const frameUrl = await generatePhotoFrameBlobWithLayout(selectedPhotoUrls, layout);
+        const frameUrl = await generatePhotoFrameBlobWithLayout(
+          selectedPhotoUrls,
+          layout
+        );
         setBlurredPhotoFrameUrl(frameUrl);
-        console.log('[Host Room] Generated blurred photo frame for result view');
+        console.log(
+          '[Host Room] Generated blurred photo frame for result view'
+        );
       } catch (error) {
-        console.error('[Host Room] Failed to generate blurred photo frame:', error);
+        console.error(
+          '[Host Room] Failed to generate blurred photo frame:',
+          error
+        );
       }
     };
 
     generateBlurredFrame();
-  }, [uploadComposedComplete, blurredPhotoFrameUrl, peerSelectedPhotos, selectablePhotos, blurredMergedPhotos, store.selectedFrameLayoutId]);
+  }, [
+    uploadComposedComplete,
+    blurredPhotoFrameUrl,
+    peerSelectedPhotos,
+    selectablePhotos,
+    blurredMergedPhotos,
+    store.selectedFrameLayoutId,
+  ]);
 
   // Listen for session-restart from Guest
   useEffect(() => {
@@ -1206,8 +1266,10 @@ export default function HostRoomPage() {
         });
 
         // Store host photo locally for client-side merge
-        setHostPhotos(prev => new Map(prev).set(photoNumber, hostPhotoData));
-        console.log(`[Host Room] Host photo ${photoNumber} captured and stored locally`);
+        setHostPhotos((prev) => new Map(prev).set(photoNumber, hostPhotoData));
+        console.log(
+          `[Host Room] Host photo ${photoNumber} captured and stored locally`
+        );
 
         // Take next photo or finish session
         if (photoNumber < totalPhotos) {
@@ -1519,9 +1581,7 @@ export default function HostRoomPage() {
       );
       console.error('[Host Room] Some segments not recorded yet:', missing);
       alert(
-        `일부 영상이 아직 녹화되지 않았습니다. (미완료: ${missing.join(
-          ', '
-        )})`
+        `일부 영상이 아직 녹화되지 않았습니다. (미완료: ${missing.join(', ')})`
       );
       return;
     }
@@ -1536,7 +1596,9 @@ export default function HostRoomPage() {
     try {
       // Get selected segments for WebGL composition
       const selectedSegments = selectedPhotoNumbers
-        .map((photoNum) => recordedSegments.find((seg) => seg.photoNumber === photoNum))
+        .map((photoNum) =>
+          recordedSegments.find((seg) => seg.photoNumber === photoNum)
+        )
         .filter((seg): seg is VideoSegment => seg !== undefined);
 
       // Convert to VideoSource format for WebGL composer
@@ -1624,7 +1686,9 @@ export default function HostRoomPage() {
     try {
       // Get selected segments for WebGL composition
       const selectedSegments = selectedPhotoNumbers
-        .map((photoNum) => recordedSegments.find((seg) => seg.photoNumber === photoNum))
+        .map((photoNum) =>
+          recordedSegments.find((seg) => seg.photoNumber === photoNum)
+        )
         .filter((seg): seg is VideoSegment => seg !== undefined);
 
       // Convert to VideoSource format for WebGL composer
@@ -1731,15 +1795,41 @@ export default function HostRoomPage() {
   console.log('HOST: isProcessing', isProcessing);
 
   // Result view - show completed photo frame (blurred for privacy, no video)
-  if (!showPhotoSelection && composedVideo && uploadComposedComplete && selectedLayout) {
+  if (
+    !showPhotoSelection &&
+    composedVideo &&
+    uploadComposedComplete &&
+    selectedLayout
+  ) {
     return (
       <div className="flex flex-col h-full p-4 gap-4 overflow-hidden bg-light">
         {/* Hidden elements */}
-        <video ref={remoteVideoRef} autoPlay playsInline muted={!remoteAudioEnabled} className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
-        <video ref={localVideoRef} autoPlay playsInline muted className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
-        <canvas ref={localCanvasRef} className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
-        <canvas ref={compositeCanvasRef} className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
-        <canvas ref={recordingCanvasRef} className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          muted={!remoteAudioEnabled}
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <video
+          ref={localVideoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <canvas
+          ref={localCanvasRef}
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <canvas
+          ref={compositeCanvasRef}
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <canvas
+          ref={recordingCanvasRef}
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
 
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between bg-white border-2 border-neutral rounded-lg p-3 shadow-md">
@@ -1756,7 +1846,18 @@ export default function HostRoomPage() {
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center overflow-hidden">
           <div className="w-full max-w-md bg-white border-2 border-neutral rounded-lg p-4 shadow-md">
             <div className="flex items-center justify-center gap-2 mb-4 p-3 bg-green-100 rounded-lg">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-green-600"
+              >
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                 <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
@@ -1876,7 +1977,9 @@ export default function HostRoomPage() {
         {peerSelectedPhotos.length < selectablePhotos && (
           <div className="flex-1 min-h-0 p-4">
             <FullScreenPhotoSelection
-              photos={blurredMergedPhotos.length > 0 ? blurredMergedPhotos : photos}
+              photos={
+                blurredMergedPhotos.length > 0 ? blurredMergedPhotos : photos
+              }
               selectedPhotos={[]}
               onPhotoSelect={() => {}}
               onComplete={() => {}}
@@ -1891,54 +1994,66 @@ export default function HostRoomPage() {
         )}
 
         {/* Video Frame Composition Status - shown when peer selected photos */}
-        {recordedSegments.length >= selectablePhotos &&
-          peerSelectedPhotos.length === selectablePhotos && (
-            <div className="flex-1 flex items-center justify-center p-4">
-              <div className="w-full max-w-md bg-white border-2 border-neutral rounded-lg p-6 shadow-md">
-                <h2 className="text-lg font-bold text-dark text-center mb-4">영상 처리 중</h2>
-                {isComposing ? (
-                  <div className="flex flex-col items-center justify-center gap-3 p-4">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                    <span className="text-sm text-dark font-medium">
-                      {composeProgress || '영상 합성 중...'}
-                    </span>
-                  </div>
-                ) : composedVideo && isUploadingComposed ? (
-                  <div className="flex flex-col items-center justify-center gap-3 p-4">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                    <span className="text-sm text-dark font-medium">
-                      저장 중...
-                    </span>
-                  </div>
-                ) : composedVideo && uploadComposedError ? (
-                  <div className="flex items-center justify-center gap-2 p-4 bg-red-100 rounded-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="15" y1="9" x2="9" y2="15" />
-                      <line x1="9" y1="9" x2="15" y2="15" />
-                    </svg>
-                    <span className="text-sm text-red-700 font-semibold">
-                      저장 실패: {uploadComposedError}
-                    </span>
-                  </div>
-                ) : composedVideo ? (
-                  <div className="flex flex-col items-center justify-center gap-3 p-4">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                    <span className="text-sm text-dark font-medium">
-                      저장 준비 중...
-                    </span>
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleComposeVideoFrame}
-                    className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
+        {peerSelectedPhotos.length === selectablePhotos && (
+          <div className="flex-1 flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-white border-2 border-neutral rounded-lg p-6 shadow-md">
+              <h2 className="text-lg font-bold text-dark text-center mb-4">
+                영상 처리 중
+              </h2>
+              {isComposing ? (
+                <div className="flex flex-col items-center justify-center gap-3 p-4">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                  <span className="text-sm text-dark font-medium">
+                    {composeProgress || '영상 합성 중...'}
+                  </span>
+                </div>
+              ) : composedVideo && isUploadingComposed ? (
+                <div className="flex flex-col items-center justify-center gap-3 p-4">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                  <span className="text-sm text-dark font-medium">
+                    저장 중...
+                  </span>
+                </div>
+              ) : composedVideo && uploadComposedError ? (
+                <div className="flex items-center justify-center gap-2 p-4 bg-red-100 rounded-lg">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-red-600"
                   >
-                    영상 프레임 생성
-                  </button>
-                )}
-              </div>
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                  <span className="text-sm text-red-700 font-semibold">
+                    저장 실패: {uploadComposedError}
+                  </span>
+                </div>
+              ) : composedVideo ? (
+                <div className="flex flex-col items-center justify-center gap-3 p-4">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                  <span className="text-sm text-dark font-medium">
+                    저장 준비 중...
+                  </span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleComposeVideoFrame}
+                  className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
+                >
+                  영상 프레임 생성
+                </button>
+              )}
             </div>
-          )}
+          </div>
+        )}
       </div>
     );
   }
@@ -2020,9 +2135,7 @@ export default function HostRoomPage() {
                       촬영 중
                     </span>
                   </div>
-                  <div className="text-xl font-semibold text-dark mb-2">
-                    사진 {photoCount + 1} / {totalPhotos}
-                  </div>
+
                   <PhotoCounter current={photoCount} total={totalPhotos} />
 
                   {currentlyRecording !== null && (
@@ -2035,85 +2148,143 @@ export default function HostRoomPage() {
               </div>
             ) : photos.length >= totalPhotos ? (
               /* Show photo selection panel after capture complete */
-              <div className="space-y-4">
-                <ProcessingIndicator show={isProcessing} />
+              // <div className="space-y-4">
+              //   <ProcessingIndicator show={isProcessing} />
 
-                <PhotoSelectionPanel
-                  photos={photos}
-                  selectedPhotos={[]}
-                  onGenerateFrame={handleGenerateFrame}
-                  readOnly={true}
-                  role="host"
-                  peerSelectedPhotos={peerSelectedPhotos}
-                  isGenerating={isGeneratingFrame}
-                  maxSelection={selectablePhotos}
-                  frameLayout={selectedLayout}
-                />
+              //   <PhotoSelectionPanel
+              //     photos={photos}
+              //     selectedPhotos={[]}
+              //     onGenerateFrame={handleGenerateFrame}
+              //     readOnly={true}
+              //     role="host"
+              //     peerSelectedPhotos={peerSelectedPhotos}
+              //     isGenerating={isGeneratingFrame}
+              //     maxSelection={selectablePhotos}
+              //     frameLayout={selectedLayout}
+              //   />
 
-                {/* Video Frame Composition - integrated here */}
-                {recordedSegments.length >= selectablePhotos &&
-                  peerSelectedPhotos.length === selectablePhotos && (
-                    <div className="bg-white border-2 border-neutral rounded-lg p-4 shadow-md">
-                      <h3 className="text-lg font-semibold mb-3 text-dark">
-                        영상 프레임 생성
-                      </h3>
+              //   {/* Video Frame Composition - integrated here */}
+              //   {recordedSegments.length >= selectablePhotos &&
+              //     peerSelectedPhotos.length === selectablePhotos && (
+              //       <div className="bg-white border-2 border-neutral rounded-lg p-4 shadow-md">
+              //         <h3 className="text-lg font-semibold mb-3 text-dark">
+              //           영상 프레임 생성
+              //         </h3>
 
-                      {isComposing && (
-                        <div className="bg-neutral/30 border border-neutral rounded-lg p-3 mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-                            <div className="text-sm text-dark font-medium">
-                              {composeProgress || '처리 중...'}
-                            </div>
-                          </div>
-                        </div>
-                      )}
+              //         {isComposing && (
+              //           <div className="bg-neutral/30 border border-neutral rounded-lg p-3 mb-3">
+              //             <div className="flex items-center gap-3">
+              //               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+              //               <div className="text-sm text-dark font-medium">
+              //                 {composeProgress || '처리 중...'}
+              //               </div>
+              //             </div>
+              //           </div>
+              //         )}
 
-                      <button
-                        onClick={handleComposeVideoFrame}
-                        disabled={isComposing}
-                        className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isComposing ? '합성 중...' : '영상 프레임 생성'}
-                      </button>
+              //         <button
+              //           onClick={handleComposeVideoFrame}
+              //           disabled={isComposing}
+              //           className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              //         >
+              //           {isComposing ? '합성 중...' : '영상 프레임 생성'}
+              //         </button>
 
-                      {composedVideo && (
-                        <div className="mt-3">
-                          <div className="bg-dark rounded-lg overflow-hidden mb-3 border-2 border-neutral">
-                            <video
-                              src={composedVideo.url}
-                              controls
-                              className="w-full aspect-video bg-black"
-                            />
-                          </div>
-                          <button
-                            onClick={() => {
-                              const timestamp = new Date()
-                                .toISOString()
-                                .replace(/[:.]/g, '-')
-                                .slice(0, -5);
+              //         {composedVideo && (
+              //           <div className="mt-3">
+              //             <div className="bg-dark rounded-lg overflow-hidden mb-3 border-2 border-neutral">
+              //               <video
+              //                 src={composedVideo.url}
+              //                 controls
+              //                 className="w-full aspect-video bg-black"
+              //               />
+              //             </div>
+              //             <button
+              //               onClick={() => {
+              //                 const timestamp = new Date()
+              //                   .toISOString()
+              //                   .replace(/[:.]/g, '-')
+              //                   .slice(0, -5);
 
-                              const extension =
-                                composedVideo.blob.type.includes('mp4')
-                                  ? 'mp4'
-                                  : 'webm';
-                              const filename = `vshot-frame-${store.roomId}-${timestamp}.${extension}`;
+              //                 const extension =
+              //                   composedVideo.blob.type.includes('mp4')
+              //                     ? 'mp4'
+              //                     : 'webm';
+              //                 const filename = `vshot-frame-${store.roomId}-${timestamp}.${extension}`;
 
-                              const link = document.createElement('a');
-                              link.href = composedVideo.url;
-                              link.download = filename;
-                              document.body.appendChild(link);
-                              link.click();
-                              document.body.removeChild(link);
-                            }}
-                            className="w-full px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
-                          >
-                            영상 프레임 다운로드
-                          </button>
-                        </div>
-                      )}
+              //                 const link = document.createElement('a');
+              //                 link.href = composedVideo.url;
+              //                 link.download = filename;
+              //                 document.body.appendChild(link);
+              //                 link.click();
+              //                 document.body.removeChild(link);
+              //               }}
+              //               className="w-full px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
+              //             >
+              //               영상 프레임 다운로드
+              //             </button>
+              //           </div>
+              //         )}
+              //       </div>
+              //     )}
+              // </div>
+              <div className="flex-1 flex items-center justify-center p-4">
+                <div className="w-full max-w-md bg-white border-2 border-neutral rounded-lg p-6 shadow-md">
+                  <h2 className="text-lg font-bold text-dark text-center mb-4">
+                    영상 처리 중
+                  </h2>
+                  {isComposing ? (
+                    <div className="flex flex-col items-center justify-center gap-3 p-4">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                      <span className="text-sm text-dark font-medium">
+                        {composeProgress || '영상 합성 중...'}
+                      </span>
                     </div>
+                  ) : composedVideo && isUploadingComposed ? (
+                    <div className="flex flex-col items-center justify-center gap-3 p-4">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                      <span className="text-sm text-dark font-medium">
+                        저장 중...
+                      </span>
+                    </div>
+                  ) : composedVideo && uploadComposedError ? (
+                    <div className="flex items-center justify-center gap-2 p-4 bg-red-100 rounded-lg">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-red-600"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="15" y1="9" x2="9" y2="15" />
+                        <line x1="9" y1="9" x2="15" y2="15" />
+                      </svg>
+                      <span className="text-sm text-red-700 font-semibold">
+                        저장 실패: {uploadComposedError}
+                      </span>
+                    </div>
+                  ) : composedVideo ? (
+                    <div className="flex flex-col items-center justify-center gap-3 p-4">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                      <span className="text-sm text-dark font-medium">
+                        저장 준비 중...
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleComposeVideoFrame}
+                      className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
+                    >
+                      영상 프레임 생성
+                    </button>
                   )}
+                </div>
               </div>
             ) : (
               /* Default: Show settings panels */
@@ -2325,17 +2496,7 @@ export default function HostRoomPage() {
                     disabled={!remoteStream || isCapturing}
                     className="w-full px-6 py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold text-lg transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    촬영 시작 (사진 + 영상)
-                  </button>
-                )}
-
-                {/* Next Guest button - shown when guest is connected */}
-                {remoteStream && !isCapturing && (
-                  <button
-                    onClick={handleNextGuest}
-                    className="w-full px-6 py-3 bg-dark/10 hover:bg-dark/20 text-dark rounded-xl font-medium transition border border-dark/20"
-                  >
-                    다음 게스트 (세션 초기화)
+                    촬영 시작
                   </button>
                 )}
               </>
