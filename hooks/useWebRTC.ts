@@ -223,11 +223,36 @@ export function useWebRTC({ sendMessage, on }: UseWebRTCProps) {
     setRemoteStream(null);
   }, [localStream]);
 
+  /**
+   * Reset for next guest - keeps local stream, closes WebRTC connection
+   * Call this when host wants to accept a new guest
+   */
+  const resetForNextGuest = useCallback(async () => {
+    console.log('[WebRTC] Resetting for next guest');
+
+    // Close existing WebRTC connection
+    if (webrtcRef.current) {
+      webrtcRef.current.close();
+      webrtcRef.current = null;
+    }
+
+    // Clear remote stream
+    setRemoteStream(null);
+
+    // Re-initialize connection with existing local stream
+    if (localStream) {
+      const connection = initializeConnection();
+      await connection.setLocalStream(localStream);
+      console.log('[WebRTC] Ready for new guest');
+    }
+  }, [localStream, initializeConnection]);
+
   return {
     localStream,
     remoteStream,
     startLocalStream,
     createOffer,
     cleanup,
+    resetForNextGuest,
   };
 }

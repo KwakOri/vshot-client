@@ -370,6 +370,18 @@ export default function GuestRoomPage() {
     return () => {};
   }, [on]);
 
+  // Listen for session-ended signal (host started new session)
+  useEffect(() => {
+    const handleSessionEnded = (message: any) => {
+      console.log('[Guest Room] Session ended by host:', message);
+      alert('호스트가 새로운 세션을 시작했습니다. 메인 페이지로 이동합니다.');
+      router.push('/guest');
+    };
+
+    on('session-ended', handleSessionEnded);
+    return () => {};
+  }, [on, router]);
+
   // Auto-upload to R2 when both frames are ready
   useEffect(() => {
     const uploadToR2 = async () => {

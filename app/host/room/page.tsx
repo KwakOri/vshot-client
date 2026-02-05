@@ -45,7 +45,7 @@ export default function HostRoomPage() {
   const router = useRouter();
   const store = useAppStore();
   const { connect, sendMessage, on, off, isConnected } = useSignaling();
-  const { localStream, remoteStream, startLocalStream, createOffer } =
+  const { localStream, remoteStream, startLocalStream, createOffer, resetForNextGuest } =
     useWebRTC({ sendMessage, on });
 
   // Load persisted settings from localStorage
@@ -750,6 +750,54 @@ export default function HostRoomPage() {
       // Cleanup if needed
     };
   }, [on, setMergedPhotos]);
+
+  // Listen for next-guest-ready signal
+  useEffect(() => {
+    const handleNextGuestReady = (message: any) => {
+      console.log('[Host Room] Next guest ready:', message);
+      alert('세션이 초기화되었습니다. 새 게스트를 기다리는 중입니다.');
+    };
+
+    on('next-guest-ready', handleNextGuestReady);
+
+    return () => {
+      // Cleanup if needed
+    };
+  }, [on]);
+
+  // Handle next guest button click
+  const handleNextGuest = async () => {
+    if (!store.roomId) return;
+
+    const confirmed = window.confirm(
+      '현재 게스트와의 세션을 종료하고 새 게스트를 받으시겠습니까?\n\n촬영된 사진/영상 데이터가 초기화됩니다.'
+    );
+
+    if (!confirmed) return;
+
+    console.log('[Host Room] Starting next guest session');
+
+    // 1. Send next-guest signal to server
+    sendMessage({
+      type: 'next-guest',
+      roomId: store.roomId,
+      userId: store.userId,
+    } as any);
+
+    // 2. Clear local session data (photos, selections)
+    store.clearSession();
+    setMergedPhotos([]);
+    setShowPhotoSelection(false);
+    setPeerSelectedPhotos([]);
+    setUploadedSegmentNumbers([]);
+    setIsCapturing(false);
+    setCountdown(null);
+
+    // 3. Reset WebRTC for new guest (keep local stream)
+    await resetForNextGuest();
+
+    console.log('[Host Room] Ready for next guest');
+  };
 
   // Auto-upload composed video to R2
   useEffect(() => {
@@ -2089,6 +2137,16 @@ export default function HostRoomPage() {
                     className="w-full px-6 py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold text-lg transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     촬영 시작 (사진 + 영상)
+                  </button>
+                )}
+
+                {/* Next Guest button - shown when guest is connected */}
+                {remoteStream && !isCapturing && (
+                  <button
+                    onClick={handleNextGuest}
+                    className="w-full px-6 py-3 bg-dark/10 hover:bg-dark/20 text-dark rounded-xl font-medium transition border border-dark/20"
+                  >
+                    다음 게스트 (세션 초기화)
                   </button>
                 )}
               </>
