@@ -62,15 +62,27 @@ export default function HostReadyPage() {
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
+      analyserRef.current.smoothingTimeConstant = 0.3; // 빠른 반응을 위해 낮은 값 설정
       source.connect(analyserRef.current);
 
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      const dataArray = new Uint8Array(analyserRef.current.fftSize);
 
       const updateLevel = () => {
         if (analyserRef.current) {
-          analyserRef.current.getByteFrequencyData(dataArray);
-          const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-          setAudioLevel(average);
+          // 시간 도메인 데이터 사용 (파형 데이터)
+          analyserRef.current.getByteTimeDomainData(dataArray);
+
+          // RMS (Root Mean Square) 계산 - 실제 음량을 더 정확하게 반영
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            const normalized = (dataArray[i] - 128) / 128; // -1 ~ 1 범위로 정규화
+            sum += normalized * normalized;
+          }
+          const rms = Math.sqrt(sum / dataArray.length);
+
+          // 0-100 범위로 스케일링 (민감도 조정)
+          const scaledLevel = Math.min(100, rms * 300);
+          setAudioLevel(scaledLevel);
         }
         animationRef.current = requestAnimationFrame(updateLevel);
       };
@@ -166,8 +178,8 @@ export default function HostReadyPage() {
             {/* Audio Level Meter */}
             <div className="h-3 bg-neutral rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-green-400 via-yellow-400 to-red-500 transition-all duration-75"
-                style={{ width: `${Math.min(100, audioLevel / 1.28)}%` }}
+                className="h-full bg-primary"
+                style={{ width: `${audioLevel}%` }}
               />
             </div>
             {isTestingMic && (

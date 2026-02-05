@@ -642,14 +642,15 @@ export default function HostRoomPage() {
 
   // Listen for session-restart from Guest
   useEffect(() => {
-    const handleSessionRestart = (message: any) => {
+    const handleSessionRestartFromPeer = (message: any) => {
       if (message.type === "session-restart" && message.roomId === store.roomId) {
         console.log("[Host Room] Received session-restart from Guest");
-        handleRestartSession();
+        // Don't notify peer back to avoid infinite loop
+        handleRestartSession(false);
       }
     };
 
-    on("session-restart", handleSessionRestart);
+    on("session-restart", handleSessionRestartFromPeer);
     return () => {};
   }, [on, store.roomId]);
 
@@ -911,9 +912,10 @@ export default function HostRoomPage() {
   };
 
   /**
-   * Reset session to initial state (triggered by Guest or Host)
+   * Reset session to initial state
+   * @param notifyPeer - If true, sends restart message to peer (use when Host initiates restart)
    */
-  const handleRestartSession = () => {
+  const handleRestartSession = (notifyPeer: boolean = true) => {
     // Reset capture state
     setIsCapturing(false);
     resetCapture();
@@ -944,8 +946,8 @@ export default function HostRoomPage() {
       body: JSON.stringify({ roomId: store.roomId }),
     }).catch((err) => console.error("[Host Room] Failed to clear segments:", err));
 
-    // Notify Guest
-    if (store.roomId) {
+    // Notify Guest only if Host initiates the restart
+    if (notifyPeer && store.roomId) {
       sendMessage({
         type: "session-restart",
         roomId: store.roomId,
@@ -1290,13 +1292,28 @@ export default function HostRoomPage() {
       <div className="flex flex-col h-full overflow-hidden">
         <FlashOverlay show={showFlash} />
 
-        {/* Hidden video element to keep audio connection active */}
+        {/* Hidden video/canvas elements to maintain refs across view changes */}
         <video
           ref={remoteVideoRef}
           autoPlay
           playsInline
           muted={!remoteAudioEnabled}
-          className="hidden"
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <video
+          ref={localVideoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <canvas
+          ref={localCanvasRef}
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <canvas
+          ref={compositeCanvasRef}
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
         />
 
         {/* 녹화 전용 hidden canvas */}
@@ -1490,7 +1507,7 @@ export default function HostRoomPage() {
                         <span className="text-sm text-green-700 font-semibold">저장 완료! 관리자 페이지에서 확인하세요.</span>
                       </div>
                       <button
-                        onClick={handleRestartSession}
+                        onClick={() => handleRestartSession()}
                         className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
                       >
                         다시 시작

@@ -17,6 +17,7 @@ interface FullScreenPhotoSelectionProps {
   readOnly?: boolean;
   peerSelectedPhotos?: number[];
   isGenerating?: boolean;
+  isComplete?: boolean; // Whether photo/video generation is complete
 }
 
 /**
@@ -43,6 +44,7 @@ export const FullScreenPhotoSelection = memo(function FullScreenPhotoSelection({
   readOnly = false,
   peerSelectedPhotos = [],
   isGenerating = false,
+  isComplete = false,
 }: FullScreenPhotoSelectionProps) {
   // For mobile carousel navigation
   const [currentCarouselIndex, setCurrentCarouselIndex] = useState(0);
@@ -143,21 +145,23 @@ export const FullScreenPhotoSelection = memo(function FullScreenPhotoSelection({
             />
           </div>
 
-          {/* Action Button */}
-          <div className="flex-shrink-0 mt-4">
-            <button
-              onClick={handleComplete}
-              disabled={!isSelectionComplete || isGenerating}
-              className="w-full px-6 py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold text-lg transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGenerating
-                ? '생성 중...'
-                : isSelectionComplete
-                ? '선택 완료'
-                : `${selectionCount}/${maxSelection} 선택됨`
-              }
-            </button>
-          </div>
+          {/* Action Button - Hidden when complete */}
+          {!isComplete && (
+            <div className="flex-shrink-0 mt-4">
+              <button
+                onClick={handleComplete}
+                disabled={!isSelectionComplete || isGenerating}
+                className="w-full px-6 py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold text-lg transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGenerating
+                  ? '생성 중...'
+                  : isSelectionComplete
+                  ? '선택 완료'
+                  : `${selectionCount}/${maxSelection} 선택됨`
+                }
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -209,19 +213,21 @@ export const FullScreenPhotoSelection = memo(function FullScreenPhotoSelection({
             })}
           </div>
 
-          {/* Action Button */}
-          <button
-            onClick={handleComplete}
-            disabled={!isSelectionComplete || isGenerating}
-            className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-bold text-base transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isGenerating
-              ? '생성 중...'
-              : isSelectionComplete
-              ? '선택 완료'
-              : `${selectionCount}/${maxSelection} 선택됨`
-            }
-          </button>
+          {/* Action Button - Hidden when complete */}
+          {!isComplete && (
+            <button
+              onClick={handleComplete}
+              disabled={!isSelectionComplete || isGenerating}
+              className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-bold text-base transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGenerating
+                ? '생성 중...'
+                : isSelectionComplete
+                ? '선택 완료'
+                : `${selectionCount}/${maxSelection} 선택됨`
+              }
+            </button>
+          )}
         </div>
       </div>
     </div>

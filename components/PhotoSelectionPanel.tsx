@@ -74,6 +74,7 @@ interface PhotoSelectionPanelProps {
   role: 'host' | 'guest';
   peerSelectedPhotos?: number[];
   isGenerating?: boolean;
+  isComplete?: boolean; // Whether photo/video generation is complete
 }
 
 /**
@@ -90,7 +91,8 @@ export const PhotoSelectionPanel = memo(function PhotoSelectionPanel({
   readOnly = false,
   role,
   peerSelectedPhotos = [],
-  isGenerating = false
+  isGenerating = false,
+  isComplete = false
 }: PhotoSelectionPanelProps) {
   if (photos.length === 0) return null;
 
@@ -150,8 +152,8 @@ export const PhotoSelectionPanel = memo(function PhotoSelectionPanel({
         })}
       </div>
 
-      {/* Generate frame button - always visible for guest */}
-      {onGenerateFrame && (
+      {/* Generate frame button - hidden when complete */}
+      {onGenerateFrame && !isComplete && (
         <div className="mt-6">
           <button
             onClick={onGenerateFrame}

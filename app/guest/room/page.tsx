@@ -450,19 +450,10 @@ export default function GuestRoomPage() {
       }
     };
 
-    const handleSessionRestart = () => {
+    const handleSessionRestartFromPeer = () => {
       console.log('[Guest Room] Received session-restart from Host');
-      // Reset local state
-      setIsPhotoSession(false);
-      setSelectedPhotos([]);
-      setPhotoFrameUrl(null);
-      setVideoFrameUrl(null);
-      setIsComposing(false);
-      setIsUploading(false);
-      setUploadComplete(false);
-      setUploadError(null);
-      setShowPhotoSelection(false);
-      resetCapture();
+      // Don't notify peer back to avoid infinite loop
+      handleRestartSession(false);
     };
 
     on('photo-session-start', handlePhotoSessionStart);
@@ -471,7 +462,7 @@ export default function GuestRoomPage() {
     on('chromakey-settings', handleChromaKeySettings);
     on('host-display-options', handleHostDisplayOptions);
     on('frame-layout-settings', handleFrameLayoutSettings);
-    on('session-restart', handleSessionRestart);
+    on('session-restart', handleSessionRestartFromPeer);
 
     return () => {};
   }, [on, resetCapture, store]);
@@ -550,8 +541,11 @@ export default function GuestRoomPage() {
     }
   };
 
-  // Reset session to initial state (after upload complete)
-  const handleRestartSession = () => {
+  /**
+   * Reset session to initial state
+   * @param notifyPeer - If true, sends restart message to peer (use when Guest initiates restart)
+   */
+  const handleRestartSession = (notifyPeer: boolean = true) => {
     // Reset local state
     setIsPhotoSession(false);
     setSelectedPhotos([]);
@@ -564,8 +558,8 @@ export default function GuestRoomPage() {
     setShowPhotoSelection(false);
     resetCapture();
 
-    // Send restart message to host via signaling
-    if (store.roomId) {
+    // Send restart message to host only if Guest initiates the restart
+    if (notifyPeer && store.roomId) {
       sendMessage({
         type: 'session-restart',
         roomId: store.roomId,
@@ -574,6 +568,28 @@ export default function GuestRoomPage() {
     }
 
     console.log('[Guest Room] Session restarted');
+  };
+
+  // Download file from URL (handles cross-origin)
+  const downloadFile = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('[Guest Room] Download failed:', error);
+      // Fallback: open in new tab
+      window.open(url, '_blank');
+    }
   };
 
   // Toggle flip
@@ -681,12 +697,32 @@ export default function GuestRoomPage() {
       <div className="flex flex-col h-full overflow-hidden">
         <FlashOverlay show={showFlash} />
 
+        {/* Hidden video/canvas elements to maintain refs across view changes */}
         <video
           ref={remoteVideoRef}
           autoPlay
           playsInline
           muted={!remoteAudioEnabled}
-          className="hidden"
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <video
+          ref={localVideoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <canvas
+          ref={localCanvasRef}
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <canvas
+          ref={remoteCanvasRef}
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+        />
+        <canvas
+          ref={compositeCanvasRef}
+          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
         />
 
         {/* Navbar */}
@@ -805,6 +841,7 @@ export default function GuestRoomPage() {
             maxSelection={selectablePhotos}
             role="guest"
             isGenerating={isComposing}
+            isComplete={!!(photoFrameUrl && videoFrameUrl)}
           />
         </div>
 
@@ -823,14 +860,22 @@ export default function GuestRoomPage() {
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
-                  <span className="text-sm text-green-700 font-semibold">저장 완료! 관리자 페이지에서 확인하세요.</span>
+                  <span className="text-sm text-green-700 font-semibold">저장 완료!</span>
                 </div>
-                <button
-                  onClick={handleRestartSession}
-                  className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
-                >
-                  다시 시작
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => photoFrameUrl && downloadFile(photoFrameUrl, `vshot-photo-${store.roomId}-${Date.now()}.png`)}
+                    className="flex-1 px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md text-center"
+                  >
+                    사진 다운로드
+                  </button>
+                  <button
+                    onClick={() => videoFrameUrl && downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.webm`)}
+                    className="flex-1 px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md text-center"
+                  >
+                    영상 다운로드
+                  </button>
+                </div>
               </div>
             ) : uploadError ? (
               <div className="flex items-center justify-center gap-2 p-3 bg-red-100 rounded-lg">
@@ -1005,6 +1050,7 @@ export default function GuestRoomPage() {
               readOnly={false}
               role="guest"
               isGenerating={isComposing}
+              isComplete={!!(photoFrameUrl && videoFrameUrl)}
             />
 
             {selectedPhotos.length === selectablePhotos && (
@@ -1024,7 +1070,7 @@ export default function GuestRoomPage() {
                         <span className="text-sm text-dark font-medium">저장 중...</span>
                       </div>
                     ) : uploadComplete ? (
-                      <div className="space-y-3">
+                      <div className="space-y-2">
                         <div className="flex items-center justify-center gap-2 p-2 bg-green-100 rounded-lg">
                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
                             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -1032,12 +1078,20 @@ export default function GuestRoomPage() {
                           </svg>
                           <span className="text-xs text-green-700 font-semibold">저장 완료!</span>
                         </div>
-                        <button
-                          onClick={handleRestartSession}
-                          className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
-                        >
-                          다시 시작
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => photoFrameUrl && downloadFile(photoFrameUrl, `vshot-photo-${store.roomId}-${Date.now()}.png`)}
+                            className="flex-1 px-3 py-2 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold text-sm transition shadow-md text-center"
+                          >
+                            사진 다운로드
+                          </button>
+                          <button
+                            onClick={() => videoFrameUrl && downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.webm`)}
+                            className="flex-1 px-3 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold text-sm transition shadow-md text-center"
+                          >
+                            영상 다운로드
+                          </button>
+                        </div>
                       </div>
                     ) : uploadError ? (
                       <div className="flex items-center justify-center gap-2 p-2 bg-red-100 rounded-lg">
