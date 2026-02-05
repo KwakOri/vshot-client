@@ -19,7 +19,6 @@ import { usePhotoCapture } from '@/hooks/usePhotoCapture';
 import { useSignaling } from '@/hooks/useSignaling';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
-import { uploadBlob } from '@/lib/files';
 import { useAppStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -66,11 +65,6 @@ export default function GuestRoomPage() {
   const [photoFrameUrl, setPhotoFrameUrl] = useState<string | null>(null);
   const [videoFrameUrl, setVideoFrameUrl] = useState<string | null>(null);
 
-  // R2 upload state
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadComplete, setUploadComplete] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
   // Full-screen photo selection mode
   const [showPhotoSelection, setShowPhotoSelection] = useState(false);
 
@@ -104,7 +98,7 @@ export default function GuestRoomPage() {
     photoCount,
     photos,
     isProcessing,
-    captureAndUpload,
+    captureLocal,
     resetCapture,
     setMergedPhotos,
     startProcessing,
@@ -308,36 +302,62 @@ export default function GuestRoomPage() {
     }
   }, [store.selectedFrameLayoutId]);
 
-  // Capture photo function
+  // Capture photo function - Now sends to Host via WebSocket instead of server upload
   const capturePhoto = useCallback(
     async (photoNumber: number) => {
       const localCanvas = localCanvasRef.current;
 
       if (localCanvas && store.roomId) {
         try {
-          await captureAndUpload({
+          // Capture photo locally (no server upload)
+          const guestPhotoData = await captureLocal({
             photoNumber,
             canvasOrVideo: localCanvas,
             isCanvas: true,
           });
 
+          // Send photo data to Host via WebSocket
+          sendMessage({
+            type: 'guest-photo-data',
+            roomId: store.roomId,
+            photoNumber,
+            imageData: guestPhotoData,
+          } as any);
+
+          console.log(`[Guest Room] Sent photo ${photoNumber} to Host via WebSocket`);
+
           if (photoNumber >= totalPhotos) {
             setIsPhotoSession(false);
           }
         } catch (error) {
-          console.error(`[Guest Room] Failed to upload photo ${photoNumber}:`, error);
+          console.error(`[Guest Room] Failed to capture/send photo ${photoNumber}:`, error);
         }
       }
     },
-    [store.roomId, captureAndUpload, totalPhotos]
+    [store.roomId, captureLocal, totalPhotos, sendMessage]
   );
 
   useEffect(() => {
     capturePhotoRef.current = capturePhoto;
   }, [capturePhoto]);
 
-  // Listen to merged photos from server
+  // Listen to merged photos from Host (client-side merge)
   useEffect(() => {
+    const handlePhotosMergedClient = (message: any) => {
+      console.log('[Guest Room] Received photos-merged-client from Host');
+      if (message.mergedPhotos && Array.isArray(message.mergedPhotos)) {
+        const mergedPhotos = message.mergedPhotos
+          .sort((a: any, b: any) => a.photoNumber - b.photoNumber)
+          .map((photo: any) => photo.imageData); // Base64 PNG directly
+
+        setIsPhotoSession(false);
+        setMergedPhotos(mergedPhotos);
+        setShowPhotoSelection(true);
+        console.log(`[Guest Room] Received ${mergedPhotos.length} merged photos from Host`);
+      }
+    };
+
+    // Also keep server-side merge handler as fallback
     const handlePhotosMerged = (message: any) => {
       if (message.photos && Array.isArray(message.photos)) {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -351,12 +371,24 @@ export default function GuestRoomPage() {
       }
     };
 
+    on('photos-merged-client', handlePhotosMergedClient);
     on('photos-merged', handlePhotosMerged);
     return () => {};
   }, [on, setMergedPhotos]);
 
-  // Listen to video frame ready event
+  // Listen to video frame ready event (client-side composition from Host)
   useEffect(() => {
+    const handleVideoComposedClient = (message: any) => {
+      console.log('[Guest Room] Received video-composed-client from Host');
+      if (message.videoUrl) {
+        // videoUrl is a complete R2 URL
+        setVideoFrameUrl(message.videoUrl);
+        setIsComposing(false);
+        console.log('[Guest Room] Video URL set:', message.videoUrl);
+      }
+    };
+
+    // Fallback for legacy server-side composition
     const handleVideoFrameReady = async (message: any) => {
       if (message.videoUrl) {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -366,6 +398,7 @@ export default function GuestRoomPage() {
       }
     };
 
+    on('video-composed-client', handleVideoComposedClient);
     on('video-frame-ready', handleVideoFrameReady);
     return () => {};
   }, [on]);
@@ -381,52 +414,6 @@ export default function GuestRoomPage() {
     on('session-ended', handleSessionEnded);
     return () => {};
   }, [on, router]);
-
-  // Auto-upload to R2 when both frames are ready
-  useEffect(() => {
-    const uploadToR2 = async () => {
-      if (!photoFrameUrl || !videoFrameUrl || isUploading || uploadComplete) return;
-
-      setIsUploading(true);
-      setUploadError(null);
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-
-      try {
-        // Upload photo frame
-        const photoResponse = await fetch(photoFrameUrl);
-        const photoBlob = await photoResponse.blob();
-        const photoFilename = `vshot-photo-${store.roomId}-${timestamp}.png`;
-
-        const photoUploadResult = await uploadBlob(photoBlob, photoFilename);
-        if (!photoUploadResult.success) {
-          throw new Error(photoUploadResult.error || '사진 업로드 실패');
-        }
-        console.log('[Guest Room] Photo uploaded to R2:', photoUploadResult.file?.id);
-
-        // Upload video frame
-        const videoResponse = await fetch(videoFrameUrl);
-        const videoBlob = await videoResponse.blob();
-        const extension = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
-        const videoFilename = `vshot-video-${store.roomId}-${timestamp}.${extension}`;
-
-        const videoUploadResult = await uploadBlob(videoBlob, videoFilename);
-        if (!videoUploadResult.success) {
-          throw new Error(videoUploadResult.error || '영상 업로드 실패');
-        }
-        console.log('[Guest Room] Video uploaded to R2:', videoUploadResult.file?.id);
-
-        setUploadComplete(true);
-      } catch (error) {
-        console.error('[Guest Room] Failed to upload to R2:', error);
-        setUploadError(error instanceof Error ? error.message : '업로드 실패');
-      } finally {
-        setIsUploading(false);
-      }
-    };
-
-    uploadToR2();
-  }, [photoFrameUrl, videoFrameUrl, isUploading, uploadComplete, store.roomId]);
 
   // Listen to photo session events and settings
   useEffect(() => {
@@ -544,6 +531,8 @@ export default function GuestRoomPage() {
   const handleGenerateFrame = async () => {
     if (selectedPhotos.length !== selectablePhotos || !store.roomId) return;
 
+    // 사진 선택 창 닫기
+    setShowPhotoSelection(false);
     setIsComposing(true);
     setPhotoFrameUrl(null);
     setVideoFrameUrl(null);
@@ -582,9 +571,6 @@ export default function GuestRoomPage() {
     setPhotoFrameUrl(null);
     setVideoFrameUrl(null);
     setIsComposing(false);
-    setIsUploading(false);
-    setUploadComplete(false);
-    setUploadError(null);
     setShowPhotoSelection(false);
     resetCapture();
 
@@ -607,25 +593,39 @@ export default function GuestRoomPage() {
     return 'mp4'; // 기본값
   };
 
-  // Download file from URL (handles cross-origin)
+  // Download file from URL
   const downloadFile = async (url: string, filename: string) => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
+    const isExternalUrl = url.startsWith('http://') || url.startsWith('https://');
+
+    if (isExternalUrl) {
+      // 외부 URL (R2 등): 프록시 API를 통해 다운로드 (CORS 우회 + 바로 다운로드)
+      const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
 
       const link = document.createElement('a');
-      link.href = blobUrl;
+      link.href = proxyUrl;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    } else {
+      // 로컬 blob URL: fetch로 변환 후 다운로드
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
 
-      URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      console.error('[Guest Room] Download failed:', error);
-      // Fallback: open in new tab
-      window.open(url, '_blank');
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        URL.revokeObjectURL(blobUrl);
+      } catch (error) {
+        console.error('[Guest Room] Download failed:', error);
+        window.open(url, '_blank');
+      }
     }
   };
 
@@ -727,6 +727,63 @@ export default function GuestRoomPage() {
       stopCamera();
     };
   }, []);
+
+  // Result view - show completed photo and video frames
+  if (!isComposing && photoFrameUrl && videoFrameUrl) {
+    return (
+      <div className="flex flex-col h-full p-4 gap-4 overflow-hidden bg-light">
+        {/* Header */}
+        <div className="flex-shrink-0 flex items-center justify-between bg-white border-2 border-neutral rounded-lg p-3 shadow-md">
+          <h1 className="text-lg font-bold text-dark">촬영 완료!</h1>
+          <button
+            onClick={() => handleRestartSession(true)}
+            className="px-4 py-2 bg-neutral hover:bg-neutral-dark text-dark rounded-lg font-semibold text-sm transition"
+          >
+            다시 촬영
+          </button>
+        </div>
+
+        {/* Result content */}
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4 overflow-hidden">
+          {/* Photo preview */}
+          <div className="flex-1 min-h-0 flex flex-col bg-white border-2 border-neutral rounded-lg p-3 shadow-md">
+            <h2 className="flex-shrink-0 text-sm font-semibold text-dark mb-2">사진</h2>
+            <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden">
+              <img
+                src={photoFrameUrl}
+                alt="Photo frame"
+                className="max-w-full max-h-full object-contain rounded-lg"
+              />
+            </div>
+            <button
+              onClick={() => downloadFile(photoFrameUrl, `vshot-photo-${store.roomId}-${Date.now()}.png`)}
+              className="flex-shrink-0 mt-3 w-full px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
+            >
+              사진 다운로드
+            </button>
+          </div>
+
+          {/* Video preview */}
+          <div className="flex-1 min-h-0 flex flex-col bg-white border-2 border-neutral rounded-lg p-3 shadow-md">
+            <h2 className="flex-shrink-0 text-sm font-semibold text-dark mb-2">영상</h2>
+            <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden">
+              <video
+                src={videoFrameUrl}
+                controls
+                className="max-w-full max-h-full object-contain rounded-lg"
+              />
+            </div>
+            <button
+              onClick={() => downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.${getVideoExtension(videoFrameUrl)}`)}
+              className="flex-shrink-0 mt-3 w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
+            >
+              영상 다운로드
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Full-screen photo selection view
   if (showPhotoSelection && photos.length >= totalPhotos && selectedLayout) {
@@ -882,52 +939,32 @@ export default function GuestRoomPage() {
           />
         </div>
 
-        {/* Upload status */}
+        {/* Download buttons */}
         {!isComposing && photoFrameUrl && videoFrameUrl && (
           <div className="flex-shrink-0 bg-primary/10 border-t-2 border-primary p-3">
-            {isUploading ? (
-              <div className="flex items-center justify-center gap-3 p-3">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-                <span className="text-sm text-dark font-medium">저장 중...</span>
-              </div>
-            ) : uploadComplete ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-center gap-2 p-3 bg-green-100 rounded-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                  </svg>
-                  <span className="text-sm text-green-700 font-semibold">저장 완료!</span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => photoFrameUrl && downloadFile(photoFrameUrl, `vshot-photo-${store.roomId}-${Date.now()}.png`)}
-                    className="flex-1 px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md text-center"
-                  >
-                    사진 다운로드
-                  </button>
-                  <button
-                    onClick={() => videoFrameUrl && downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.${getVideoExtension(videoFrameUrl)}`)}
-                    className="flex-1 px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md text-center"
-                  >
-                    영상 다운로드
-                  </button>
-                </div>
-              </div>
-            ) : uploadError ? (
-              <div className="flex items-center justify-center gap-2 p-3 bg-red-100 rounded-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="15" y1="9" x2="9" y2="15" />
-                  <line x1="9" y1="9" x2="15" y2="15" />
+            <div className="space-y-3">
+              <div className="flex items-center justify-center gap-2 p-3 bg-green-100 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
                 </svg>
-                <span className="text-sm text-red-700 font-semibold">저장 실패: {uploadError}</span>
+                <span className="text-sm text-green-700 font-semibold">생성 완료!</span>
               </div>
-            ) : (
-              <div className="flex items-center justify-center gap-2 p-3">
-                <span className="text-sm text-dark font-medium">생성 완료! 저장 준비 중...</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => photoFrameUrl && downloadFile(photoFrameUrl, `vshot-photo-${store.roomId}-${Date.now()}.png`)}
+                  className="flex-1 px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md text-center"
+                >
+                  사진 다운로드
+                </button>
+                <button
+                  onClick={() => videoFrameUrl && downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.${getVideoExtension(videoFrameUrl)}`)}
+                  className="flex-1 px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md text-center"
+                >
+                  영상 다운로드
+                </button>
               </div>
-            )}
+            </div>
           </div>
         )}
       </div>
@@ -1102,44 +1139,27 @@ export default function GuestRoomPage() {
 
                 {!isComposing && photoFrameUrl && videoFrameUrl && (
                   <div className="space-y-2">
-                    {isUploading ? (
-                      <div className="flex items-center justify-center gap-2 p-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                        <span className="text-sm text-dark font-medium">저장 중...</span>
-                      </div>
-                    ) : uploadComplete ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-center gap-2 p-2 bg-green-100 rounded-lg">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                            <polyline points="22 4 12 14.01 9 11.01" />
-                          </svg>
-                          <span className="text-xs text-green-700 font-semibold">저장 완료!</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => photoFrameUrl && downloadFile(photoFrameUrl, `vshot-photo-${store.roomId}-${Date.now()}.png`)}
-                            className="flex-1 px-3 py-2 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold text-sm transition shadow-md text-center"
-                          >
-                            사진 다운로드
-                          </button>
-                          <button
-                            onClick={() => videoFrameUrl && downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.${getVideoExtension(videoFrameUrl)}`)}
-                            className="flex-1 px-3 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold text-sm transition shadow-md text-center"
-                          >
-                            영상 다운로드
-                          </button>
-                        </div>
-                      </div>
-                    ) : uploadError ? (
-                      <div className="flex items-center justify-center gap-2 p-2 bg-red-100 rounded-lg">
-                        <span className="text-xs text-red-700 font-semibold">저장 실패</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2 p-2">
-                        <span className="text-xs text-dark font-medium">저장 준비 중...</span>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-center gap-2 p-2 bg-green-100 rounded-lg">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                      </svg>
+                      <span className="text-xs text-green-700 font-semibold">생성 완료!</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => photoFrameUrl && downloadFile(photoFrameUrl, `vshot-photo-${store.roomId}-${Date.now()}.png`)}
+                        className="flex-1 px-3 py-2 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold text-sm transition shadow-md text-center"
+                      >
+                        사진 다운로드
+                      </button>
+                      <button
+                        onClick={() => videoFrameUrl && downloadFile(videoFrameUrl, `vshot-video-${store.roomId}-${Date.now()}.${getVideoExtension(videoFrameUrl)}`)}
+                        className="flex-1 px-3 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold text-sm transition shadow-md text-center"
+                      >
+                        영상 다운로드
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

@@ -22,11 +22,13 @@ import { usePhotoCapture } from '@/hooks/usePhotoCapture';
 import { useSignaling } from '@/hooks/useSignaling';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { getApiHeaders, getApiHeadersMultipart } from '@/lib/api';
+import { batchMergeImages } from '@/lib/client-image-merger';
 import { uploadBlob } from '@/lib/files';
-import { generatePhotoFrameWithLayout } from '@/lib/frame-generator';
+import { generatePhotoFrameWithLayout, generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
 import { useAppStore } from '@/lib/store';
 import { VideoRecorder } from '@/lib/video-recorder';
 import { type VideoSegment } from '@/lib/video-splitter';
+import { composeVideoWithWebGL, type VideoSource } from '@/lib/webgl-video-composer';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -80,12 +82,16 @@ export default function HostRoomPage() {
   const totalPhotos = slotCount * 2; // Total photos to capture
   const selectablePhotos = slotCount; // Photos user can select
 
+  // Client-side photo merge state
+  const [guestPhotos, setGuestPhotos] = useState<Map<number, string>>(new Map());
+  const [hostPhotos, setHostPhotos] = useState<Map<number, string>>(new Map());
+
   // Use shared photo capture hook
   const {
     photoCount,
     photos,
     isProcessing,
-    captureAndUpload,
+    captureLocal,
     resetCapture,
     setMergedPhotos,
     startProcessing,
@@ -133,6 +139,11 @@ export default function HostRoomPage() {
   const [uploadComposedError, setUploadComposedError] = useState<string | null>(
     null
   );
+
+  // Host preview photos (blurred guest for privacy)
+  const [blurredMergedPhotos, setBlurredMergedPhotos] = useState<string[]>([]);
+  // Host result photo frame (blurred)
+  const [blurredPhotoFrameUrl, setBlurredPhotoFrameUrl] = useState<string | null>(null);
 
   // Timer settings
   const [recordingDuration, setRecordingDuration] = useState(10); // seconds
@@ -644,6 +655,22 @@ export default function HostRoomPage() {
     };
   }, [on, store.userId]);
 
+  // Listen to guest photo data (for client-side merging)
+  useEffect(() => {
+    const handleGuestPhotoData = (message: any) => {
+      console.log(`[Host Room] Received guest-photo-data #${message.photoNumber}`);
+      if (message.photoNumber && message.imageData) {
+        setGuestPhotos(prev => new Map(prev).set(message.photoNumber, message.imageData));
+      }
+    };
+
+    on('guest-photo-data', handleGuestPhotoData);
+
+    return () => {
+      // Cleanup if needed
+    };
+  }, [on]);
+
   // Listen to guest display options
   useEffect(() => {
     const handleGuestDisplayOptions = (message: any) => {
@@ -704,6 +731,9 @@ export default function HostRoomPage() {
         // Update peer selected photos
         setPeerSelectedPhotos(message.selectedPhotos);
 
+        // 사진 선택 창 닫기 (Guest가 선택 완료함)
+        setShowPhotoSelection(false);
+
         // Auto-compose and upload video
         await autoComposeAndUploadVideo(message.selectedPhotos);
       }
@@ -722,10 +752,61 @@ export default function HostRoomPage() {
     selectablePhotos,
   ]);
 
-  // Listen to merged photos from server
+  // Client-side photo merging: merge when all photos are ready
+  useEffect(() => {
+    const performClientMerge = async () => {
+      // Check if we have all photos from both sides
+      if (hostPhotos.size < totalPhotos || guestPhotos.size < totalPhotos) {
+        return;
+      }
+
+      // All photos ready - perform client-side merge
+      console.log(`[Host Room] All photos ready (host: ${hostPhotos.size}, guest: ${guestPhotos.size}), starting client-side merge...`);
+      startProcessing();
+
+      try {
+        // 1. 일반 합성 (Guest용) - Guest에게 전송
+        const mergedResults = await batchMergeImages(guestPhotos, hostPhotos);
+        console.log(`[Host Room] Client-side merge complete: ${mergedResults.length} photos`);
+
+        // 2. 블러 합성 (Host 미리보기용) - Guest 신상 보호
+        const blurredResults = await batchMergeImages(guestPhotos, hostPhotos, {
+          blurGuest: true,
+          blurAmount: 30,
+        });
+        console.log(`[Host Room] Blurred merge complete for Host preview`);
+
+        // Send merged photos to Guest via WebSocket (일반 버전)
+        if (store.roomId) {
+          sendMessage({
+            type: 'photos-merged-client',
+            roomId: store.roomId,
+            mergedPhotos: mergedResults,
+          } as any);
+          console.log('[Host Room] Sent merged photos to Guest');
+        }
+
+        // Update local state
+        // - mergedPhotos: 일반 합성 (최종 결과물 생성에 사용)
+        // - blurredMergedPhotos: 블러 합성 (Host 미리보기용)
+        const mergedPhotoUrls = mergedResults.map(m => m.imageData);
+        const blurredPhotoUrls = blurredResults.map(m => m.imageData);
+        setMergedPhotos(mergedPhotoUrls);
+        setBlurredMergedPhotos(blurredPhotoUrls);
+        setShowPhotoSelection(true);
+      } catch (error) {
+        console.error('[Host Room] Client-side merge failed:', error);
+        alert('사진 합성에 실패했습니다.');
+      }
+    };
+
+    performClientMerge();
+  }, [hostPhotos.size, guestPhotos.size, totalPhotos, store.roomId, sendMessage, setMergedPhotos, setBlurredMergedPhotos, startProcessing]);
+
+  // Listen to merged photos from server (fallback for legacy mode)
   useEffect(() => {
     const handlePhotosMerged = (message: any) => {
-      console.log('[Host Room] Received merged photos from server:', message);
+      console.log('[Host Room] Received merged photos from server (legacy):', message);
 
       if (message.photos && Array.isArray(message.photos)) {
         // Create photos array with merged images
@@ -787,11 +868,17 @@ export default function HostRoomPage() {
     // 2. Clear local session data (photos, selections)
     store.clearSession();
     setMergedPhotos([]);
+    setBlurredMergedPhotos([]);
+    setBlurredPhotoFrameUrl(null);
     setShowPhotoSelection(false);
     setPeerSelectedPhotos([]);
     setUploadedSegmentNumbers([]);
     setIsCapturing(false);
     setCountdown(null);
+
+    // Clear client-side photo merge state
+    setGuestPhotos(new Map());
+    setHostPhotos(new Map());
 
     // 3. Reset WebRTC for new guest (keep local stream)
     await resetForNextGuest();
@@ -828,6 +915,16 @@ export default function HostRoomPage() {
           uploadResult.file?.id
         );
 
+        // Send video URL to Guest
+        if (store.roomId && uploadResult.file?.url) {
+          sendMessage({
+            type: 'video-composed-client',
+            roomId: store.roomId,
+            videoUrl: uploadResult.file.url,
+          } as any);
+          console.log('[Host Room] Sent video URL to Guest:', uploadResult.file.url);
+        }
+
         setUploadComposedComplete(true);
       } catch (error) {
         console.error(
@@ -848,7 +945,33 @@ export default function HostRoomPage() {
     isUploadingComposed,
     uploadComposedComplete,
     store.roomId,
+    sendMessage,
   ]);
+
+  // Generate blurred photo frame for Host result view
+  useEffect(() => {
+    const generateBlurredFrame = async () => {
+      if (!uploadComposedComplete || blurredPhotoFrameUrl) return;
+      if (peerSelectedPhotos.length !== selectablePhotos) return;
+      if (blurredMergedPhotos.length === 0) return;
+
+      const layout = getLayoutById(store.selectedFrameLayoutId);
+      if (!layout) return;
+
+      try {
+        const photosToUse = peerSelectedPhotos.slice(0, layout.slotCount);
+        const selectedPhotoUrls = photosToUse.map((index) => blurredMergedPhotos[index]);
+
+        const frameUrl = await generatePhotoFrameBlobWithLayout(selectedPhotoUrls, layout);
+        setBlurredPhotoFrameUrl(frameUrl);
+        console.log('[Host Room] Generated blurred photo frame for result view');
+      } catch (error) {
+        console.error('[Host Room] Failed to generate blurred photo frame:', error);
+      }
+    };
+
+    generateBlurredFrame();
+  }, [uploadComposedComplete, blurredPhotoFrameUrl, peerSelectedPhotos, selectablePhotos, blurredMergedPhotos, store.selectedFrameLayoutId]);
 
   // Listen for session-restart from Guest
   useEffect(() => {
@@ -1071,15 +1194,20 @@ export default function HostRoomPage() {
       });
     }
 
-    // Capture ONLY local canvas (Host's chroma key layer) for high-quality server-side merge
+    // Capture local canvas (Host's chroma key layer) for client-side merge
     const localCanvas = localCanvasRef.current;
     if (localCanvas && store.roomId) {
       try {
-        await captureAndUpload({
+        // Capture photo locally (no server upload) for client-side merging
+        const hostPhotoData = await captureLocal({
           photoNumber,
           canvasOrVideo: localCanvas,
           isCanvas: true,
         });
+
+        // Store host photo locally for client-side merge
+        setHostPhotos(prev => new Map(prev).set(photoNumber, hostPhotoData));
+        console.log(`[Host Room] Host photo ${photoNumber} captured and stored locally`);
 
         // Take next photo or finish session
         if (photoNumber < totalPhotos) {
@@ -1168,6 +1296,13 @@ export default function HostRoomPage() {
     setPeerSelectedPhotos([]);
     setIsGeneratingFrame(false);
     setShowPhotoSelection(false);
+
+    // Reset client-side photo merge state
+    setGuestPhotos(new Map());
+    setHostPhotos(new Map());
+    setMergedPhotos([]);
+    setBlurredMergedPhotos([]);
+    setBlurredPhotoFrameUrl(null);
 
     // Reset video composition state
     if (composedVideo) {
@@ -1373,61 +1508,74 @@ export default function HostRoomPage() {
     // Convert to 1-based photo numbers
     const selectedPhotoNumbers = selectedPhotoIndices.map((i) => i + 1);
 
-    // Check if all selected segments are uploaded
-    const allUploaded = selectedPhotoNumbers.every((n) =>
-      uploadedSegmentNumbers.includes(n)
+    // Check if all selected segments are recorded locally
+    const allRecorded = selectedPhotoNumbers.every((n) =>
+      recordedSegments.some((seg) => seg.photoNumber === n)
     );
 
-    if (!allUploaded) {
+    if (!allRecorded) {
       const missing = selectedPhotoNumbers.filter(
-        (n) => !uploadedSegmentNumbers.includes(n)
+        (n) => !recordedSegments.some((seg) => seg.photoNumber === n)
       );
-      console.error('[Host Room] Some segments not uploaded yet:', missing);
+      console.error('[Host Room] Some segments not recorded yet:', missing);
       alert(
-        `일부 영상이 아직 업로드되지 않았습니다. (미완료: ${missing.join(
+        `일부 영상이 아직 녹화되지 않았습니다. (미완료: ${missing.join(
           ', '
         )})`
       );
       return;
     }
 
-    console.log('[Host Room] Auto-composing from uploaded segments');
+    console.log('[Host Room] Auto-composing with WebGL (client-side)');
     console.log('[Host Room] Selected photo numbers:', selectedPhotoNumbers);
     console.log('[Host Room] Selected layout:', store.selectedFrameLayoutId);
 
     setIsComposing(true);
-    setComposeProgress('서버에서 영상 합성 중...');
+    setComposeProgress('클라이언트에서 영상 합성 중...');
 
     try {
-      const { videoUrl } = await requestComposeFromUploaded(
-        selectedPhotoIndices
+      // Get selected segments for WebGL composition
+      const selectedSegments = selectedPhotoNumbers
+        .map((photoNum) => recordedSegments.find((seg) => seg.photoNumber === photoNum))
+        .filter((seg): seg is VideoSegment => seg !== undefined);
+
+      // Convert to VideoSource format for WebGL composer
+      const videoSources: VideoSource[] = selectedSegments.map((seg) => ({
+        blob: seg.blob,
+        startTime: seg.startTime,
+        endTime: seg.endTime,
+        photoNumber: seg.photoNumber,
+      }));
+
+      const layout = getLayoutById(store.selectedFrameLayoutId);
+
+      // Compose video using WebGL (client-side, no server required)
+      const composedBlob = await composeVideoWithWebGL(
+        videoSources,
+        {
+          width: RESOLUTION.VIDEO_WIDTH,
+          height: RESOLUTION.VIDEO_HEIGHT,
+          frameRate: 24,
+          layout: layout || undefined,
+        },
+        (progress) => setComposeProgress(progress)
       );
 
       setComposeProgress('합성 완료, 미리보기 준비 중...');
 
-      // Fetch the composed video blob for local preview
-      const API_URL =
-        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const videoResponse = await fetch(`${API_URL}${videoUrl}`);
-      if (!videoResponse.ok) {
-        throw new Error('Failed to fetch composed video for preview');
-      }
-      const blob = await videoResponse.blob();
-
       // Save composed video locally for preview
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(composedBlob);
       if (composedVideo) {
         URL.revokeObjectURL(composedVideo.url);
       }
-      setComposedVideo({ blob, url });
+      setComposedVideo({ blob: composedBlob, url });
 
-      console.log('[Host Room] Video composition complete:', {
-        size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
-        serverUrl: videoUrl,
+      console.log('[Host Room] WebGL video composition complete:', {
+        size: `${(composedBlob.size / 1024 / 1024).toFixed(2)} MB`,
       });
 
       setComposeProgress('완료!');
-      alert('영상 프레임이 서버에서 생성되어 Guest에게 전송되었습니다!');
+      alert('영상 프레임이 클라이언트에서 생성되었습니다!');
     } catch (error) {
       console.error('[Host Room] Failed to compose video:', error);
       alert(
@@ -1449,52 +1597,68 @@ export default function HostRoomPage() {
     // Convert to 1-based photo numbers
     const selectedPhotoNumbers = peerSelectedPhotos.map((i) => i + 1);
 
-    // Check if all selected segments are uploaded
-    const allUploaded = selectedPhotoNumbers.every((n) =>
-      uploadedSegmentNumbers.includes(n)
+    // Check if all selected segments are recorded locally
+    const allRecorded = selectedPhotoNumbers.every((n) =>
+      recordedSegments.some((seg) => seg.photoNumber === n)
     );
 
-    if (!allUploaded) {
+    if (!allRecorded) {
       const missing = selectedPhotoNumbers.filter(
-        (n) => !uploadedSegmentNumbers.includes(n)
+        (n) => !recordedSegments.some((seg) => seg.photoNumber === n)
       );
       alert(
-        `일부 영상이 아직 업로드되지 않았습니다. (미완료: ${missing.join(
+        `일부 영상이 아직 녹화되지 않았습니다. (미완료: ${missing.join(
           ', '
-        )})\n업로드가 완료될 때까지 기다려주세요.`
+        )})\n녹화가 완료될 때까지 기다려주세요.`
       );
       return;
     }
 
-    console.log('[Host Room] Server FFmpeg compose from uploaded start');
+    console.log('[Host Room] WebGL client-side compose start');
     console.log('[Host Room] Selected photo numbers:', selectedPhotoNumbers);
     console.log('[Host Room] Selected layout:', store.selectedFrameLayoutId);
 
     setIsComposing(true);
-    setComposeProgress('서버에서 영상 합성 중...');
+    setComposeProgress('클라이언트에서 영상 합성 중...');
 
     try {
-      const { videoUrl } = await requestComposeFromUploaded(peerSelectedPhotos);
+      // Get selected segments for WebGL composition
+      const selectedSegments = selectedPhotoNumbers
+        .map((photoNum) => recordedSegments.find((seg) => seg.photoNumber === photoNum))
+        .filter((seg): seg is VideoSegment => seg !== undefined);
 
-      // Fetch the composed video blob for local preview
-      const API_URL =
-        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const videoResponse = await fetch(`${API_URL}${videoUrl}`);
-      if (!videoResponse.ok) {
-        throw new Error('Failed to fetch composed video for preview');
-      }
-      const blob = await videoResponse.blob();
+      // Convert to VideoSource format for WebGL composer
+      const videoSources: VideoSource[] = selectedSegments.map((seg) => ({
+        blob: seg.blob,
+        startTime: seg.startTime,
+        endTime: seg.endTime,
+        photoNumber: seg.photoNumber,
+      }));
 
-      const url = URL.createObjectURL(blob);
+      const layout = getLayoutById(store.selectedFrameLayoutId);
+
+      // Compose video using WebGL (client-side, no server required)
+      const composedBlob = await composeVideoWithWebGL(
+        videoSources,
+        {
+          width: RESOLUTION.VIDEO_WIDTH,
+          height: RESOLUTION.VIDEO_HEIGHT,
+          frameRate: 24,
+          layout: layout || undefined,
+        },
+        (progress) => setComposeProgress(progress)
+      );
+
+      const url = URL.createObjectURL(composedBlob);
 
       // Cleanup previous composed video
       if (composedVideo) {
         URL.revokeObjectURL(composedVideo.url);
       }
 
-      setComposedVideo({ blob, url });
-      console.log('[Host Room] Video composition complete:', {
-        size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
+      setComposedVideo({ blob: composedBlob, url });
+      console.log('[Host Room] WebGL video composition complete:', {
+        size: `${(composedBlob.size / 1024 / 1024).toFixed(2)} MB`,
         layout: store.selectedFrameLayoutId,
       });
 
@@ -1565,6 +1729,75 @@ export default function HostRoomPage() {
   }, [composedVideo]);
 
   console.log('HOST: isProcessing', isProcessing);
+
+  // Result view - show completed photo frame (blurred for privacy, no video)
+  if (!showPhotoSelection && composedVideo && uploadComposedComplete && selectedLayout) {
+    return (
+      <div className="flex flex-col h-full p-4 gap-4 overflow-hidden bg-light">
+        {/* Hidden elements */}
+        <video ref={remoteVideoRef} autoPlay playsInline muted={!remoteAudioEnabled} className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
+        <video ref={localVideoRef} autoPlay playsInline muted className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
+        <canvas ref={localCanvasRef} className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
+        <canvas ref={compositeCanvasRef} className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
+        <canvas ref={recordingCanvasRef} className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none" />
+
+        {/* Header */}
+        <div className="flex-shrink-0 flex items-center justify-between bg-white border-2 border-neutral rounded-lg p-3 shadow-md">
+          <h1 className="text-lg font-bold text-dark">촬영 완료!</h1>
+          <button
+            onClick={handleNextGuest}
+            className="px-4 py-2 bg-neutral hover:bg-neutral-dark text-dark rounded-lg font-semibold text-sm transition"
+          >
+            다음 게스트
+          </button>
+        </div>
+
+        {/* Result content - Blurred photo frame only (no video for privacy) */}
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center overflow-hidden">
+          <div className="w-full max-w-md bg-white border-2 border-neutral rounded-lg p-4 shadow-md">
+            <div className="flex items-center justify-center gap-2 mb-4 p-3 bg-green-100 rounded-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+              <span className="text-sm text-green-700 font-semibold">
+                저장 완료! 관리자 페이지에서 확인하세요.
+              </span>
+            </div>
+
+            {/* Blurred photo frame preview */}
+            {blurredPhotoFrameUrl ? (
+              <div className="aspect-[2/3] rounded-lg overflow-hidden border-2 border-neutral mb-4">
+                <img
+                  src={blurredPhotoFrameUrl}
+                  alt="Photo frame (blurred)"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            ) : (
+              <div className="aspect-[2/3] rounded-lg overflow-hidden border-2 border-neutral mb-4 flex items-center justify-center bg-neutral/20">
+                <div className="text-center text-dark/50">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                  <span className="text-sm">프레임 생성 중...</span>
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-dark/50 text-center mb-4">
+              * Guest 개인정보 보호를 위해 블러 처리된 미리보기입니다.
+            </p>
+
+            <button
+              onClick={handleNextGuest}
+              className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
+            >
+              다음 게스트 받기
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show full-screen photo selection when photos are ready (read-only for Host)
   if (showPhotoSelection && photos.length >= totalPhotos && selectedLayout) {
@@ -1639,105 +1872,61 @@ export default function HostRoomPage() {
         />
 
         {/* Full-screen Photo Selection (read-only for Host) */}
-        <div className="flex-1 min-h-0 p-4">
-          <FullScreenPhotoSelection
-            photos={photos}
-            selectedPhotos={[]}
-            onPhotoSelect={() => {}}
-            onComplete={() => {}}
-            frameLayout={selectedLayout}
-            maxSelection={selectablePhotos}
-            role="host"
-            readOnly={true}
-            peerSelectedPhotos={peerSelectedPhotos}
-            isGenerating={isComposing}
-          />
-        </div>
+        {/* Only show while Guest is still selecting photos */}
+        {peerSelectedPhotos.length < selectablePhotos && (
+          <div className="flex-1 min-h-0 p-4">
+            <FullScreenPhotoSelection
+              photos={blurredMergedPhotos.length > 0 ? blurredMergedPhotos : photos}
+              selectedPhotos={[]}
+              onPhotoSelect={() => {}}
+              onComplete={() => {}}
+              frameLayout={selectedLayout}
+              maxSelection={selectablePhotos}
+              role="host"
+              readOnly={true}
+              peerSelectedPhotos={peerSelectedPhotos}
+              isGenerating={isComposing}
+            />
+          </div>
+        )}
 
-        {/* Video Frame Composition - shown when peer selected photos */}
-        {uploadedSegmentNumbers.length >= selectablePhotos &&
+        {/* Video Frame Composition Status - shown when peer selected photos */}
+        {recordedSegments.length >= selectablePhotos &&
           peerSelectedPhotos.length === selectablePhotos && (
-            <div className="flex-shrink-0 bg-white border-t-2 border-neutral p-4">
-              <div className="max-w-xl mx-auto">
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="w-full max-w-md bg-white border-2 border-neutral rounded-lg p-6 shadow-md">
+                <h2 className="text-lg font-bold text-dark text-center mb-4">영상 처리 중</h2>
                 {isComposing ? (
-                  <div className="flex items-center justify-center gap-3 p-3 bg-neutral/30 rounded-lg">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                  <div className="flex flex-col items-center justify-center gap-3 p-4">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
                     <span className="text-sm text-dark font-medium">
-                      {composeProgress || '처리 중...'}
+                      {composeProgress || '영상 합성 중...'}
+                    </span>
+                  </div>
+                ) : composedVideo && isUploadingComposed ? (
+                  <div className="flex flex-col items-center justify-center gap-3 p-4">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                    <span className="text-sm text-dark font-medium">
+                      저장 중...
+                    </span>
+                  </div>
+                ) : composedVideo && uploadComposedError ? (
+                  <div className="flex items-center justify-center gap-2 p-4 bg-red-100 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="15" y1="9" x2="9" y2="15" />
+                      <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                    <span className="text-sm text-red-700 font-semibold">
+                      저장 실패: {uploadComposedError}
                     </span>
                   </div>
                 ) : composedVideo ? (
-                  <div className="space-y-2">
-                    <video
-                      src={composedVideo.url}
-                      controls
-                      className="w-full rounded-lg border-2 border-neutral"
-                    />
-                    {isUploadingComposed ? (
-                      <div className="flex items-center justify-center gap-3 p-3 bg-neutral/30 rounded-lg">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-                        <span className="text-sm text-dark font-medium">
-                          저장 중...
-                        </span>
-                      </div>
-                    ) : uploadComposedComplete ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-center gap-2 p-3 bg-green-100 rounded-lg">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="text-green-600"
-                          >
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                            <polyline points="22 4 12 14.01 9 11.01" />
-                          </svg>
-                          <span className="text-sm text-green-700 font-semibold">
-                            저장 완료! 관리자 페이지에서 확인하세요.
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => handleRestartSession()}
-                          className="w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
-                        >
-                          다시 시작
-                        </button>
-                      </div>
-                    ) : uploadComposedError ? (
-                      <div className="flex items-center justify-center gap-2 p-3 bg-red-100 rounded-lg">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="text-red-600"
-                        >
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="15" y1="9" x2="9" y2="15" />
-                          <line x1="9" y1="9" x2="15" y2="15" />
-                        </svg>
-                        <span className="text-sm text-red-700 font-semibold">
-                          저장 실패: {uploadComposedError}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2 p-3 bg-neutral/30 rounded-lg">
-                        <span className="text-sm text-dark font-medium">
-                          저장 준비 중...
-                        </span>
-                      </div>
-                    )}
+                  <div className="flex flex-col items-center justify-center gap-3 p-4">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                    <span className="text-sm text-dark font-medium">
+                      저장 준비 중...
+                    </span>
                   </div>
                 ) : (
                   <button
@@ -1862,7 +2051,7 @@ export default function HostRoomPage() {
                 />
 
                 {/* Video Frame Composition - integrated here */}
-                {uploadedSegmentNumbers.length >= selectablePhotos &&
+                {recordedSegments.length >= selectablePhotos &&
                   peerSelectedPhotos.length === selectablePhotos && (
                     <div className="bg-white border-2 border-neutral rounded-lg p-4 shadow-md">
                       <h3 className="text-lg font-semibold mb-3 text-dark">

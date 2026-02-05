@@ -51,13 +51,13 @@ export const LAYOUT_DEFINITIONS: FrameLayoutDefinition[] = [
   //   tags: ['grid', 'equal', 'standard', 'life4cut'],
   // },
 
-  // 2. Polaroid Single (one-cut frame: 2000x3000, slot: 1200x1800 at 400,700)
+  // 2. Polaroid Single (one-cut frame: 1600x2400, slot: 1400x2100 at 100,120)
   {
     id: '1cut-polaroid',
     label: '폴라로이드 (단일)',
     slotCount: 1,
     positionRatios: [
-      { x: 400 / 2000, y: 700 / 3000, width: 1200 / 2000, height: 1800 / 3000, zIndex: 0 },
+      { x: 100 / 1600, y: 120 / 2400, width: 1400 / 1600, height: 2100 / 2400, zIndex: 0 },
     ],
     thumbnailSrc: '/frames/one-cut.png',
     frameSrc: '/frames/one-cut.png',
