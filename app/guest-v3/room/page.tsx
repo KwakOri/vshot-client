@@ -16,6 +16,7 @@ import { useSignaling } from '@/hooks/useSignaling';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { useGuestManagement } from '@/hooks/v3/useGuestManagement';
 import { useV3PhotoCapture } from '@/hooks/v3/useV3PhotoCapture';
+import { generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
 import { useAppStore } from '@/lib/store';
 import { SessionState, SignalMessage } from '@/types';
 import { useRouter } from 'next/navigation';
@@ -123,9 +124,24 @@ export default function GuestV3RoomPage() {
       console.log('[Guest V3] Photos merged:', mergedPhotoUrl);
       setSessionState(SessionState.PROCESSING);
     },
-    onSessionComplete: (sessionId, frameResultUrl) => {
+    onSessionComplete: async (sessionId, frameResultUrl) => {
       console.log('[Guest V3] Session complete:', sessionId);
-      setLastSessionResult({ sessionId, frameResultUrl });
+      // Apply frame overlay client-side (server returns merged photo without frame)
+      const layout = getLayoutById(store.selectedFrameLayoutId);
+      if (layout) {
+        try {
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+          const fullUrl = `${API_URL}${frameResultUrl}`;
+          const framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
+          setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
+          console.log('[Guest V3] Frame applied to photo');
+        } catch (err) {
+          console.error('[Guest V3] Failed to apply frame, using merged photo:', err);
+          setLastSessionResult({ sessionId, frameResultUrl });
+        }
+      } else {
+        setLastSessionResult({ sessionId, frameResultUrl });
+      }
       setSessionState(SessionState.COMPLETED);
     },
     onError: (error) => {
@@ -451,21 +467,31 @@ export default function GuestV3RoomPage() {
   // Download result
   const downloadResult = async () => {
     if (!lastSessionResult?.frameResultUrl) return;
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-    const fullUrl = `${API_URL}${lastSessionResult.frameResultUrl}`;
+
+    const url = lastSessionResult.frameResultUrl;
+    const isBlobUrl = url.startsWith('blob:');
 
     try {
-      const response = await fetch(fullUrl);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      let downloadUrl: string;
+      if (isBlobUrl) {
+        downloadUrl = url;
+      } else {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const response = await fetch(`${API_URL}${url}`);
+        const blob = await response.blob();
+        downloadUrl = URL.createObjectURL(blob);
+      }
 
       const link = document.createElement('a');
-      link.href = url;
+      link.href = downloadUrl;
       link.download = `vshot-v3-${store.roomId}-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+
+      if (!isBlobUrl) {
+        URL.revokeObjectURL(downloadUrl);
+      }
     } catch (error) {
       console.error('[Guest V3] Download error:', error);
     }
@@ -498,7 +524,10 @@ export default function GuestV3RoomPage() {
           <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden">
             {lastSessionResult.frameResultUrl ? (
               <img
-                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`}
+                src={lastSessionResult.frameResultUrl.startsWith('blob:')
+                  ? lastSessionResult.frameResultUrl
+                  : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
+                }
                 alt="촬영 결과"
                 className="max-w-full max-h-full object-contain rounded-lg"
               />

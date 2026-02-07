@@ -8,7 +8,7 @@ import {
   SettingsPanel,
   VideoDisplayPanel,
 } from '@/components';
-import { FrameOverlayPreview, CountdownOverlay } from '@/components/v3/FrameOverlayPreview';
+import { CountdownOverlay } from '@/components/v3/FrameOverlayPreview';
 import { GuestWaitingIndicator, SessionHistoryPanel } from '@/components/v3/GuestWaitingIndicator';
 import { RESOLUTION } from '@/constants/constants';
 import { getLayoutById } from '@/constants/frame-layouts';
@@ -20,6 +20,7 @@ import { useSignaling } from '@/hooks/useSignaling';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { useGuestManagement } from '@/hooks/v3/useGuestManagement';
 import { useV3PhotoCapture } from '@/hooks/v3/useV3PhotoCapture';
+import { generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
 import { useAppStore } from '@/lib/store';
 import { VideoRecorder, downloadVideo } from '@/lib/video-recorder';
 import { SessionState, SignalMessage } from '@/types';
@@ -100,6 +101,9 @@ export default function HostV3RoomPage() {
   // Frame layout
   const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
 
+  // Frame overlay image for composite canvas
+  const [frameOverlayImage, setFrameOverlayImage] = useState<HTMLImageElement | null>(null);
+
   // Refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -152,9 +156,24 @@ export default function HostV3RoomPage() {
       console.log('[Host V3] Photos merged:', mergedPhotoUrl);
       setSessionState(SessionState.PROCESSING);
     },
-    onSessionComplete: (sessionId, frameResultUrl) => {
+    onSessionComplete: async (sessionId, frameResultUrl) => {
       console.log('[Host V3] Session complete:', sessionId);
-      setLastSessionResult({ sessionId, frameResultUrl });
+      // Apply frame overlay client-side (server returns merged photo without frame)
+      const layout = getLayoutById(store.selectedFrameLayoutId);
+      if (layout) {
+        try {
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+          const fullUrl = `${API_URL}${frameResultUrl}`;
+          const framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
+          setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
+          console.log('[Host V3] Frame applied to photo');
+        } catch (err) {
+          console.error('[Host V3] Failed to apply frame, using merged photo:', err);
+          setLastSessionResult({ sessionId, frameResultUrl });
+        }
+      } else {
+        setLastSessionResult({ sessionId, frameResultUrl });
+      }
       setSessionState(SessionState.COMPLETED);
     },
     onError: (error) => {
@@ -191,7 +210,23 @@ export default function HostV3RoomPage() {
     height: RESOLUTION.VIDEO_HEIGHT,
     guestFlipHorizontal,
     hostFlipHorizontal,
+    frameOverlayImage,
+    frameOverlayEnabled: photoCapture.isCapturing && photoCapture.countdown !== null && photoCapture.countdown > 0,
+    frameOverlayOpacity: 0.3,
   });
+
+  // Preload frame overlay image
+  useEffect(() => {
+    if (!selectedLayout?.frameSrc) return;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      setFrameOverlayImage(img);
+      console.log('[Host V3] Frame overlay image preloaded:', selectedLayout.frameSrc);
+    };
+    img.onerror = () => console.error('[Host V3] Failed to load frame overlay:', selectedLayout.frameSrc);
+    img.src = selectedLayout.frameSrc;
+  }, [selectedLayout?.frameSrc]);
 
   // Apply saved settings on load
   useEffect(() => {
@@ -538,21 +573,31 @@ export default function HostV3RoomPage() {
   // Download result photo
   const downloadResult = async () => {
     if (!lastSessionResult?.frameResultUrl) return;
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-    const fullUrl = `${API_URL}${lastSessionResult.frameResultUrl}`;
+
+    const url = lastSessionResult.frameResultUrl;
+    const isBlobUrl = url.startsWith('blob:');
 
     try {
-      const response = await fetch(fullUrl);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      let downloadUrl: string;
+      if (isBlobUrl) {
+        downloadUrl = url;
+      } else {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const response = await fetch(`${API_URL}${url}`);
+        const blob = await response.blob();
+        downloadUrl = URL.createObjectURL(blob);
+      }
 
       const link = document.createElement('a');
-      link.href = url;
+      link.href = downloadUrl;
       link.download = `vshot-v3-${store.roomId}-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+
+      if (!isBlobUrl) {
+        URL.revokeObjectURL(downloadUrl);
+      }
     } catch (error) {
       console.error('[Host V3] Download error:', error);
     }
@@ -614,14 +659,6 @@ export default function HostV3RoomPage() {
   return (
     <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
       <FlashOverlay show={showFlash} />
-
-      {/* Frame Overlay Preview (renders to composite canvas) */}
-      <FrameOverlayPreview
-        canvas={compositeCanvasRef.current}
-        layout={selectedLayout || null}
-        enabled={photoCapture.isCapturing && photoCapture.countdown !== null && photoCapture.countdown > 0}
-        opacity={0.3}
-      />
 
       {/* Countdown Overlay */}
       <CountdownOverlay
@@ -861,7 +898,10 @@ export default function HostV3RoomPage() {
               {lastSessionResult.frameResultUrl && (
                 <div className="mb-3 flex justify-center">
                   <img
-                    src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`}
+                    src={lastSessionResult.frameResultUrl.startsWith('blob:')
+                      ? lastSessionResult.frameResultUrl
+                      : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
+                    }
                     alt="촬영 결과"
                     className="max-h-48 rounded-lg shadow-md"
                   />
