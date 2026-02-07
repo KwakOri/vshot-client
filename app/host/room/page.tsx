@@ -610,7 +610,7 @@ export default function HostRoomPage() {
 
   // Broadcast host display options when guest connects or flip changes
   useEffect(() => {
-    if (store.roomId && remoteStream) {
+    if (store.roomId && store.peerId) {
       sendMessage({
         type: 'host-display-options',
         roomId: store.roomId,
@@ -618,7 +618,7 @@ export default function HostRoomPage() {
       });
       console.log('[Host Room] Sent display options:', { flipHorizontal: hostFlipHorizontal });
     }
-  }, [store.roomId, remoteStream, hostFlipHorizontal, sendMessage]);
+  }, [store.roomId, store.peerId, hostFlipHorizontal, sendMessage]);
 
   // Broadcast frame layout settings when changed
   useEffect(() => {

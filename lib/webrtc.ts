@@ -79,8 +79,17 @@ export class WebRTCConnection {
       throw new Error('PeerConnection not initialized');
     }
 
+    const senders = this.pc.getSenders();
+
     stream.getTracks().forEach((track) => {
-      this.pc!.addTrack(track, stream);
+      const existingSender = senders.find((s) => s.track?.kind === track.kind);
+      if (existingSender) {
+        existingSender.replaceTrack(track);
+        console.log(`[WebRTC] Replaced ${track.kind} track via replaceTrack()`);
+      } else {
+        this.pc!.addTrack(track, stream);
+        console.log(`[WebRTC] Added new ${track.kind} track`);
+      }
     });
 
     console.log('[WebRTC] Local stream set');
