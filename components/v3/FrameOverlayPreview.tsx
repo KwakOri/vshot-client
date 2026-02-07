@@ -12,12 +12,6 @@ interface FrameOverlayPreviewProps {
   className?: string;
 }
 
-/**
- * Frame Overlay Preview Component
- *
- * Renders frame overlay on top of composite canvas during capture countdown
- * Helps users align their shot with the final frame layout
- */
 export function FrameOverlayPreview({
   canvas,
   layout,
@@ -30,14 +24,13 @@ export function FrameOverlayPreview({
     layout,
     enabled,
     opacity,
-    updateInterval: 100, // 10fps for overlay
+    updateInterval: 100,
   });
 
-  // Show loading/error states if needed
   if (enabled && !isReady && !error) {
     return (
       <div className={`frame-overlay-loading ${className}`}>
-        <p className="text-sm text-[#1B1612]/50">프레임 로딩 중...</p>
+        <p className="text-sm text-dark/50">프레임 로딩 중...</p>
       </div>
     );
   }
@@ -46,15 +39,9 @@ export function FrameOverlayPreview({
     console.error('[FrameOverlayPreview] Error:', error);
   }
 
-  // This component doesn't render anything visible - it manages canvas overlay
   return null;
 }
 
-/**
- * Countdown Overlay Component
- *
- * Shows countdown numbers with frame preview
- */
 interface CountdownOverlayProps {
   countdown: number | null;
   frameLayout: FrameLayout | null;
@@ -73,17 +60,26 @@ export function CountdownOverlay({
       className={`
         fixed inset-0 z-50
         flex items-center justify-center
-        bg-black/30
         ${className}
       `}
+      style={{
+        background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 100%)',
+      }}
     >
-      <div
-        className="text-[10rem] font-bold text-white"
-        style={{
-          textShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
-        }}
-      >
-        {countdown}
+      {/* Outer ring */}
+      <div className="absolute w-48 h-48 rounded-full border-2 border-white/10 animate-pulse-ring" />
+
+      {/* Countdown number */}
+      <div className="animate-countdown-pop" key={countdown}>
+        <span
+          className="font-display text-[10rem] font-black text-white leading-none select-none"
+          style={{
+            textShadow: '0 0 40px rgba(252, 113, 43, 0.4), 0 4px 20px rgba(0, 0, 0, 0.5)',
+            WebkitTextStroke: '2px rgba(255, 255, 255, 0.1)',
+          }}
+        >
+          {countdown}
+        </span>
       </div>
     </div>
   );

@@ -127,145 +127,176 @@ export default function GuestV3ReadyPage() {
     };
   }, [localStream]);
 
+  const isReady = roomIdInput.trim().length > 0 && isCameraActive;
+
   return (
-    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden bg-light">
-      {/* Top bar - Room ID input */}
-      <div className="flex-shrink-0 bg-white border-2 border-neutral rounded-lg p-2 shadow-md">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg transition ${
-              showSettings ? 'bg-primary text-white' : 'bg-neutral/40 hover:bg-neutral'
-            }`}
-            title="장치 설정"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
-
-          <input
-            type="text"
-            value={roomIdInput}
-            onChange={(e) => setRoomIdInput(e.target.value.toUpperCase())}
-            placeholder="Room ID 입력"
-            maxLength={6}
-            className="flex-1 min-w-0 px-3 py-2 bg-neutral/40 border-2 border-neutral rounded-lg text-dark text-center text-lg font-bold tracking-widest focus:outline-none focus:border-primary"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') joinRoom();
-            }}
-          />
-
-          <button
-            onClick={joinRoom}
-            disabled={!roomIdInput.trim() || !isCameraActive}
-            className="flex-shrink-0 px-4 py-2 bg-secondary hover:bg-secondary-dark text-white font-bold rounded-lg disabled:opacity-50 transition shadow-md"
-          >
-            입장
-          </button>
-        </div>
-
-        {/* V3 badge */}
-        <div className="flex justify-center mt-1">
-          <span className="text-xs text-primary font-semibold">v3</span>
-        </div>
-      </div>
-
-      {/* Settings panel */}
-      {showSettings && (
-        <div className="flex-shrink-0 bg-white border-2 border-neutral rounded-lg p-3 shadow-md">
-          <DeviceSelector
-            videoDevices={videoDevices}
-            audioDevices={audioDevices}
-            audioOutputDevices={audioOutputDevices}
-            selectedVideoDeviceId={selectedVideoDeviceId}
-            selectedAudioDeviceId={selectedAudioDeviceId}
-            selectedAudioOutputDeviceId={selectedAudioOutputDeviceId}
-            onVideoDeviceChange={handleVideoDeviceChange}
-            onAudioDeviceChange={handleAudioDeviceChange}
-            onAudioOutputDeviceChange={setSelectedAudioOutputDeviceId}
-            showSpeaker={true}
-            disabled={false}
-          />
-        </div>
-      )}
-
-      {/* Video preview */}
-      <div className="flex-1 min-h-0 bg-gray-800 rounded-lg p-2 flex items-center justify-center">
+    <div className="flex flex-col h-full overflow-hidden bg-dark relative">
+      {/* Camera preview - full background */}
+      <div className="flex-1 min-h-0 relative">
+        {/* Checkerboard pattern behind video */}
         <div
-          className="relative bg-black rounded-lg overflow-hidden h-full"
-          style={{ aspectRatio: '2/3' }}
-        >
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage: `
-                linear-gradient(45deg, #333 25%, transparent 25%),
-                linear-gradient(-45deg, #333 25%, transparent 25%),
-                linear-gradient(45deg, transparent 75%, #333 75%),
-                linear-gradient(-45deg, transparent 75%, #333 75%)
-              `,
-              backgroundSize: '20px 20px',
-              backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
-            }}
-          />
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `
+              linear-gradient(45deg, #222 25%, transparent 25%),
+              linear-gradient(-45deg, #222 25%, transparent 25%),
+              linear-gradient(45deg, transparent 75%, #222 75%),
+              linear-gradient(-45deg, transparent 75%, #222 75%)
+            `,
+            backgroundSize: '20px 20px',
+            backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+          }}
+        />
 
-          {isCameraLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
-                <span className="text-white text-sm">카메라 로딩 중...</span>
-              </div>
+        <video
+          ref={localVideoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ transform: store.guestFlipHorizontal ? 'scaleX(-1)' : 'none' }}
+        />
+
+        {/* Loading overlay */}
+        {isCameraLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-dark/70 z-10">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
+              <span className="text-white/80 text-sm font-medium">카메라 준비 중...</span>
             </div>
-          )}
+          </div>
+        )}
 
-          {!isCameraLoading && !isCameraActive && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10">
-              <div className="flex flex-col items-center gap-3 text-center px-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400">
+        {/* Camera error overlay */}
+        {!isCameraLoading && !isCameraActive && (
+          <div className="absolute inset-0 flex items-center justify-center bg-dark/80 z-10">
+            <div className="flex flex-col items-center gap-4 text-center px-6">
+              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                   <line x1="1" y1="1" x2="23" y2="23" />
                 </svg>
-                <span className="text-white text-sm">카메라에 접근할 수 없습니다</span>
-                <button
-                  onClick={() => startPreview()}
-                  className="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-semibold transition"
-                >
-                  다시 시도
-                </button>
               </div>
+              <div>
+                <p className="text-white font-semibold text-sm">카메라에 접근할 수 없습니다</p>
+                <p className="text-white/40 text-xs mt-1">카메라 권한을 확인해주세요</p>
+              </div>
+              <button
+                onClick={() => startPreview()}
+                className="booth-btn px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-full text-sm font-bold transition"
+              >
+                다시 시도
+              </button>
             </div>
-          )}
+          </div>
+        )}
 
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{ transform: store.guestFlipHorizontal ? 'scaleX(-1)' : 'none' }}
-          />
+        {/* Top gradient overlay */}
+        <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-dark/60 to-transparent z-10 pointer-events-none" />
+        {/* Bottom gradient overlay */}
+        <div className="absolute bottom-0 inset-x-0 h-48 bg-gradient-to-t from-dark/80 to-transparent z-10 pointer-events-none" />
 
-          {/* Flip toggle button overlay */}
-          <button
-            onClick={() => store.setGuestFlipHorizontal(!store.guestFlipHorizontal)}
-            className={`absolute bottom-2 right-2 z-10 px-3 py-1.5 rounded-lg font-semibold text-xs transition shadow-md ${
-              store.guestFlipHorizontal
-                ? 'bg-primary hover:bg-primary-dark text-white'
-                : 'bg-white/80 hover:bg-white text-dark'
-            }`}
-            title="화면 좌우 반전"
-          >
-            {store.guestFlipHorizontal ? '반전 ON' : '반전 OFF'}
-          </button>
+        {/* Top bar - overlaid on video */}
+        <div className="absolute top-0 inset-x-0 z-20 p-3">
+          <div className="flex items-center gap-2">
+            {/* Settings button */}
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md transition ${
+                showSettings ? 'bg-primary text-white' : 'bg-white/15 hover:bg-white/25 text-white'
+              }`}
+              title="장치 설정"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+
+            <div className="flex-1" />
+
+            {/* Flip toggle */}
+            <button
+              onClick={() => store.setGuestFlipHorizontal(!store.guestFlipHorizontal)}
+              className={`flex-shrink-0 h-10 px-4 flex items-center justify-center rounded-full backdrop-blur-md text-xs font-bold transition ${
+                store.guestFlipHorizontal
+                  ? 'bg-primary text-white'
+                  : 'bg-white/15 hover:bg-white/25 text-white'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
+                <polyline points="7 23 7 1" />
+                <polyline points="17 1 17 23" />
+                <polyline points="11 5 7 1 3 5" />
+                <polyline points="21 19 17 23 13 19" />
+              </svg>
+              반전
+            </button>
+          </div>
         </div>
+
+        {/* Settings panel - floating overlay */}
+        {showSettings && (
+          <div className="absolute top-16 left-3 right-3 z-30 animate-slide-up">
+            <div className="booth-card p-4 backdrop-blur-md">
+              <DeviceSelector
+                videoDevices={videoDevices}
+                audioDevices={audioDevices}
+                audioOutputDevices={audioOutputDevices}
+                selectedVideoDeviceId={selectedVideoDeviceId}
+                selectedAudioDeviceId={selectedAudioDeviceId}
+                selectedAudioOutputDeviceId={selectedAudioOutputDeviceId}
+                onVideoDeviceChange={handleVideoDeviceChange}
+                onAudioDeviceChange={handleAudioDeviceChange}
+                onAudioOutputDeviceChange={setSelectedAudioOutputDeviceId}
+                showSpeaker={true}
+                disabled={false}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="flex-shrink-0 text-center">
-        <p className="text-xs text-dark/60">
-          Room ID를 입력하고 입장 버튼을 눌러주세요
-        </p>
+      {/* Bottom entry panel - overlaid */}
+      <div className="absolute bottom-0 inset-x-0 z-20 p-4 pb-6">
+        <div className="animate-slide-up">
+          {/* Room ID input row */}
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={roomIdInput}
+                onChange={(e) => setRoomIdInput(e.target.value.toUpperCase())}
+                placeholder="ROOM ID"
+                maxLength={6}
+                className="w-full px-4 py-3.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white text-center text-lg font-display font-bold tracking-[0.3em] placeholder:text-white/30 placeholder:tracking-[0.3em] focus:outline-none focus:border-primary focus:bg-white/15 transition"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') joinRoom();
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Join button */}
+          <button
+            onClick={joinRoom}
+            disabled={!isReady}
+            className="booth-btn w-full py-4 rounded-xl font-display font-bold text-base shadow-lg touch-manipulation transition-all disabled:opacity-30 disabled:pointer-events-none"
+            style={{
+              background: isReady
+                ? 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)'
+                : 'rgba(255,255,255,0.1)',
+              color: 'white',
+              boxShadow: isReady ? '0 8px 24px rgba(252, 113, 43, 0.3)' : 'none',
+            }}
+          >
+            포토부스 입장
+          </button>
+
+          <p className="text-center text-white/30 text-xs mt-3">
+            Room ID를 입력하고 입장하세요
+          </p>
+        </div>
       </div>
     </div>
   );

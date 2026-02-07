@@ -132,81 +132,142 @@ export default function HostV3ReadyPage() {
     };
   }, []);
 
+  // Audio level bars for visualization
+  const bars = 12;
+  const barLevels = Array.from({ length: bars }, (_, i) => {
+    const threshold = (i / bars) * 100;
+    return audioLevel > threshold;
+  });
+
   return (
-    <div className="min-h-screen bg-light text-dark flex items-center justify-center p-3 sm:p-8 landscape:p-3">
-      <div className="max-w-lg w-full bg-white border-2 border-neutral rounded-2xl shadow-lg p-4 sm:p-8 landscape:p-4 max-h-[90vh] overflow-y-auto">
-        <h1 className="text-xl sm:text-3xl landscape:text-xl font-bold mb-3 sm:mb-6 landscape:mb-3 text-center text-dark">
-          Host 설정 <span className="text-primary text-sm font-normal">v3</span>
-        </h1>
+    <div className="min-h-screen bg-light text-dark flex items-center justify-center p-3 sm:p-8 landscape:p-3 relative overflow-hidden booth-noise">
+      {/* Background decoration */}
+      <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-[0.04] pointer-events-none"
+        style={{ background: 'radial-gradient(circle, #FC712B, transparent 70%)' }} />
+      <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full opacity-[0.03] pointer-events-none"
+        style={{ background: 'radial-gradient(circle, #FD9319, transparent 70%)' }} />
 
-        <div className="space-y-4 sm:space-y-6 landscape:space-y-4">
-          {/* Device Selection (Microphone + Speaker only) */}
-          <DeviceSelector
-            videoDevices={[]}
-            audioDevices={audioDevices}
-            audioOutputDevices={audioOutputDevices}
-            selectedVideoDeviceId={null}
-            selectedAudioDeviceId={selectedAudioDeviceId}
-            selectedAudioOutputDeviceId={selectedAudioOutputDeviceId}
-            onVideoDeviceChange={() => {}}
-            onAudioDeviceChange={setSelectedAudioDeviceId}
-            onAudioOutputDeviceChange={setSelectedAudioOutputDeviceId}
-            showCamera={false}
-            showMicrophone={true}
-            showSpeaker={true}
-            disabled={isTestingMic}
-          />
+      <div className="max-w-lg w-full relative z-10">
+        {/* Header */}
+        <div className="text-center mb-6 sm:mb-8 landscape:mb-4 animate-slide-up">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+            PHOTO BOOTH HOST
+          </div>
+          <h1 className="font-display text-2xl sm:text-4xl landscape:text-2xl font-bold text-dark tracking-tight">
+            촬영 준비
+          </h1>
+          <p className="text-dark/50 text-sm mt-1">장치 설정 후 포토부스를 시작하세요</p>
+        </div>
 
-          {/* Mic Test Section */}
-          <div className="bg-neutral/20 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-dark">마이크 테스트</span>
-              <button
-                onClick={isTestingMic ? stopMicTest : startMicTest}
-                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
-                  isTestingMic
-                    ? 'bg-red-500 hover:bg-red-600 text-white'
-                    : 'bg-primary hover:bg-primary-dark text-white'
-                }`}
-              >
-                {isTestingMic ? '테스트 중지' : '테스트 시작'}
-              </button>
-            </div>
-
-            <div className="h-3 bg-neutral rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-75"
-                style={{ width: `${audioLevel}%` }}
+        <div className="booth-card p-5 sm:p-7 landscape:p-4 max-h-[75vh] overflow-y-auto booth-scroll animate-slide-up" style={{ animationDelay: '0.1s' }}>
+          <div className="space-y-5 sm:space-y-6 landscape:space-y-4">
+            {/* Device Selection */}
+            <div>
+              <label className="font-display text-xs font-semibold text-dark/40 uppercase tracking-wider mb-3 block">
+                오디오 장치
+              </label>
+              <DeviceSelector
+                videoDevices={[]}
+                audioDevices={audioDevices}
+                audioOutputDevices={audioOutputDevices}
+                selectedVideoDeviceId={null}
+                selectedAudioDeviceId={selectedAudioDeviceId}
+                selectedAudioOutputDeviceId={selectedAudioOutputDeviceId}
+                onVideoDeviceChange={() => {}}
+                onAudioDeviceChange={setSelectedAudioDeviceId}
+                onAudioOutputDeviceChange={setSelectedAudioOutputDeviceId}
+                showCamera={false}
+                showMicrophone={true}
+                showSpeaker={true}
+                disabled={isTestingMic}
               />
             </div>
-            {isTestingMic && (
-              <p className="text-xs text-dark/60 mt-1">마이크에 말해보세요...</p>
+
+            {/* Mic Test Section */}
+            <div className="bg-light/60 rounded-xl p-4 border border-neutral/50">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full transition-colors ${isTestingMic ? 'bg-green-500' : 'bg-neutral'}`} />
+                  <span className="text-sm font-semibold text-dark">마이크 테스트</span>
+                </div>
+                <button
+                  onClick={isTestingMic ? stopMicTest : startMicTest}
+                  className={`booth-btn px-4 py-1.5 rounded-full text-xs font-bold transition touch-manipulation ${
+                    isTestingMic
+                      ? 'bg-dark/80 hover:bg-dark text-white'
+                      : 'bg-primary hover:bg-primary-dark text-white'
+                  }`}
+                >
+                  {isTestingMic ? '중지' : '테스트'}
+                </button>
+              </div>
+
+              {/* Audio Level Bars */}
+              <div className="flex items-end gap-1 h-8">
+                {barLevels.map((active, i) => (
+                  <div
+                    key={i}
+                    className="flex-1 rounded-sm transition-all duration-75"
+                    style={{
+                      height: active ? `${Math.min(100, 40 + (i / bars) * 60)}%` : '20%',
+                      backgroundColor: active
+                        ? i < bars * 0.6
+                          ? '#FC712B'
+                          : i < bars * 0.8
+                          ? '#FD9319'
+                          : '#ef4444'
+                        : '#E2D4C4',
+                      opacity: active ? 1 : 0.4,
+                    }}
+                  />
+                ))}
+              </div>
+              {isTestingMic && (
+                <p className="text-xs text-dark/40 mt-2">마이크에 말해보세요</p>
+              )}
+            </div>
+
+            {/* Frame Selection */}
+            {activeLayouts.length > 1 && (
+              <div>
+                <label className="font-display text-xs font-semibold text-dark/40 uppercase tracking-wider mb-3 block">
+                  프레임 선택
+                </label>
+                <FrameSelector
+                  layouts={activeLayouts}
+                  selectedLayoutId={selectedFrameLayoutId}
+                  onSelect={handleFrameSelect}
+                />
+              </div>
             )}
+
+            {/* V3 Mode Info */}
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-secondary/5 border border-secondary/15">
+              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center mt-0.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FD9319" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-dark">게스트 로테이션 모드</p>
+                <p className="text-xs text-dark/50 mt-0.5 leading-relaxed">
+                  게스트가 교체되어도 설정이 유지됩니다. 방에 입장한 후 화면 공유를 시작해주세요.
+                </p>
+              </div>
+            </div>
+
+            {/* Create Room Button */}
+            <button
+              onClick={createRoom}
+              className="booth-btn w-full bg-primary hover:bg-primary-dark text-white font-display font-bold py-4 sm:py-5 landscape:py-3 rounded-xl text-base sm:text-lg landscape:text-base shadow-lg shadow-primary/20 touch-manipulation"
+            >
+              포토부스 시작
+            </button>
           </div>
-
-          {/* Frame Selection */}
-          {activeLayouts.length > 1 && (
-            <FrameSelector
-              layouts={activeLayouts}
-              selectedLayoutId={selectedFrameLayoutId}
-              onSelect={handleFrameSelect}
-            />
-          )}
-
-          {/* Info */}
-          <div className="bg-secondary/10 rounded-lg p-3 border border-secondary/30">
-            <p className="text-sm text-dark/80">
-              <strong>V3 모드</strong>: 게스트가 교체되어도 설정이 유지됩니다.<br />
-              방에 입장한 후 화면 공유를 시작해주세요.
-            </p>
-          </div>
-
-          <button
-            onClick={createRoom}
-            className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 sm:py-5 landscape:py-3 rounded-lg text-base sm:text-lg landscape:text-base transition shadow-md active:scale-95 touch-manipulation"
-          >
-            방 만들기
-          </button>
         </div>
       </div>
     </div>

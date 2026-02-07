@@ -25,7 +25,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export default function GuestV3RoomPage() {
   const router = useRouter();
   const store = useAppStore();
-  // Use v3 signaling path
   const wsUrl = (process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001/signaling').replace('/signaling', '/signaling-v3');
   const { connect, sendMessage, on, off, isConnected } = useSignaling({ wsUrl });
   const { localStream, remoteStream, startLocalStream } = useWebRTC({
@@ -33,30 +32,21 @@ export default function GuestV3RoomPage() {
     on,
   });
 
-  // Session state
   const [sessionState, setSessionState] = useState<SessionState>(SessionState.IDLE);
-
-  // Camera state
   const [isCameraActive, setIsCameraActive] = useState(false);
 
-  // Host's chroma key settings (received from Host)
   const [hostChromaKeyEnabled, setHostChromaKeyEnabled] = useState(true);
   const [hostSensitivity, setHostSensitivity] = useState(50);
   const [hostSmoothness, setHostSmoothness] = useState(10);
   const [hostChromaKeyColor, setHostChromaKeyColor] = useState('#00ff00');
 
-  // Display options
   const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(store.guestFlipHorizontal);
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
 
-  // Flash
   const [showFlash, setShowFlash] = useState(false);
-
-  // Audio
   const [remoteAudioEnabled, setRemoteAudioEnabled] = useState(true);
   const [localMicMuted, setLocalMicMuted] = useState(false);
 
-  // Device selection
   const { videoDevices, audioDevices, audioOutputDevices, refreshDevices } = useMediaDevices();
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState<string | null>(
     store.selectedVideoDeviceId
@@ -68,22 +58,18 @@ export default function GuestV3RoomPage() {
     store.selectedAudioOutputDeviceId
   );
 
-  // Settings modal
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [pendingVideoDeviceId, setPendingVideoDeviceId] = useState<string | null>(null);
   const [pendingAudioDeviceId, setPendingAudioDeviceId] = useState<string | null>(null);
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
-  // Result state
   const [lastSessionResult, setLastSessionResult] = useState<{
     sessionId: string;
     frameResultUrl: string;
   } | null>(null);
 
-  // Frame layout from host settings
   const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
 
-  // Refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -91,7 +77,6 @@ export default function GuestV3RoomPage() {
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
   const initializedRef = useRef(false);
 
-  // V3 Guest Management Hook
   const guestManagement = useGuestManagement({
     roomId: store.roomId || '',
     userId: store.userId,
@@ -99,7 +84,6 @@ export default function GuestV3RoomPage() {
     sendSignal: sendMessage,
   });
 
-  // V3 Photo Capture Hook
   const photoCapture = useV3PhotoCapture({
     roomId: store.roomId || '',
     userId: store.userId,
@@ -126,7 +110,6 @@ export default function GuestV3RoomPage() {
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
       console.log('[Guest V3] Session complete:', sessionId);
-      // Apply frame overlay client-side (server returns merged photo without frame)
       const layout = getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
@@ -134,9 +117,8 @@ export default function GuestV3RoomPage() {
           const fullUrl = `${API_URL}${frameResultUrl}`;
           const framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
-          console.log('[Guest V3] Frame applied to photo');
         } catch (err) {
-          console.error('[Guest V3] Failed to apply frame, using merged photo:', err);
+          console.error('[Guest V3] Failed to apply frame:', err);
           setLastSessionResult({ sessionId, frameResultUrl });
         }
       } else {
@@ -150,7 +132,6 @@ export default function GuestV3RoomPage() {
     },
   });
 
-  // Chroma key for local video (Guest's camera - no chromakey, just render to canvas)
   useChromaKey({
     videoElement: localVideoRef.current,
     canvasElement: localCanvasRef.current,
@@ -163,7 +144,6 @@ export default function GuestV3RoomPage() {
     flipHorizontal: guestFlipHorizontal,
   });
 
-  // Chroma key for remote video (Host's screen share)
   useChromaKey({
     videoElement: remoteVideoRef.current,
     canvasElement: remoteCanvasRef.current,
@@ -178,7 +158,6 @@ export default function GuestV3RoomPage() {
     flipHorizontal: hostFlipHorizontal,
   });
 
-  // Composite canvas (Guest background + Host foreground)
   useCompositeCanvas({
     compositeCanvas: compositeCanvasRef.current,
     backgroundVideo: localVideoRef.current,
@@ -191,7 +170,6 @@ export default function GuestV3RoomPage() {
     hostFlipHorizontal,
   });
 
-  // Initialize and join room
   useEffect(() => {
     if (initializedRef.current) return;
     if (!store._hasHydrated) return;
@@ -209,16 +187,13 @@ export default function GuestV3RoomPage() {
     const init = async () => {
       try {
         await startCamera();
-
         await connect();
-
         sendMessage({
           type: 'join',
           roomId: roomId!,
           userId: userId,
           role: 'guest',
         });
-
         setSessionState(SessionState.GUEST_CONNECTED);
       } catch (error) {
         console.error('[Guest V3] Error:', error);
@@ -230,7 +205,6 @@ export default function GuestV3RoomPage() {
     init();
   }, [store._hasHydrated, store.roomId, store.role]);
 
-  // Start camera
   const startCamera = async () => {
     try {
       const videoConstraints: MediaTrackConstraints = {
@@ -274,7 +248,6 @@ export default function GuestV3RoomPage() {
     }
   };
 
-  // Register v3 signal handlers
   useEffect(() => {
     const handleV3Signal = (message: any) => {
       guestManagement.registerSignalHandlers(message);
@@ -284,7 +257,6 @@ export default function GuestV3RoomPage() {
         case 'guest-joined-v3':
           if (message.guestId === store.userId) {
             setSessionState(SessionState.GUEST_CONNECTED);
-            // Apply host settings
             if (message.hostSettings) {
               if (message.hostSettings.selectedFrameLayoutId) {
                 store.setSelectedFrameLayoutId(message.hostSettings.selectedFrameLayoutId);
@@ -313,7 +285,6 @@ export default function GuestV3RoomPage() {
       on(type, handleV3Signal);
     });
 
-    // WebRTC peer events
     on('peer-joined', (message: any) => {
       store.setPeerId(message.userId);
     });
@@ -323,7 +294,6 @@ export default function GuestV3RoomPage() {
     });
   }, [on, guestManagement.registerSignalHandlers, photoCapture.handleSignalMessage]);
 
-  // Listen for chroma key settings from host
   useEffect(() => {
     on('chromakey-settings', (message: any) => {
       if (message.settings) {
@@ -349,21 +319,18 @@ export default function GuestV3RoomPage() {
     });
   }, [on, store]);
 
-  // Setup local video
   useEffect(() => {
     if (localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream]);
 
-  // Setup remote video
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = remoteStream;
     }
   }, [remoteStream]);
 
-  // Toggle flip
   const toggleGuestFlip = () => {
     const newFlipState = !guestFlipHorizontal;
     setGuestFlipHorizontal(newFlipState);
@@ -378,7 +345,6 @@ export default function GuestV3RoomPage() {
     }
   };
 
-  // Toggle local mic
   const toggleLocalMic = () => {
     if (localStream) {
       const audioTracks = localStream.getAudioTracks();
@@ -389,7 +355,6 @@ export default function GuestV3RoomPage() {
     }
   };
 
-  // Leave room
   const leaveRoom = () => {
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
@@ -399,7 +364,6 @@ export default function GuestV3RoomPage() {
     router.push('/guest-v3/ready');
   };
 
-  // Settings modal
   const openSettings = () => {
     setPendingVideoDeviceId(selectedVideoDeviceId);
     setPendingAudioDeviceId(selectedAudioDeviceId);
@@ -464,7 +428,6 @@ export default function GuestV3RoomPage() {
     }
   };
 
-  // Download result
   const downloadResult = async () => {
     if (!lastSessionResult?.frameResultUrl) return;
 
@@ -497,7 +460,6 @@ export default function GuestV3RoomPage() {
     }
   };
 
-  // Cleanup
   useEffect(() => {
     return () => {
       if (localStream) {
@@ -506,73 +468,102 @@ export default function GuestV3RoomPage() {
     };
   }, []);
 
-  // Result view
+  // ─── Result View ───
   if (sessionState === SessionState.COMPLETED && lastSessionResult) {
     return (
-      <div className="flex flex-col h-full p-4 gap-4 overflow-hidden bg-light">
-        <div className="flex-shrink-0 flex items-center justify-between bg-white border-2 border-neutral rounded-lg p-3 shadow-md">
-          <h1 className="text-lg font-bold text-dark">촬영 완료!</h1>
+      <div className="flex flex-col h-full overflow-hidden bg-dark relative">
+        {/* Background glow */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: 'radial-gradient(ellipse at center top, rgba(252, 113, 43, 0.08) 0%, transparent 60%)',
+        }} />
+
+        {/* Top bar */}
+        <div className="flex-shrink-0 flex items-center justify-between p-4 relative z-10">
+          <h1 className="font-display text-lg font-bold text-white">촬영 완료</h1>
           <button
             onClick={leaveRoom}
-            className="px-4 py-2 bg-neutral hover:bg-neutral-dark text-dark rounded-lg font-semibold text-sm transition"
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-full font-semibold text-sm transition"
           >
             나가기
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 flex flex-col bg-white border-2 border-neutral rounded-lg p-3 shadow-md">
-          <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden">
+        {/* Photo result */}
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 relative z-10">
+          <div className="animate-bounce-in max-w-sm w-full">
             {lastSessionResult.frameResultUrl ? (
-              <img
-                src={lastSessionResult.frameResultUrl.startsWith('blob:')
-                  ? lastSessionResult.frameResultUrl
-                  : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
-                }
-                alt="촬영 결과"
-                className="max-w-full max-h-full object-contain rounded-lg"
-              />
+              <div className="relative">
+                <img
+                  src={lastSessionResult.frameResultUrl.startsWith('blob:')
+                    ? lastSessionResult.frameResultUrl
+                    : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
+                  }
+                  alt="촬영 결과"
+                  className="w-full rounded-2xl shadow-2xl"
+                  style={{ boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)' }}
+                />
+                {/* Photo border glow */}
+                <div className="absolute -inset-1 rounded-2xl opacity-20 blur-md pointer-events-none"
+                  style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)' }} />
+              </div>
             ) : (
-              <div className="text-dark/50">결과를 불러오는 중...</div>
+              <div className="text-white/30 text-center py-12">결과를 불러오는 중...</div>
             )}
           </div>
+        </div>
+
+        {/* Download button */}
+        <div className="flex-shrink-0 p-4 pb-8 relative z-10">
           <button
             onClick={downloadResult}
-            className="flex-shrink-0 mt-3 w-full px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
+            className="booth-btn w-full py-4 rounded-xl font-display font-bold text-base shadow-lg touch-manipulation"
+            style={{
+              background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
+              color: 'white',
+              boxShadow: '0 8px 24px rgba(252, 113, 43, 0.3)',
+            }}
           >
-            사진 다운로드
+            <div className="flex items-center justify-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              사진 저장하기
+            </div>
           </button>
         </div>
       </div>
     );
   }
 
-  // Main video view
+  // ─── Main Video View ───
   return (
-    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
+    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden bg-light">
       <FlashOverlay show={showFlash} />
 
-      {/* Countdown Overlay */}
       <CountdownOverlay
         countdown={photoCapture.countdown}
         frameLayout={selectedLayout || null}
       />
 
       {/* Navbar */}
-      <div className="flex-shrink-0 flex items-center gap-2 bg-white border-2 border-neutral rounded-lg p-2 shadow-md">
+      <div className="flex-shrink-0 flex items-center gap-2 booth-card px-3 py-2">
         <button
           onClick={leaveRoom}
-          className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-neutral/40 hover:bg-neutral rounded-lg transition"
+          className="flex-shrink-0 w-9 h-9 flex items-center justify-center bg-neutral/30 hover:bg-neutral/50 rounded-full transition"
           title="나가기"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
         </button>
 
         {store.roomId && (
-          <div className="bg-secondary px-3 py-1.5 rounded-lg shadow-md">
-            <span className="text-xs opacity-90 text-white">Room:</span>
-            <span className="text-sm font-bold ml-1 text-white">{store.roomId}</span>
+          <div className="px-3 py-1.5 rounded-full shadow-sm" style={{
+            background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
+          }}>
+            <span className="text-xs font-display font-bold text-white tracking-wider">{store.roomId}</span>
           </div>
         )}
 
@@ -588,13 +579,13 @@ export default function GuestV3RoomPage() {
         {/* Mic mute */}
         <button
           onClick={toggleLocalMic}
-          className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg transition ${
-            localMicMuted ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-neutral/40 hover:bg-neutral text-dark'
+          className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full transition ${
+            localMicMuted ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-neutral/30 hover:bg-neutral/50 text-dark'
           }`}
           title={localMicMuted ? '마이크 켜기' : '마이크 끄기'}
         >
           {localMicMuted ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="1" y1="1" x2="23" y2="23" />
               <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
               <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
@@ -602,7 +593,7 @@ export default function GuestV3RoomPage() {
               <line x1="8" y1="23" x2="16" y2="23" />
             </svg>
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
               <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
               <line x1="12" y1="19" x2="12" y2="23" />
@@ -614,18 +605,18 @@ export default function GuestV3RoomPage() {
         {/* Remote audio */}
         <button
           onClick={() => setRemoteAudioEnabled(!remoteAudioEnabled)}
-          className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg transition ${
-            remoteAudioEnabled ? 'bg-neutral/40 hover:bg-neutral text-dark' : 'bg-red-500 hover:bg-red-600 text-white'
+          className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full transition ${
+            remoteAudioEnabled ? 'bg-neutral/30 hover:bg-neutral/50 text-dark' : 'bg-red-500 hover:bg-red-600 text-white'
           }`}
           title={remoteAudioEnabled ? '상대방 음성 끄기' : '상대방 음성 켜기'}
         >
           {remoteAudioEnabled ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
               <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
             </svg>
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
               <line x1="23" y1="9" x2="17" y2="15" />
               <line x1="17" y1="9" x2="23" y2="15" />
@@ -636,10 +627,10 @@ export default function GuestV3RoomPage() {
         {/* Settings */}
         <button
           onClick={openSettings}
-          className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-neutral/40 hover:bg-neutral rounded-lg transition"
-          title="Settings"
+          className="flex-shrink-0 w-9 h-9 flex items-center justify-center bg-neutral/30 hover:bg-neutral/50 rounded-full transition"
+          title="설정"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="1" />
             <circle cx="12" cy="5" r="1" />
             <circle cx="12" cy="19" r="1" />
@@ -663,7 +654,7 @@ export default function GuestV3RoomPage() {
       />
 
       {/* Video Display */}
-      <div className="flex-1 min-h-0 bg-gray-800 rounded-lg p-2 flex items-center justify-center">
+      <div className="flex-1 min-h-0 booth-video-container p-1.5 flex items-center justify-center">
         <VideoDisplayPanel
           role="guest"
           isActive={isCameraActive}
@@ -683,13 +674,16 @@ export default function GuestV3RoomPage() {
       </div>
 
       {/* Bottom Panel */}
-      <div className="flex-shrink-0 overflow-y-auto max-h-[40vh]">
+      <div className="flex-shrink-0 overflow-y-auto max-h-[40vh] booth-scroll">
         {/* Capturing state */}
         {sessionState === SessionState.CAPTURING && (
-          <div className="bg-white border-2 border-primary rounded-lg p-4 shadow-md">
-            <div className="flex items-center justify-center gap-4">
-              <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse" />
-              <div className="text-lg font-semibold text-dark">
+          <div className="booth-card p-5 animate-slide-up" style={{ borderColor: '#FC712B' }}>
+            <div className="flex items-center justify-center gap-3">
+              <div className="relative">
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-recording-pulse" />
+                <div className="absolute inset-0 w-3 h-3 bg-red-500 rounded-full animate-pulse-ring" />
+              </div>
+              <div className="font-display text-lg font-bold text-dark">
                 {photoCapture.countdown !== null && photoCapture.countdown > 0
                   ? `${photoCapture.countdown}초 후 촬영`
                   : photoCapture.uploadProgress > 0
@@ -702,35 +696,34 @@ export default function GuestV3RoomPage() {
 
         {/* Processing state */}
         {sessionState === SessionState.PROCESSING && (
-          <div className="bg-white border-2 border-secondary rounded-lg p-4 shadow-md">
+          <div className="booth-card-warm p-5 animate-slide-up">
             <div className="flex items-center justify-center gap-3">
-              <div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
-              <div className="text-sm font-semibold text-dark">사진 합성 중...</div>
+              <div className="w-6 h-6 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+              <div className="font-display text-sm font-semibold text-dark">사진 합성 중...</div>
             </div>
           </div>
         )}
 
         {/* Default state - waiting for host action */}
         {sessionState === SessionState.GUEST_CONNECTED && (
-          <div className="bg-white border-2 border-neutral rounded-lg p-3 shadow-md">
+          <div className="booth-card px-4 py-3 animate-fade-in">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-sm text-dark/70">
-                {remoteStream ? (
-                  <span>Host 연결됨 - 촬영 대기 중</span>
-                ) : (
-                  <span>Host를 기다리는 중...</span>
-                )}
+              <div className="flex items-center gap-2.5">
+                <div className={`w-2 h-2 rounded-full ${remoteStream ? 'bg-green-500' : 'bg-secondary animate-pulse'}`} />
+                <span className="text-sm text-dark/60 font-medium">
+                  {remoteStream ? 'Host 연결됨 - 촬영 대기 중' : 'Host를 기다리는 중...'}
+                </span>
               </div>
 
               <button
                 onClick={toggleGuestFlip}
-                className={`flex-shrink-0 px-4 py-2 rounded-lg font-semibold text-sm transition shadow-md ${
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition ${
                   guestFlipHorizontal
-                    ? 'bg-primary hover:bg-primary-dark text-white'
-                    : 'bg-neutral hover:bg-neutral-dark text-dark'
+                    ? 'bg-primary/10 text-primary border border-primary/20'
+                    : 'bg-neutral/30 text-dark/50 border border-neutral/50'
                 }`}
               >
-                {guestFlipHorizontal ? '반전 ON' : '반전 OFF'}
+                반전
               </button>
             </div>
           </div>

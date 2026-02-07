@@ -32,7 +32,6 @@ import { v4 as uuidv4 } from 'uuid';
 export default function HostV3RoomPage() {
   const router = useRouter();
   const store = useAppStore();
-  // Use v3 signaling path
   const wsUrl = (process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001/signaling').replace('/signaling', '/signaling-v3');
   const { connect, sendMessage, on, off, isConnected } = useSignaling({ wsUrl });
   const {
@@ -43,39 +42,29 @@ export default function HostV3RoomPage() {
     resetForNextGuest,
   } = useWebRTC({ sendMessage, on });
 
-  // Load persisted settings
   const {
     settings: savedSettings,
     isLoaded: settingsLoaded,
     updateSetting,
   } = useHostSettings();
 
-  // Session state
   const [sessionState, setSessionState] = useState<SessionState>(SessionState.IDLE);
-
-  // Camera/Source state
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [sourceType, setSourceType] = useState<'camera' | 'screen'>('camera');
 
-  // Chroma key
   const [chromaKeyEnabled, setChromaKeyEnabled] = useState(true);
   const [sensitivity, setSensitivity] = useState(50);
   const [smoothness, setSmoothness] = useState(10);
   const [chromaKeyColor, setChromaKeyColor] = useState('#00ff00');
   const [guestBlurAmount, setGuestBlurAmount] = useState(30);
 
-  // Display options
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
   const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
 
-  // Flash
   const [showFlash, setShowFlash] = useState(false);
-
-  // Audio
   const [remoteAudioEnabled, setRemoteAudioEnabled] = useState(true);
   const [localMicMuted, setLocalMicMuted] = useState(false);
 
-  // Device selection
   const { audioDevices, audioOutputDevices, refreshDevices } = useMediaDevices();
   const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState<string | null>(
     store.selectedAudioDeviceId
@@ -84,27 +73,22 @@ export default function HostV3RoomPage() {
     store.selectedAudioOutputDeviceId
   );
 
-  // Settings modal
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [pendingAudioDeviceId, setPendingAudioDeviceId] = useState<string | null>(null);
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
-  // Result state
   const [lastSessionResult, setLastSessionResult] = useState<{
     sessionId: string;
     frameResultUrl: string;
   } | null>(null);
 
-  // Video recording
   const videoRecorderRef = useRef<VideoRecorder | null>(null);
   const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
   const [isVideoProcessing, setIsVideoProcessing] = useState(false);
   const [videoProcessingProgress, setVideoProcessingProgress] = useState('');
 
-  // Frame layout
   const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
 
-  // Refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -112,7 +96,9 @@ export default function HostV3RoomPage() {
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
   const initializedRef = useRef(false);
 
-  // V3 Guest Management Hook
+  // Chroma key settings panel toggle
+  const [showChromaSettings, setShowChromaSettings] = useState(false);
+
   const guestManagement = useGuestManagement({
     roomId: store.roomId || '',
     userId: store.userId,
@@ -131,7 +117,6 @@ export default function HostV3RoomPage() {
     createWebRTCOffer: createOffer,
   });
 
-  // V3 Photo Capture Hook
   const photoCapture = useV3PhotoCapture({
     roomId: store.roomId || '',
     userId: store.userId,
@@ -158,7 +143,6 @@ export default function HostV3RoomPage() {
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
       console.log('[Host V3] Session complete:', sessionId);
-      // Apply frame overlay client-side (server returns merged photo without frame)
       const layout = getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
@@ -166,9 +150,8 @@ export default function HostV3RoomPage() {
           const fullUrl = `${API_URL}${frameResultUrl}`;
           const framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
-          console.log('[Host V3] Frame applied to photo');
         } catch (err) {
-          console.error('[Host V3] Failed to apply frame, using merged photo:', err);
+          console.error('[Host V3] Failed to apply frame:', err);
           setLastSessionResult({ sessionId, frameResultUrl });
         }
       } else {
@@ -183,7 +166,6 @@ export default function HostV3RoomPage() {
     },
   });
 
-  // Use chroma key for local video (Host's screen share)
   useChromaKey({
     videoElement: localVideoRef.current,
     canvasElement: localCanvasRef.current,
@@ -197,11 +179,6 @@ export default function HostV3RoomPage() {
     flipHorizontal: hostFlipHorizontal,
   });
 
-  // Remote chroma key not needed for host (guest sends raw video)
-
-  // Composite canvas (Guest background + Host foreground)
-  // Note: Frame overlay is NOT drawn into canvas - it's shown as CSS overlay during streaming
-  // and applied via composeVideoWithWebGL post-processing after recording
   useCompositeCanvas({
     compositeCanvas: compositeCanvasRef.current,
     backgroundVideo: remoteVideoRef.current,
@@ -214,7 +191,6 @@ export default function HostV3RoomPage() {
     hostFlipHorizontal,
   });
 
-  // Apply saved settings on load
   useEffect(() => {
     if (!settingsLoaded) return;
     setChromaKeyEnabled(savedSettings.chromaKeyEnabled);
@@ -226,7 +202,6 @@ export default function HostV3RoomPage() {
     setGuestBlurAmount(savedSettings.guestBlurAmount);
   }, [settingsLoaded]);
 
-  // Initialize and join room
   useEffect(() => {
     if (initializedRef.current) return;
     if (!store._hasHydrated) return;
@@ -240,21 +215,15 @@ export default function HostV3RoomPage() {
 
     const init = async () => {
       try {
-        // Generate room ID
         const roomId = uuidv4().slice(0, 6).toUpperCase();
         store.setRoomId(roomId);
-
-        // Connect to signaling server
         await connect();
-
-        // Join room as host
         sendMessage({
           type: 'join',
           roomId,
           userId: store.userId,
           role: 'host',
         });
-
         setSessionState(SessionState.WAITING_FOR_GUEST);
       } catch (error) {
         console.error('[Host V3] Init error:', error);
@@ -266,22 +235,15 @@ export default function HostV3RoomPage() {
     init();
   }, [store._hasHydrated, store.role]);
 
-  // Register v3 signal handlers
   useEffect(() => {
     const handleV3Signal = (message: any) => {
-      // Set peerId BEFORE guestManagement processes the message,
-      // because guestManagement.handleGuestJoined calls createWebRTCOffer
-      // which needs peerId to be set in the store to send the offer SDP.
       if (message.type === 'guest-joined-v3' && message.guestId) {
         store.setPeerId(message.guestId);
       }
 
-      // Route to guest management
       guestManagement.registerSignalHandlers(message);
-      // Route to photo capture
       photoCapture.handleSignalMessage(message);
 
-      // Handle session state transitions
       switch (message.type) {
         case 'guest-joined-v3':
           setSessionState(SessionState.GUEST_CONNECTED);
@@ -296,15 +258,12 @@ export default function HostV3RoomPage() {
           setSessionState(SessionState.WAITING_FOR_GUEST);
           break;
         case 'countdown-tick-v3':
-          // Start recording at the beginning of countdown (count === 5)
           if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
             videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
-              // Post-process: apply frame overlay using composeVideoWithWebGL
               const layout = getLayoutById(store.selectedFrameLayoutId);
               if (layout && layout.frameSrc) {
                 try {
                   setIsVideoProcessing(true);
-                  console.log('[Host V3] Post-processing video with frame overlay...');
                   const videoSource: VideoSource = {
                     blob: rawBlob,
                     startTime: 0,
@@ -322,9 +281,8 @@ export default function HostV3RoomPage() {
                     (msg) => setVideoProcessingProgress(msg)
                   );
                   setRecordedVideoBlob(composedBlob);
-                  console.log('[Host V3] Video post-processing complete');
                 } catch (err) {
-                  console.error('[Host V3] Video post-processing failed, using raw video:', err);
+                  console.error('[Host V3] Video post-processing failed:', err);
                   setRecordedVideoBlob(rawBlob);
                 } finally {
                   setIsVideoProcessing(false);
@@ -337,7 +295,6 @@ export default function HostV3RoomPage() {
           }
           break;
         case 'capture-now-v3':
-          // Stop recording 2 seconds after capture
           setTimeout(() => {
             if (videoRecorderRef.current?.isRecording()) {
               videoRecorderRef.current.stopRecording();
@@ -347,7 +304,6 @@ export default function HostV3RoomPage() {
       }
     };
 
-    // Register handlers for all v3 message types
     const v3MessageTypes = [
       'guest-joined-v3',
       'guest-left-v3',
@@ -363,31 +319,23 @@ export default function HostV3RoomPage() {
       on(type, handleV3Signal);
     });
 
-    // Also register for WebRTC peer events
     on('peer-joined', (message: any) => {
-      console.log('[Host V3] Peer joined:', message.userId);
       store.setPeerId(message.userId);
     });
 
     on('peer-left', (message: any) => {
-      console.log('[Host V3] Peer left:', message.userId);
       store.setPeerId(null);
     });
   }, [on, guestManagement.registerSignalHandlers, photoCapture.handleSignalMessage]);
 
-  // Start screen share
   const startScreenShare = async () => {
     try {
       const stream = await startLocalStream(async () => {
         const mediaStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: false,
         });
 
-        // Add audio track
         const audioConstraints: MediaTrackConstraints | boolean = store.selectedAudioDeviceId
           ? { deviceId: { exact: store.selectedAudioDeviceId } }
           : true;
@@ -411,7 +359,6 @@ export default function HostV3RoomPage() {
       setSourceType('screen');
       refreshDevices();
 
-      // Handle screen share stop
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.onended = () => {
@@ -419,7 +366,6 @@ export default function HostV3RoomPage() {
         };
       }
 
-      // Send chroma key settings to guest
       if (store.roomId) {
         sendMessage({
           type: 'chromakey-settings',
@@ -437,7 +383,6 @@ export default function HostV3RoomPage() {
     }
   };
 
-  // Start camera
   const startCamera = async () => {
     try {
       const stream = await startLocalStream(async () => {
@@ -464,7 +409,6 @@ export default function HostV3RoomPage() {
       setSourceType('camera');
       refreshDevices();
 
-      // Send chroma key settings
       if (store.roomId) {
         sendMessage({
           type: 'chromakey-settings',
@@ -482,25 +426,21 @@ export default function HostV3RoomPage() {
     }
   };
 
-  // Handle capture start
   const handleStartCapture = () => {
     if (!guestManagement.currentGuestId) {
       alert('게스트가 연결되어 있지 않습니다.');
       return;
     }
-
     setSessionState(SessionState.CAPTURING);
     photoCapture.startCapture();
   };
 
-  // Download recorded video
   const handleDownloadVideo = () => {
     if (!recordedVideoBlob) return;
     const ext = recordedVideoBlob.type.includes('mp4') ? 'mp4' : 'webm';
     downloadVideo(recordedVideoBlob, `vshot-v3-${store.roomId}-${Date.now()}.${ext}`);
   };
 
-  // Prepare for next guest
   const handlePrepareForNextGuest = () => {
     setLastSessionResult(null);
     setRecordedVideoBlob(null);
@@ -510,7 +450,6 @@ export default function HostV3RoomPage() {
     setSessionState(SessionState.WAITING_FOR_GUEST);
   };
 
-  // Toggle local mic
   const toggleLocalMic = () => {
     if (localStream) {
       const audioTracks = localStream.getAudioTracks();
@@ -521,7 +460,6 @@ export default function HostV3RoomPage() {
     }
   };
 
-  // Leave room
   const leaveRoom = () => {
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
@@ -531,7 +469,6 @@ export default function HostV3RoomPage() {
     router.push('/host-v3/ready');
   };
 
-  // Settings modal handlers
   const openSettings = () => {
     setPendingAudioDeviceId(selectedAudioDeviceId);
     setPendingAudioOutputDeviceId(selectedAudioOutputDeviceId);
@@ -560,7 +497,6 @@ export default function HostV3RoomPage() {
     }
   };
 
-  // Send chroma key settings when they change
   const syncChromaKeySettings = useCallback(() => {
     if (store.roomId) {
       sendMessage({
@@ -576,7 +512,6 @@ export default function HostV3RoomPage() {
     }
   }, [store.roomId, chromaKeyEnabled, chromaKeyColor, sensitivity, smoothness, sendMessage]);
 
-  // Send host display options
   const toggleHostFlip = () => {
     const newFlipState = !hostFlipHorizontal;
     setHostFlipHorizontal(newFlipState);
@@ -591,7 +526,6 @@ export default function HostV3RoomPage() {
     }
   };
 
-  // Download result photo
   const downloadResult = async () => {
     if (!lastSessionResult?.frameResultUrl) return;
 
@@ -624,7 +558,6 @@ export default function HostV3RoomPage() {
     }
   };
 
-  // Initialize VideoRecorder
   useEffect(() => {
     videoRecorderRef.current = new VideoRecorder(() => compositeCanvasRef.current);
     return () => {
@@ -633,7 +566,6 @@ export default function HostV3RoomPage() {
     };
   }, []);
 
-  // Cleanup
   useEffect(() => {
     return () => {
       if (localStream) {
@@ -642,7 +574,6 @@ export default function HostV3RoomPage() {
     };
   }, []);
 
-  // Broadcast host display options when guest connects or flip changes
   useEffect(() => {
     if (store.roomId && store.peerId) {
       sendMessage({
@@ -650,11 +581,9 @@ export default function HostV3RoomPage() {
         roomId: store.roomId,
         options: { flipHorizontal: hostFlipHorizontal },
       });
-      console.log('[Host V3] Sent display options:', { flipHorizontal: hostFlipHorizontal });
     }
   }, [store.roomId, store.peerId, hostFlipHorizontal, sendMessage]);
 
-  // Listen for guest display options
   useEffect(() => {
     on('guest-display-options', (message: any) => {
       if (message.options) {
@@ -663,14 +592,12 @@ export default function HostV3RoomPage() {
     });
   }, [on]);
 
-  // Setup remote video
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = remoteStream;
     }
   }, [remoteStream]);
 
-  // Setup local video
   useEffect(() => {
     if (localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
@@ -678,10 +605,9 @@ export default function HostV3RoomPage() {
   }, [localStream]);
 
   return (
-    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
+    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden bg-light">
       <FlashOverlay show={showFlash} />
 
-      {/* Countdown Overlay */}
       <CountdownOverlay
         countdown={photoCapture.countdown}
         frameLayout={selectedLayout || null}
@@ -719,7 +645,7 @@ export default function HostV3RoomPage() {
       />
 
       {/* Video Display */}
-      <div className="flex-1 min-h-0 bg-gray-800 rounded-lg p-2 flex items-center justify-center">
+      <div className="flex-1 min-h-0 booth-video-container p-1.5 flex items-center justify-center">
         <VideoDisplayPanel
           role="host"
           isActive={isCameraActive}
@@ -739,23 +665,34 @@ export default function HostV3RoomPage() {
       </div>
 
       {/* Bottom Panel */}
-      <div className="flex-shrink-0 overflow-y-auto max-h-[40vh]">
-        {/* Source selection - shown when no source active */}
+      <div className="flex-shrink-0 overflow-y-auto max-h-[40vh] booth-scroll">
+        {/* Source selection */}
         {!isCameraActive && (
-          <div className="bg-white border-2 border-neutral rounded-lg p-4 shadow-md">
-            <p className="text-sm text-dark/70 mb-3">영상 소스를 선택해주세요</p>
+          <div className="booth-card-warm p-5 animate-slide-up">
+            <p className="font-display text-xs font-semibold text-dark/40 uppercase tracking-wider mb-3">
+              영상 소스 선택
+            </p>
             <div className="flex gap-3">
               <button
                 onClick={startScreenShare}
-                className="flex-1 px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
+                className="booth-btn flex-1 flex flex-col items-center gap-2 px-4 py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-semibold transition shadow-md shadow-primary/15"
               >
-                화면 공유
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+                <span className="text-sm">화면 공유</span>
               </button>
               <button
                 onClick={startCamera}
-                className="flex-1 px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
+                className="booth-btn flex-1 flex flex-col items-center gap-2 px-4 py-4 bg-secondary hover:bg-secondary-dark text-white rounded-xl font-semibold transition shadow-md shadow-secondary/15"
               >
-                카메라
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+                <span className="text-sm">카메라</span>
               </button>
             </div>
           </div>
@@ -763,129 +700,149 @@ export default function HostV3RoomPage() {
 
         {/* Waiting for guest */}
         {isCameraActive && guestManagement.waitingForGuest && (
-          <GuestWaitingIndicator
-            waitingForGuest={true}
-            completedSessionCount={guestManagement.sessionCount}
-          />
+          <div className="animate-slide-up">
+            <GuestWaitingIndicator
+              waitingForGuest={true}
+              completedSessionCount={guestManagement.sessionCount}
+            />
+          </div>
         )}
 
         {/* Guest connected - ready to capture */}
         {isCameraActive &&
           !guestManagement.waitingForGuest &&
           sessionState === SessionState.GUEST_CONNECTED && (
-            <div className="space-y-3">
-              {/* Chroma Key Settings */}
-              <SettingsPanel title="크로마키 설정">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-dark">크로마키</span>
-                    <button
-                      onClick={() => {
-                        const newVal = !chromaKeyEnabled;
-                        setChromaKeyEnabled(newVal);
-                        updateSetting('chromaKeyEnabled', newVal);
-                        syncChromaKeySettings();
-                      }}
-                      className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${
-                        chromaKeyEnabled
-                          ? 'bg-primary text-white'
-                          : 'bg-neutral text-dark'
-                      }`}
-                    >
-                      {chromaKeyEnabled ? 'ON' : 'OFF'}
-                    </button>
-                  </div>
+            <div className="space-y-3 animate-slide-up">
+              {/* Chroma Key Toggle + Capture */}
+              <div className="booth-card p-4">
+                {/* Quick controls row */}
+                <div className="flex items-center gap-2 mb-3">
+                  <button
+                    onClick={() => {
+                      const newVal = !chromaKeyEnabled;
+                      setChromaKeyEnabled(newVal);
+                      updateSetting('chromaKeyEnabled', newVal);
+                      syncChromaKeySettings();
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition ${
+                      chromaKeyEnabled
+                        ? 'bg-green-500/10 text-green-600 border border-green-500/20'
+                        : 'bg-neutral/30 text-dark/50 border border-neutral/50'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${chromaKeyEnabled ? 'bg-green-500' : 'bg-neutral'}`} />
+                    크로마키
+                  </button>
 
-                  {chromaKeyEnabled && (
-                    <>
-                      <div>
-                        <label className="text-xs text-dark/60 block mb-1">크로마키 색상</label>
-                        <input
-                          type="color"
-                          value={chromaKeyColor}
-                          onChange={(e) => {
-                            setChromaKeyColor(e.target.value);
-                            updateSetting('chromaKeyColor', e.target.value);
-                          }}
-                          onBlur={syncChromaKeySettings}
-                          className="w-full h-8 rounded cursor-pointer"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-dark/60 block mb-1">
-                          민감도: {sensitivity}
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={sensitivity}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            setSensitivity(val);
-                            updateSetting('sensitivity', val);
-                          }}
-                          onMouseUp={syncChromaKeySettings}
-                          onTouchEnd={syncChromaKeySettings}
-                          className="w-full accent-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-dark/60 block mb-1">
-                          부드러움: {smoothness}
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="50"
-                          value={smoothness}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            setSmoothness(val);
-                            updateSetting('smoothness', val);
-                          }}
-                          onMouseUp={syncChromaKeySettings}
-                          onTouchEnd={syncChromaKeySettings}
-                          className="w-full accent-primary"
-                        />
-                      </div>
-                    </>
-                  )}
+                  <button
+                    onClick={toggleHostFlip}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition ${
+                      hostFlipHorizontal
+                        ? 'bg-primary/10 text-primary border border-primary/20'
+                        : 'bg-neutral/30 text-dark/50 border border-neutral/50'
+                    }`}
+                  >
+                    반전
+                  </button>
 
-                  {/* Flip toggle */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-dark">좌우 반전</span>
-                    <button
-                      onClick={toggleHostFlip}
-                      className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${
-                        hostFlipHorizontal
-                          ? 'bg-primary text-white'
-                          : 'bg-neutral text-dark'
-                      }`}
-                    >
-                      {hostFlipHorizontal ? 'ON' : 'OFF'}
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setShowChromaSettings(!showChromaSettings)}
+                    className="ml-auto flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold bg-neutral/30 text-dark/60 hover:bg-neutral/50 transition"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    설정
+                  </button>
                 </div>
-              </SettingsPanel>
+
+                {/* Expanded chroma settings */}
+                {showChromaSettings && chromaKeyEnabled && (
+                  <div className="space-y-3 pt-3 border-t border-neutral/30 animate-slide-up">
+                    <div>
+                      <label className="text-xs text-dark/50 block mb-1.5">크로마키 색상</label>
+                      <input
+                        type="color"
+                        value={chromaKeyColor}
+                        onChange={(e) => {
+                          setChromaKeyColor(e.target.value);
+                          updateSetting('chromaKeyColor', e.target.value);
+                        }}
+                        onBlur={syncChromaKeySettings}
+                        className="w-full h-8 rounded-lg cursor-pointer border border-neutral/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-dark/50 flex justify-between mb-1.5">
+                        <span>민감도</span>
+                        <span className="font-mono text-dark/40">{sensitivity}</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={sensitivity}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setSensitivity(val);
+                          updateSetting('sensitivity', val);
+                        }}
+                        onMouseUp={syncChromaKeySettings}
+                        onTouchEnd={syncChromaKeySettings}
+                        className="w-full accent-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-dark/50 flex justify-between mb-1.5">
+                        <span>부드러움</span>
+                        <span className="font-mono text-dark/40">{smoothness}</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="50"
+                        value={smoothness}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setSmoothness(val);
+                          updateSetting('smoothness', val);
+                        }}
+                        onMouseUp={syncChromaKeySettings}
+                        onTouchEnd={syncChromaKeySettings}
+                        className="w-full accent-primary"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Capture button */}
               <button
                 onClick={handleStartCapture}
                 disabled={!remoteStream}
-                className="w-full px-6 py-4 bg-primary hover:bg-primary-dark disabled:opacity-50 text-white rounded-lg font-bold text-lg transition shadow-lg active:scale-95 touch-manipulation"
+                className="booth-btn w-full py-4 bg-primary hover:bg-primary-dark disabled:opacity-40 text-white rounded-xl font-display font-bold text-lg shadow-lg shadow-primary/25 touch-manipulation transition-all"
               >
-                촬영 시작
+                <div className="flex items-center justify-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                  촬영 시작
+                </div>
               </button>
             </div>
           )}
 
         {/* Capturing state */}
         {sessionState === SessionState.CAPTURING && (
-          <div className="bg-white border-2 border-primary rounded-lg p-4 shadow-md">
-            <div className="flex items-center justify-center gap-4">
-              <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse" />
-              <div className="text-lg font-semibold text-dark">
+          <div className="booth-card p-5 border-primary/30 animate-slide-up" style={{ borderColor: '#FC712B' }}>
+            <div className="flex items-center justify-center gap-3">
+              <div className="relative">
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-recording-pulse" />
+                <div className="absolute inset-0 w-3 h-3 bg-red-500 rounded-full animate-pulse-ring" />
+              </div>
+              <div className="font-display text-lg font-bold text-dark">
                 {photoCapture.countdown !== null && photoCapture.countdown > 0
                   ? `${photoCapture.countdown}초 후 촬영`
                   : photoCapture.uploadProgress > 0
@@ -898,64 +855,69 @@ export default function HostV3RoomPage() {
 
         {/* Processing state */}
         {sessionState === SessionState.PROCESSING && (
-          <div className="bg-white border-2 border-secondary rounded-lg p-4 shadow-md">
+          <div className="booth-card-warm p-5 animate-slide-up">
             <div className="flex items-center justify-center gap-3">
-              <div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
-              <div className="text-sm font-semibold text-dark">사진 합성 중...</div>
+              <div className="w-6 h-6 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+              <div className="font-display text-sm font-semibold text-dark">사진 합성 중...</div>
             </div>
           </div>
         )}
 
         {/* Completed state */}
         {sessionState === SessionState.COMPLETED && lastSessionResult && (
-          <div className="space-y-3">
-            <div className="bg-white border-2 border-primary rounded-lg p-4 shadow-md">
-              <div className="flex items-center justify-center gap-2 p-2 bg-green-100 rounded-lg mb-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600">
+          <div className="space-y-3 animate-slide-up">
+            <div className="booth-card p-5">
+              {/* Success badge */}
+              <div className="flex items-center justify-center gap-2 p-2.5 bg-green-50 rounded-xl mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                   <polyline points="22 4 12 14.01 9 11.01" />
                 </svg>
-                <span className="text-sm text-green-700 font-semibold">촬영 완료!</span>
+                <span className="text-sm text-green-700 font-display font-bold">촬영 완료!</span>
               </div>
 
               {/* Result preview */}
               {lastSessionResult.frameResultUrl && (
-                <div className="mb-3 flex justify-center">
+                <div className="mb-4 flex justify-center">
                   <img
                     src={lastSessionResult.frameResultUrl.startsWith('blob:')
                       ? lastSessionResult.frameResultUrl
                       : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
                     }
                     alt="촬영 결과"
-                    className="max-h-48 rounded-lg shadow-md"
+                    className="max-h-48 rounded-xl shadow-lg"
                   />
                 </div>
               )}
 
+              {/* Download buttons */}
               <div className="flex gap-2">
                 <button
                   onClick={downloadResult}
-                  className="flex-1 px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-lg font-semibold transition shadow-md"
+                  className="booth-btn flex-1 px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-xl font-semibold text-sm transition shadow-md shadow-secondary/15"
                 >
-                  사진 다운로드
+                  사진 저장
                 </button>
                 {isVideoProcessing && (
-                  <div className="flex-1 px-4 py-3 bg-dark/60 text-white rounded-lg font-semibold text-center text-sm">
+                  <div className="flex-1 px-4 py-3 bg-dark/10 text-dark/50 rounded-xl font-semibold text-center text-xs flex items-center justify-center gap-2">
+                    <div className="w-3 h-3 border-2 border-dark/30 border-t-transparent rounded-full animate-spin" />
                     {videoProcessingProgress || '영상 처리 중...'}
                   </div>
                 )}
                 {!isVideoProcessing && recordedVideoBlob && (
                   <button
                     onClick={handleDownloadVideo}
-                    className="flex-1 px-4 py-3 bg-dark hover:bg-dark/80 text-white rounded-lg font-semibold transition shadow-md"
+                    className="booth-btn flex-1 px-4 py-3 bg-dark hover:bg-dark-50 text-white rounded-xl font-semibold text-sm transition shadow-md"
                   >
-                    영상 다운로드
+                    영상 저장
                   </button>
                 )}
               </div>
+
+              {/* Next guest button */}
               <button
                 onClick={handlePrepareForNextGuest}
-                className="w-full mt-2 px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition shadow-md"
+                className="booth-btn w-full mt-3 px-4 py-3.5 bg-primary hover:bg-primary-dark text-white rounded-xl font-display font-bold transition shadow-md shadow-primary/20"
               >
                 다음 게스트
               </button>
