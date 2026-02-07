@@ -23,6 +23,11 @@ interface VideoDisplayPanelProps {
 
   // Audio settings
   remoteAudioEnabled?: boolean;
+
+  // Frame overlay (CSS-based, not drawn into canvas)
+  frameOverlaySrc?: string;
+  frameOverlayVisible?: boolean;
+  frameOverlayOpacity?: number;
 }
 
 export function VideoDisplayPanel({
@@ -37,6 +42,9 @@ export function VideoDisplayPanel({
   flipHorizontal,
   countdown,
   remoteAudioEnabled = true,
+  frameOverlaySrc,
+  frameOverlayVisible = false,
+  frameOverlayOpacity = 0.3,
 }: VideoDisplayPanelProps) {
   const isHost = role === 'host';
   const isGuest = role === 'guest';
@@ -123,6 +131,16 @@ export function VideoDisplayPanel({
               />
             </div>
           </div>
+        )}
+
+        {/* Frame overlay (CSS-based, not drawn into canvas - for preview only) */}
+        {frameOverlaySrc && frameOverlayVisible && (
+          <img
+            src={frameOverlaySrc}
+            alt=""
+            className="absolute inset-0 w-full h-full object-fill pointer-events-none"
+            style={{ opacity: frameOverlayOpacity }}
+          />
         )}
 
         {/* Countdown overlay */}

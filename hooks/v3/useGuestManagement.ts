@@ -11,7 +11,7 @@ const DEFAULT_HOST_SETTINGS: HostSettings = {
     similarity: 0.4,
     smoothness: 0.1,
   },
-  selectedFrameLayoutId: '2x2-grid',
+  selectedFrameLayoutId: '1cut-polaroid',
   recordingDuration: 10,
   captureInterval: 3,
 };

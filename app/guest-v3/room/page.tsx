@@ -676,6 +676,9 @@ export default function GuestV3RoomPage() {
           flipHorizontal={guestFlipHorizontal}
           countdown={photoCapture.countdown}
           remoteAudioEnabled={remoteAudioEnabled}
+          frameOverlaySrc={selectedLayout?.frameSrc}
+          frameOverlayVisible={true}
+          frameOverlayOpacity={1}
         />
       </div>
 

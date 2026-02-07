@@ -23,6 +23,7 @@ import { useV3PhotoCapture } from '@/hooks/v3/useV3PhotoCapture';
 import { generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
 import { useAppStore } from '@/lib/store';
 import { VideoRecorder, downloadVideo } from '@/lib/video-recorder';
+import { composeVideoWithWebGL, VideoSource } from '@/lib/webgl-video-composer';
 import { SessionState, SignalMessage } from '@/types';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -97,12 +98,11 @@ export default function HostV3RoomPage() {
   // Video recording
   const videoRecorderRef = useRef<VideoRecorder | null>(null);
   const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
+  const [isVideoProcessing, setIsVideoProcessing] = useState(false);
+  const [videoProcessingProgress, setVideoProcessingProgress] = useState('');
 
   // Frame layout
   const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
-
-  // Frame overlay image for composite canvas
-  const [frameOverlayImage, setFrameOverlayImage] = useState<HTMLImageElement | null>(null);
 
   // Refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -200,6 +200,8 @@ export default function HostV3RoomPage() {
   // Remote chroma key not needed for host (guest sends raw video)
 
   // Composite canvas (Guest background + Host foreground)
+  // Note: Frame overlay is NOT drawn into canvas - it's shown as CSS overlay during streaming
+  // and applied via composeVideoWithWebGL post-processing after recording
   useCompositeCanvas({
     compositeCanvas: compositeCanvasRef.current,
     backgroundVideo: remoteVideoRef.current,
@@ -210,23 +212,7 @@ export default function HostV3RoomPage() {
     height: RESOLUTION.VIDEO_HEIGHT,
     guestFlipHorizontal,
     hostFlipHorizontal,
-    frameOverlayImage,
-    frameOverlayEnabled: photoCapture.isCapturing && photoCapture.countdown !== null && photoCapture.countdown > 0,
-    frameOverlayOpacity: 0.3,
   });
-
-  // Preload frame overlay image
-  useEffect(() => {
-    if (!selectedLayout?.frameSrc) return;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      setFrameOverlayImage(img);
-      console.log('[Host V3] Frame overlay image preloaded:', selectedLayout.frameSrc);
-    };
-    img.onerror = () => console.error('[Host V3] Failed to load frame overlay:', selectedLayout.frameSrc);
-    img.src = selectedLayout.frameSrc;
-  }, [selectedLayout?.frameSrc]);
 
   // Apply saved settings on load
   useEffect(() => {
@@ -312,8 +298,41 @@ export default function HostV3RoomPage() {
         case 'countdown-tick-v3':
           // Start recording at the beginning of countdown (count === 5)
           if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
-            videoRecorderRef.current.startRecording(1, 0, (blob) => {
-              setRecordedVideoBlob(blob);
+            videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
+              // Post-process: apply frame overlay using composeVideoWithWebGL
+              const layout = getLayoutById(store.selectedFrameLayoutId);
+              if (layout && layout.frameSrc) {
+                try {
+                  setIsVideoProcessing(true);
+                  console.log('[Host V3] Post-processing video with frame overlay...');
+                  const videoSource: VideoSource = {
+                    blob: rawBlob,
+                    startTime: 0,
+                    endTime: 0,
+                    photoNumber: 1,
+                  };
+                  const composedBlob = await composeVideoWithWebGL(
+                    [videoSource],
+                    {
+                      width: RESOLUTION.VIDEO_WIDTH,
+                      height: RESOLUTION.VIDEO_HEIGHT,
+                      frameRate: 24,
+                      layout,
+                    },
+                    (msg) => setVideoProcessingProgress(msg)
+                  );
+                  setRecordedVideoBlob(composedBlob);
+                  console.log('[Host V3] Video post-processing complete');
+                } catch (err) {
+                  console.error('[Host V3] Video post-processing failed, using raw video:', err);
+                  setRecordedVideoBlob(rawBlob);
+                } finally {
+                  setIsVideoProcessing(false);
+                  setVideoProcessingProgress('');
+                }
+              } else {
+                setRecordedVideoBlob(rawBlob);
+              }
             }).catch((err) => console.error('[Host V3] Video recording start error:', err));
           }
           break;
@@ -485,6 +504,8 @@ export default function HostV3RoomPage() {
   const handlePrepareForNextGuest = () => {
     setLastSessionResult(null);
     setRecordedVideoBlob(null);
+    setIsVideoProcessing(false);
+    setVideoProcessingProgress('');
     photoCapture.reset();
     setSessionState(SessionState.WAITING_FOR_GUEST);
   };
@@ -711,6 +732,9 @@ export default function HostV3RoomPage() {
           flipHorizontal={hostFlipHorizontal}
           countdown={photoCapture.countdown}
           remoteAudioEnabled={remoteAudioEnabled}
+          frameOverlaySrc={selectedLayout?.frameSrc}
+          frameOverlayVisible={true}
+          frameOverlayOpacity={1}
         />
       </div>
 
@@ -915,7 +939,12 @@ export default function HostV3RoomPage() {
                 >
                   사진 다운로드
                 </button>
-                {recordedVideoBlob && (
+                {isVideoProcessing && (
+                  <div className="flex-1 px-4 py-3 bg-dark/60 text-white rounded-lg font-semibold text-center text-sm">
+                    {videoProcessingProgress || '영상 처리 중...'}
+                  </div>
+                )}
+                {!isVideoProcessing && recordedVideoBlob && (
                   <button
                     onClick={handleDownloadVideo}
                     className="flex-1 px-4 py-3 bg-dark hover:bg-dark/80 text-white rounded-lg font-semibold transition shadow-md"

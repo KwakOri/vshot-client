@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { RoomState, CapturedPhoto } from '@/types';
+import { getLayoutById } from '@/constants/frame-layouts';
 
 export interface ChromaKeySettings {
   enabled: boolean;
@@ -171,6 +172,10 @@ export const useAppStore = create<AppStore>()(
         guestFlipHorizontal: state.guestFlipHorizontal,
       }),
       onRehydrateStorage: () => (state) => {
+        // Validate persisted layout ID - fallback to default if invalid
+        if (state && !getLayoutById(state.selectedFrameLayoutId)) {
+          state.setSelectedFrameLayoutId('1cut-polaroid');
+        }
         // Mark hydration as complete
         state?.setHasHydrated(true);
       },

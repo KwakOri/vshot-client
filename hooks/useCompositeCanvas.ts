@@ -11,9 +11,6 @@ interface UseCompositeCanvasOptions {
   guestFlipHorizontal?: boolean;
   hostFlipHorizontal?: boolean;
   guestBlurAmount?: number; // Blur amount in pixels (0 = no blur)
-  frameOverlayImage?: HTMLImageElement | null;
-  frameOverlayEnabled?: boolean;
-  frameOverlayOpacity?: number; // 0-1, default 0.3
 }
 
 /**
@@ -31,9 +28,6 @@ export function useCompositeCanvas({
   guestFlipHorizontal = false,
   hostFlipHorizontal = false,
   guestBlurAmount = 0,
-  frameOverlayImage = null,
-  frameOverlayEnabled = false,
-  frameOverlayOpacity = 0.3,
 }: UseCompositeCanvasOptions) {
   const animationFrameRef = useRef<number | undefined>(undefined);
 
@@ -116,14 +110,6 @@ export function useCompositeCanvas({
         ctx.drawImage(foregroundCanvas, 0, 0, width, height);
       }
 
-      // Draw frame overlay on top (single loop - prevents flickering)
-      if (frameOverlayEnabled && frameOverlayImage && frameOverlayImage.complete && frameOverlayImage.naturalWidth > 0) {
-        ctx.save();
-        ctx.globalAlpha = frameOverlayOpacity;
-        ctx.drawImage(frameOverlayImage, 0, 0, width, height);
-        ctx.restore();
-      }
-
       animationFrameRef.current = requestAnimationFrame(drawComposite);
     };
 
@@ -145,7 +131,7 @@ export function useCompositeCanvas({
       }
       backgroundVideo.removeEventListener('loadedmetadata', startComposite);
     };
-  }, [localStream, remoteStream, compositeCanvas, backgroundVideo, foregroundCanvas, width, height, guestFlipHorizontal, hostFlipHorizontal, guestBlurAmount, frameOverlayImage, frameOverlayEnabled, frameOverlayOpacity]);
+  }, [localStream, remoteStream, compositeCanvas, backgroundVideo, foregroundCanvas, width, height, guestFlipHorizontal, hostFlipHorizontal, guestBlurAmount]);
 
   return { animationFrameRef };
 }
