@@ -591,23 +591,9 @@ export default function HostRoomPage() {
   };
 
   // Toggle Host's display flip option
+  // (useEffect above handles broadcasting to guest on state change)
   const toggleHostFlip = () => {
-    const newFlipState = !hostFlipHorizontal;
-    setHostFlipHorizontal(newFlipState);
-
-    // Broadcast to Guest
-    if (store.roomId) {
-      sendMessage({
-        type: 'host-display-options',
-        roomId: store.roomId,
-        options: {
-          flipHorizontal: newFlipState,
-        },
-      });
-      console.log('[Host Room] Sent display options:', {
-        flipHorizontal: newFlipState,
-      });
-    }
+    setHostFlipHorizontal((prev) => !prev);
   };
 
   // Toggle local microphone mute
@@ -621,6 +607,18 @@ export default function HostRoomPage() {
       console.log('[Host Room] Local mic muted:', !localMicMuted);
     }
   };
+
+  // Broadcast host display options when guest connects or flip changes
+  useEffect(() => {
+    if (store.roomId && remoteStream) {
+      sendMessage({
+        type: 'host-display-options',
+        roomId: store.roomId,
+        options: { flipHorizontal: hostFlipHorizontal },
+      });
+      console.log('[Host Room] Sent display options:', { flipHorizontal: hostFlipHorizontal });
+    }
+  }, [store.roomId, remoteStream, hostFlipHorizontal, sendMessage]);
 
   // Broadcast frame layout settings when changed
   useEffect(() => {

@@ -37,6 +37,7 @@ export class WebGLVideoComposer {
   private layout: FrameLayout;
   private scaledPositions: Array<{ x: number; y: number; width: number; height: number; zIndex?: number }>; // Scaled positions for video canvas
   private frameImage: HTMLImageElement | null = null; // Frame overlay image
+  private frameImagePromise: Promise<void> | null = null; // Promise for frame image loading
 
   constructor(width: number, height: number, layout?: FrameLayout) {
     // WebGL canvas for video rendering
@@ -348,19 +349,32 @@ export class WebGLVideoComposer {
   }
 
   /**
-   * Load frame overlay image
+   * Load frame overlay image (returns a promise that resolves when loaded)
    */
   private loadFrameImage(src: string): void {
     this.frameImage = new Image();
     this.frameImage.crossOrigin = 'anonymous';
-    this.frameImage.onload = () => {
-      console.log('[WebGLVideoComposer] Frame overlay image loaded:', src);
-    };
-    this.frameImage.onerror = () => {
-      console.error('[WebGLVideoComposer] Failed to load frame overlay image:', src);
-      this.frameImage = null;
-    };
+    this.frameImagePromise = new Promise<void>((resolve) => {
+      this.frameImage!.onload = () => {
+        console.log('[WebGLVideoComposer] Frame overlay image loaded:', src);
+        resolve();
+      };
+      this.frameImage!.onerror = () => {
+        console.error('[WebGLVideoComposer] Failed to load frame overlay image:', src);
+        this.frameImage = null;
+        resolve(); // Resolve anyway so rendering isn't blocked
+      };
+    });
     this.frameImage.src = src;
+  }
+
+  /**
+   * Wait for frame image to be loaded (call before startRendering)
+   */
+  async waitForFrameImage(): Promise<void> {
+    if (this.frameImagePromise) {
+      await this.frameImagePromise;
+    }
   }
 
   /**
@@ -419,6 +433,9 @@ export class WebGLVideoComposer {
 
     // Create textures
     this.textures = this.videoElements.map(video => this.createTexture(video));
+
+    // Wait for frame overlay image to be ready before rendering
+    await this.waitForFrameImage();
 
     console.log('[WebGLVideoComposer] All videos loaded successfully');
   }

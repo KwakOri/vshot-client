@@ -107,17 +107,23 @@ export async function renderFrameToCanvas(
 
   // Draw frame overlay on top (if frameSrc exists)
   if (layout.frameSrc && layout.frameSrc !== '') {
+    console.log('[renderFrameToCanvas] Loading frame overlay:', layout.frameSrc);
     const frameImage = new Image();
     frameImage.crossOrigin = 'anonymous';
 
     return new Promise<void>((resolve, reject) => {
       frameImage.onload = () => {
+        console.log('[renderFrameToCanvas] Frame overlay loaded successfully:', {
+          src: layout.frameSrc,
+          naturalWidth: frameImage.naturalWidth,
+          naturalHeight: frameImage.naturalHeight,
+        });
         // Draw frame overlay covering the entire canvas
         ctx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
         resolve();
       };
-      frameImage.onerror = () => {
-        console.error(`Failed to load frame image: ${layout.frameSrc}`);
+      frameImage.onerror = (e) => {
+        console.error('[renderFrameToCanvas] Failed to load frame image:', layout.frameSrc, e);
         resolve(); // Continue even if frame fails to load
       };
       frameImage.src = layout.frameSrc;

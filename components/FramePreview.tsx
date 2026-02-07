@@ -92,6 +92,7 @@ export const FramePreview = memo(function FramePreview({
         <img
           src={frameLayout.frameSrc}
           alt="Frame overlay"
+          crossOrigin="anonymous"
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           style={{ zIndex: 100 }}
         />
