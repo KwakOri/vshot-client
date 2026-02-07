@@ -16,7 +16,6 @@ import { useSignaling } from '@/hooks/useSignaling';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { useGuestManagement } from '@/hooks/v3/useGuestManagement';
 import { useV3PhotoCapture } from '@/hooks/v3/useV3PhotoCapture';
-import { generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
 import { useAppStore } from '@/lib/store';
 import { SessionState, SignalMessage } from '@/types';
 import { useRouter } from 'next/navigation';
@@ -63,11 +62,6 @@ export default function GuestV3RoomPage() {
   const [pendingAudioDeviceId, setPendingAudioDeviceId] = useState<string | null>(null);
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
-  const [lastSessionResult, setLastSessionResult] = useState<{
-    sessionId: string;
-    frameResultUrl: string;
-  } | null>(null);
-
   const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -109,22 +103,9 @@ export default function GuestV3RoomPage() {
       setSessionState(SessionState.PROCESSING);
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
-      console.log('[Guest V3] Session complete:', sessionId);
-      const layout = getLayoutById(store.selectedFrameLayoutId);
-      if (layout) {
-        try {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-          const fullUrl = `${API_URL}${frameResultUrl}`;
-          const framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
-          setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
-        } catch (err) {
-          console.error('[Guest V3] Failed to apply frame:', err);
-          setLastSessionResult({ sessionId, frameResultUrl });
-        }
-      } else {
-        setLastSessionResult({ sessionId, frameResultUrl });
-      }
-      setSessionState(SessionState.COMPLETED);
+      console.log('[Festa Guest] Session complete:', sessionId);
+      // Festa: skip result view, auto-reset to ready state
+      setSessionState(SessionState.GUEST_CONNECTED);
     },
     onError: (error) => {
       console.error('[Guest V3] Capture error:', error);
@@ -269,7 +250,6 @@ export default function GuestV3RoomPage() {
           break;
         case 'session-reset-festa':
           photoCapture.reset();
-          setLastSessionResult(null);
           setSessionState(SessionState.GUEST_CONNECTED);
           break;
       }
@@ -434,38 +414,6 @@ export default function GuestV3RoomPage() {
     }
   };
 
-  const downloadResult = async () => {
-    if (!lastSessionResult?.frameResultUrl) return;
-
-    const url = lastSessionResult.frameResultUrl;
-    const isBlobUrl = url.startsWith('blob:');
-
-    try {
-      let downloadUrl: string;
-      if (isBlobUrl) {
-        downloadUrl = url;
-      } else {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${API_URL}${url}`);
-        const blob = await response.blob();
-        downloadUrl = URL.createObjectURL(blob);
-      }
-
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `vshot-v3-${store.roomId}-${Date.now()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      if (!isBlobUrl) {
-        URL.revokeObjectURL(downloadUrl);
-      }
-    } catch (error) {
-      console.error('[Guest V3] Download error:', error);
-    }
-  };
-
   useEffect(() => {
     return () => {
       if (localStream) {
@@ -473,75 +421,6 @@ export default function GuestV3RoomPage() {
       }
     };
   }, []);
-
-  // ─── Result View ───
-  if (sessionState === SessionState.COMPLETED && lastSessionResult) {
-    return (
-      <div className="flex flex-col h-full overflow-hidden bg-dark relative">
-        {/* Background glow */}
-        <div className="absolute inset-0 pointer-events-none" style={{
-          background: 'radial-gradient(ellipse at center top, rgba(252, 113, 43, 0.08) 0%, transparent 60%)',
-        }} />
-
-        {/* Top bar */}
-        <div className="flex-shrink-0 flex items-center justify-between p-4 relative z-10">
-          <h1 className="font-display text-lg font-bold text-white">촬영 완료</h1>
-          <button
-            onClick={leaveRoom}
-            className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-full font-semibold text-sm transition"
-          >
-            나가기
-          </button>
-        </div>
-
-        {/* Photo result */}
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 relative z-10">
-          <div className="animate-bounce-in max-w-sm w-full">
-            {lastSessionResult.frameResultUrl ? (
-              <div className="relative">
-                <img
-                  src={lastSessionResult.frameResultUrl.startsWith('blob:')
-                    ? lastSessionResult.frameResultUrl
-                    : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
-                  }
-                  alt="촬영 결과"
-                  className="w-full rounded-2xl shadow-2xl"
-                  style={{ boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)' }}
-                />
-                {/* Photo border glow */}
-                <div className="absolute -inset-1 rounded-2xl opacity-20 blur-md pointer-events-none"
-                  style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)' }} />
-              </div>
-            ) : (
-              <div className="text-white/30 text-center py-12">결과를 불러오는 중...</div>
-            )}
-          </div>
-        </div>
-
-        {/* Download button */}
-        <div className="flex-shrink-0 p-4 pb-8 relative z-10">
-          <button
-            onClick={downloadResult}
-            className="booth-btn w-full py-4 rounded-xl font-display font-bold text-base shadow-lg touch-manipulation"
-            style={{
-              background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
-              color: 'white',
-              boxShadow: '0 8px 24px rgba(252, 113, 43, 0.3)',
-            }}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              사진 저장하기
-            </div>
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   // ─── Main Video View ───
   return (
