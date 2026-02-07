@@ -86,6 +86,7 @@ export default function HostV3RoomPage() {
 
   const videoRecorderRef = useRef<VideoRecorder | null>(null);
   const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
+  const recordedVideoBlobRef = useRef<Blob | null>(null);
   const [isVideoProcessing, setIsVideoProcessing] = useState(false);
   const [videoProcessingProgress, setVideoProcessingProgress] = useState('');
 
@@ -163,6 +164,7 @@ export default function HostV3RoomPage() {
       setSessionState(SessionState.COMPLETED);
 
       // Film auto-creation (background)
+      // Video post-processing may still be in progress, so we wait for it
       (async () => {
         try {
           // 1. Upload photo
@@ -177,11 +179,20 @@ export default function HostV3RoomPage() {
             }
           }
 
-          // 2. Upload video (if available)
+          // 2. Wait for video post-processing to complete (poll ref)
           let videoFileId: string | undefined;
-          if (recordedVideoBlob) {
-            const ext = recordedVideoBlob.type.includes('mp4') ? 'mp4' : 'webm';
-            const videoUpload = await uploadBlob(recordedVideoBlob, `festa-video-${sessionId}.${ext}`);
+          const maxWait = 30000; // 30s max
+          const pollInterval = 500;
+          let waited = 0;
+          while (!recordedVideoBlobRef.current && waited < maxWait) {
+            await new Promise((r) => setTimeout(r, pollInterval));
+            waited += pollInterval;
+          }
+
+          const videoBlob = recordedVideoBlobRef.current;
+          if (videoBlob) {
+            const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
+            const videoUpload = await uploadBlob(videoBlob, `festa-video-${sessionId}.${ext}`);
             if (videoUpload.success && videoUpload.file) {
               videoFileId = videoUpload.file.id;
             }
@@ -195,7 +206,7 @@ export default function HostV3RoomPage() {
               photoFileId,
               videoFileId,
             });
-            console.log('[Festa Host] Film created successfully');
+            console.log('[Festa Host] Film created successfully', videoFileId ? '(with video)' : '(photo only)');
           }
         } catch (err) {
           console.error('[Festa Host] Film creation failed:', err);
@@ -293,6 +304,7 @@ export default function HostV3RoomPage() {
           setSessionState(SessionState.GUEST_CONNECTED);
           setLastSessionResult(null);
           setRecordedVideoBlob(null);
+          recordedVideoBlobRef.current = null;
           break;
         case 'guest-left-v3':
           setSessionState(SessionState.WAITING_FOR_GUEST);
@@ -325,17 +337,20 @@ export default function HostV3RoomPage() {
                     (msg) => setVideoProcessingProgress(msg)
                   );
                   setRecordedVideoBlob(composedBlob);
+                  recordedVideoBlobRef.current = composedBlob;
                 } catch (err) {
-                  console.error('[Host V3] Video post-processing failed:', err);
+                  console.error('[Festa Host] Video post-processing failed:', err);
                   setRecordedVideoBlob(rawBlob);
+                  recordedVideoBlobRef.current = rawBlob;
                 } finally {
                   setIsVideoProcessing(false);
                   setVideoProcessingProgress('');
                 }
               } else {
                 setRecordedVideoBlob(rawBlob);
+                recordedVideoBlobRef.current = rawBlob;
               }
-            }).catch((err) => console.error('[Host V3] Video recording start error:', err));
+            }).catch((err) => console.error('[Festa Host] Video recording start error:', err));
           }
           break;
         case 'capture-now-v3':
@@ -491,6 +506,7 @@ export default function HostV3RoomPage() {
     sendMessage({ type: 'session-reset-festa', roomId: store.roomId! });
     setLastSessionResult(null);
     setRecordedVideoBlob(null);
+    recordedVideoBlobRef.current = null;
     setIsVideoProcessing(false);
     setVideoProcessingProgress('');
     photoCapture.reset();
