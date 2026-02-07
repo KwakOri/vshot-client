@@ -293,7 +293,21 @@ export default function GuestReadyPage() {
             playsInline
             muted
             className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform: store.guestFlipHorizontal ? 'scaleX(-1)' : 'none' }}
           />
+
+          {/* Flip toggle button overlay */}
+          <button
+            onClick={() => store.setGuestFlipHorizontal(!store.guestFlipHorizontal)}
+            className={`absolute bottom-2 right-2 z-10 px-3 py-1.5 rounded-lg font-semibold text-xs transition shadow-md ${
+              store.guestFlipHorizontal
+                ? 'bg-primary hover:bg-primary-dark text-white'
+                : 'bg-white/80 hover:bg-white text-dark'
+            }`}
+            title="화면 좌우 반전"
+          >
+            {store.guestFlipHorizontal ? '반전 ON' : '반전 OFF'}
+          </button>
         </div>
       </div>
 

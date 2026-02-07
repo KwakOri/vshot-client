@@ -26,6 +26,10 @@ interface AppStore extends RoomState {
   setSelectedAudioDeviceId: (deviceId: string | null) => void;
   setSelectedAudioOutputDeviceId: (deviceId: string | null) => void;
 
+  // Guest flip horizontal (persisted)
+  guestFlipHorizontal: boolean;
+  setGuestFlipHorizontal: (flip: boolean) => void;
+
   // Chroma key settings
   chromaKey: ChromaKeySettings;
   setChromaKeyEnabled: (enabled: boolean) => void;
@@ -73,6 +77,9 @@ export const useAppStore = create<AppStore>()(
   selectedFrameLayoutId: '1cut-polaroid', // Default layout (single polaroid)
   _hasHydrated: false,
 
+  // Guest flip horizontal
+  guestFlipHorizontal: false,
+
   // Device selection
   selectedVideoDeviceId: null,
   selectedAudioDeviceId: null,
@@ -83,6 +90,8 @@ export const useAppStore = create<AppStore>()(
   },
 
   setSelectedFrameLayoutId: (layoutId) => set({ selectedFrameLayoutId: layoutId }),
+
+  setGuestFlipHorizontal: (flip) => set({ guestFlipHorizontal: flip }),
 
   setSelectedVideoDeviceId: (deviceId) => set({ selectedVideoDeviceId: deviceId }),
   setSelectedAudioDeviceId: (deviceId) => set({ selectedAudioDeviceId: deviceId }),
@@ -159,6 +168,7 @@ export const useAppStore = create<AppStore>()(
         selectedVideoDeviceId: state.selectedVideoDeviceId,
         selectedAudioDeviceId: state.selectedAudioDeviceId,
         selectedAudioOutputDeviceId: state.selectedAudioOutputDeviceId,
+        guestFlipHorizontal: state.guestFlipHorizontal,
       }),
       onRehydrateStorage: () => (state) => {
         // Mark hydration as complete

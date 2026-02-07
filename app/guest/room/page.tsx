@@ -41,7 +41,7 @@ export default function GuestRoomPage() {
   const [hostChromaKeyColor, setHostChromaKeyColor] = useState('#00ff00');
 
   // Display options (flip horizontal)
-  const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
+  const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(store.guestFlipHorizontal);
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
 
   // Frame layout settings (received from Host)
@@ -633,6 +633,7 @@ export default function GuestRoomPage() {
   const toggleGuestFlip = () => {
     const newFlipState = !guestFlipHorizontal;
     setGuestFlipHorizontal(newFlipState);
+    store.setGuestFlipHorizontal(newFlipState);
 
     if (store.roomId) {
       sendMessage({
