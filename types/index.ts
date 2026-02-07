@@ -26,7 +26,21 @@ export type SignalMessage =
   | { type: 'aspect-ratio-settings'; roomId: string; settings: AspectRatioSettings }
   | { type: 'frame-layout-settings'; roomId: string; settings: FrameLayoutSettings }
   | { type: 'session-restart'; roomId: string; userId?: string; fromUserId?: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  // V3 Messages - Guest Management
+  | { type: 'guest-left-v3'; roomId: string; guestId: string }
+  | { type: 'guest-joined-v3'; roomId: string; guestId: string; hostSettings: HostSettings }
+  | { type: 'waiting-for-guest-v3'; roomId: string }
+  // V3 Messages - Single Capture Flow
+  | { type: 'frame-selected-v3'; roomId: string; layoutId: string; layout: FrameLayoutSettings }
+  | { type: 'start-capture-v3'; roomId: string }
+  | { type: 'countdown-tick-v3'; roomId: string; count: number }
+  | { type: 'capture-now-v3'; roomId: string }
+  | { type: 'photo-uploaded-v3'; roomId: string; userId: string; role: 'host' | 'guest'; photoUrl: string }
+  | { type: 'photos-merged-v3'; roomId: string; mergedPhotoUrl: string }
+  | { type: 'session-complete-v3'; roomId: string; sessionId: string; frameResultUrl: string }
+  // V3 Messages - Host Settings Sync
+  | { type: 'host-settings-sync-v3'; roomId: string; settings: HostSettings };
 
 export interface ChromaKeySettings {
   enabled: boolean;
@@ -150,4 +164,44 @@ export interface FrameLayout {
 export interface LayoutSelectionResult {
   layout: FrameLayout;
   appliedAt: string;
+}
+
+// V3 Types
+export interface HostSettings {
+  chromaKey: ChromaKeySettings;
+  selectedFrameLayoutId: string;
+  recordingDuration: number;
+  captureInterval: number;
+}
+
+export interface V3Session {
+  sessionId: string;
+  guestId: string;
+  hostPhotoUrl: string | null;
+  guestPhotoUrl: string | null;
+  mergedPhotoUrl: string | null;
+  frameResultUrl: string | null;
+  status: 'in_progress' | 'completed';
+  createdAt: Date;
+  completedAt: Date | null;
+}
+
+export interface V3Room {
+  roomId: string;
+  hostId: string;
+  currentGuestId: string | null;
+  hostSettings: HostSettings;
+  completedSessions: V3Session[];
+  createdAt: Date;
+  lastActivityAt: Date;
+}
+
+export enum SessionState {
+  IDLE = 'idle',
+  WAITING_FOR_GUEST = 'waiting_for_guest',
+  GUEST_CONNECTED = 'guest_connected',
+  FRAME_SELECTING = 'frame_selecting',
+  CAPTURING = 'capturing',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
 }

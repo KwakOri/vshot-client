@@ -136,6 +136,21 @@ export class WebRTCConnection {
     return this.remoteStream;
   }
 
+  /**
+   * Close peer connection only, without stopping local stream tracks.
+   * Used for guest rotation where Host keeps their stream.
+   */
+  closePeerConnection(): void {
+    if (this.pc) {
+      this.pc.close();
+      this.pc = null;
+    }
+
+    this.localStream = null;
+    this.remoteStream = null;
+    console.log('[WebRTC] Peer connection closed (local stream preserved)');
+  }
+
   close(): void {
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());

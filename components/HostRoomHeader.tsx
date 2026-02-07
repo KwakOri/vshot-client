@@ -14,6 +14,8 @@ interface HostRoomHeaderProps {
   remoteAudioEnabled: boolean;
   onToggleRemoteAudio: () => void;
   onOpenSettings: () => void;
+  /** 방 코드 복사 버튼 표시 여부 (기본: true) */
+  showRoomCode?: boolean;
   /**
    * 'compact': 사진 선택 화면용 (단일 행)
    * 'default': 메인 비디오 화면용 (반응형)
@@ -33,6 +35,7 @@ export function HostRoomHeader({
   remoteAudioEnabled,
   onToggleRemoteAudio,
   onOpenSettings,
+  showRoomCode = true,
   variant = 'default',
 }: HostRoomHeaderProps) {
   const handleCopyRoomCode = () => {
@@ -185,7 +188,7 @@ export function HostRoomHeader({
   );
 
   const renderRoomCodeButton = () =>
-    roomId && (
+    showRoomCode && roomId && (
       <button
         onClick={handleCopyRoomCode}
         className={`flex items-center gap-2 bg-secondary hover:bg-secondary-dark rounded-lg shadow-md transition ${

@@ -5,7 +5,13 @@ import { useAppStore } from '@/lib/store';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001/signaling';
 
-export function useSignaling() {
+interface UseSignalingOptions {
+  /** Override the WebSocket URL (e.g., for v3 signaling path) */
+  wsUrl?: string;
+}
+
+export function useSignaling(options?: UseSignalingOptions) {
+  const wsUrl = options?.wsUrl || WS_URL;
   const signalingRef = useRef<SignalingClient | null>(null);
   const [isConnected, setIsConnectedState] = useState(false);
   const handlerQueueRef = useRef<Array<{ messageType: string; handler: (message: any) => void }>>([]);
@@ -28,8 +34,8 @@ export function useSignaling() {
     let client: SignalingClient;
 
     try {
-      console.log('[Signaling] Attempting to connect...');
-      client = new SignalingClient(WS_URL);
+      console.log('[Signaling] Attempting to connect to:', wsUrl);
+      client = new SignalingClient(wsUrl);
       await client.connect();
       signalingRef.current = client;
       setIsConnectedState(true);

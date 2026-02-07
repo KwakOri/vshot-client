@@ -230,9 +230,9 @@ export function useWebRTC({ sendMessage, on }: UseWebRTCProps) {
   const resetForNextGuest = useCallback(async () => {
     console.log('[WebRTC] Resetting for next guest');
 
-    // Close existing WebRTC connection
+    // Close peer connection only - DON'T stop local stream tracks
     if (webrtcRef.current) {
-      webrtcRef.current.close();
+      webrtcRef.current.closePeerConnection();
       webrtcRef.current = null;
     }
 
