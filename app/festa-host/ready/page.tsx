@@ -122,7 +122,7 @@ export default function HostV3ReadyPage() {
     store.setRole('host');
 
     stopMicTest();
-    router.push('/host-v3/room');
+    router.push('/festa-host/room');
   };
 
   // Cleanup on unmount

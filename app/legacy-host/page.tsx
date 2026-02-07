@@ -3,11 +3,11 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function HostV3Page() {
+export default function HostPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/host-v3/ready');
+    router.replace('/legacy-host/ready');
   }, [router]);
 
   return (

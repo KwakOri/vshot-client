@@ -175,7 +175,7 @@ export default function GuestV3RoomPage() {
     if (!store._hasHydrated) return;
 
     if (!store.roomId || store.role !== 'guest') {
-      router.push('/guest-v3/ready');
+      router.push('/festa-guest/ready');
       return;
     }
 
@@ -198,7 +198,7 @@ export default function GuestV3RoomPage() {
       } catch (error) {
         console.error('[Guest V3] Error:', error);
         alert('연결에 실패했습니다.');
-        router.push('/guest-v3/ready');
+        router.push('/festa-guest/ready');
       }
     };
 
@@ -267,6 +267,11 @@ export default function GuestV3RoomPage() {
         case 'countdown-tick-v3':
           setSessionState(SessionState.CAPTURING);
           break;
+        case 'session-reset-festa':
+          photoCapture.reset();
+          setLastSessionResult(null);
+          setSessionState(SessionState.GUEST_CONNECTED);
+          break;
       }
     };
 
@@ -279,6 +284,7 @@ export default function GuestV3RoomPage() {
       'capture-now-v3',
       'photos-merged-v3',
       'session-complete-v3',
+      'session-reset-festa',
     ];
 
     v3MessageTypes.forEach((type) => {
@@ -361,7 +367,7 @@ export default function GuestV3RoomPage() {
     }
     store.setRoomId(null as any);
     store.setRole(null);
-    router.push('/guest-v3/ready');
+    router.push('/festa-guest/ready');
   };
 
   const openSettings = () => {

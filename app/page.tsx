@@ -45,13 +45,49 @@ export default function Home() {
           </Link>
         </div>
 
+        {/* Festa Mode Section */}
+        <div className="mt-6 pt-6 border-t-2 border-neutral">
+          <div className="text-center mb-4">
+            <span className="inline-block px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full"
+              style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)', color: 'white' }}>
+              Festa Mode
+            </span>
+            <p className="text-sm text-dark/60 mt-2">
+              페스티벌 현장용 포토부스 모드 (연결 유지 + QR 다운로드)
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Link
+              href="/festa-host"
+              onClick={() => handleRoleSelect('host')}
+              className="font-bold py-6 px-6 rounded-xl text-center transition-all shadow-md flex flex-col items-center border-2 border-primary/30 hover:border-primary text-dark hover:shadow-lg"
+              style={{ background: 'linear-gradient(135deg, rgba(252,113,43,0.08), rgba(253,147,25,0.08))' }}
+            >
+              <Monitor size={36} className="mb-2 text-primary" strokeWidth={2} />
+              <div className="text-lg mb-1">Festa Host</div>
+              <div className="text-xs opacity-70">부스 VR 화면</div>
+            </Link>
+
+            <Link
+              href="/festa-guest"
+              onClick={() => handleRoleSelect('guest')}
+              className="font-bold py-6 px-6 rounded-xl text-center transition-all shadow-md flex flex-col items-center border-2 border-secondary/30 hover:border-secondary text-dark hover:shadow-lg"
+              style={{ background: 'linear-gradient(135deg, rgba(253,147,25,0.08), rgba(226,212,196,0.15))' }}
+            >
+              <Camera size={36} className="mb-2 text-secondary" strokeWidth={2} />
+              <div className="text-lg mb-1">Festa Guest</div>
+              <div className="text-xs opacity-70">부스 카메라</div>
+            </Link>
+          </div>
+        </div>
+
         <div className="mt-8 p-6 bg-neutral/30 rounded-lg border border-neutral">
           <h2 className="font-bold text-dark mb-3 text-lg">사용 방법</h2>
           <ol className="text-sm text-dark/80 space-y-2 list-decimal list-inside">
             <li>Host가 방을 생성하고 VR 화면을 공유합니다</li>
             <li>Guest가 방 ID를 입력해 참가하고 카메라를 활성화합니다</li>
-            <li>Host가 촬영 버튼을 클릭하면 8장의 사진이 촬영됩니다</li>
-            <li>촬영된 사진 중 4장을 선택해 프레임을 만듭니다</li>
+            <li>Host가 촬영 버튼을 클릭하면 사진이 촬영됩니다</li>
             <li>완성된 프레임을 다운로드합니다</li>
           </ol>
         </div>

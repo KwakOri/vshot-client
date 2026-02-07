@@ -116,7 +116,7 @@ export default function GuestV3ReadyPage() {
       localStream.getTracks().forEach((track) => track.stop());
     }
 
-    router.push('/guest-v3/room');
+    router.push('/festa-guest/room');
   };
 
   useEffect(() => {

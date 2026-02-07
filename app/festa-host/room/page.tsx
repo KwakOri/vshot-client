@@ -24,6 +24,8 @@ import { generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
 import { useAppStore } from '@/lib/store';
 import { VideoRecorder, downloadVideo } from '@/lib/video-recorder';
 import { composeVideoWithWebGL, VideoSource } from '@/lib/webgl-video-composer';
+import { uploadBlob } from '@/lib/files';
+import { createFilm } from '@/lib/films';
 import { SessionState, SignalMessage } from '@/types';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -142,22 +144,63 @@ export default function HostV3RoomPage() {
       setSessionState(SessionState.PROCESSING);
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
-      console.log('[Host V3] Session complete:', sessionId);
+      console.log('[Festa Host] Session complete:', sessionId);
+      let framedBlobUrl: string | null = null;
       const layout = getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
           const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
           const fullUrl = `${API_URL}${frameResultUrl}`;
-          const framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
+          framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
-          console.error('[Host V3] Failed to apply frame:', err);
+          console.error('[Festa Host] Failed to apply frame:', err);
           setLastSessionResult({ sessionId, frameResultUrl });
         }
       } else {
         setLastSessionResult({ sessionId, frameResultUrl });
       }
       setSessionState(SessionState.COMPLETED);
+
+      // Film auto-creation (background)
+      (async () => {
+        try {
+          // 1. Upload photo
+          const photoSrc = framedBlobUrl || frameResultUrl;
+          let photoFileId: string | undefined;
+          if (photoSrc) {
+            const photoResponse = await fetch(photoSrc.startsWith('blob:') ? photoSrc : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${photoSrc}`);
+            const photoBlob = await photoResponse.blob();
+            const photoUpload = await uploadBlob(photoBlob, `festa-photo-${sessionId}.png`);
+            if (photoUpload.success && photoUpload.file) {
+              photoFileId = photoUpload.file.id;
+            }
+          }
+
+          // 2. Upload video (if available)
+          let videoFileId: string | undefined;
+          if (recordedVideoBlob) {
+            const ext = recordedVideoBlob.type.includes('mp4') ? 'mp4' : 'webm';
+            const videoUpload = await uploadBlob(recordedVideoBlob, `festa-video-${sessionId}.${ext}`);
+            if (videoUpload.success && videoUpload.file) {
+              videoFileId = videoUpload.file.id;
+            }
+          }
+
+          // 3. Create Film record
+          if (photoFileId) {
+            await createFilm({
+              roomId: store.roomId!,
+              sessionId,
+              photoFileId,
+              videoFileId,
+            });
+            console.log('[Festa Host] Film created successfully');
+          }
+        } catch (err) {
+          console.error('[Festa Host] Film creation failed:', err);
+        }
+      })();
     },
     onError: (error) => {
       console.error('[Host V3] Capture error:', error);
@@ -207,7 +250,7 @@ export default function HostV3RoomPage() {
     if (!store._hasHydrated) return;
 
     if (store.role !== 'host') {
-      router.push('/host-v3/ready');
+      router.push('/festa-host/ready');
       return;
     }
 
@@ -223,12 +266,13 @@ export default function HostV3RoomPage() {
           roomId,
           userId: store.userId,
           role: 'host',
+          mode: 'festa',
         });
         setSessionState(SessionState.WAITING_FOR_GUEST);
       } catch (error) {
-        console.error('[Host V3] Init error:', error);
+        console.error('[Festa Host] Init error:', error);
         alert('서버 연결에 실패했습니다.');
-        router.push('/host-v3/ready');
+        router.push('/festa-host/ready');
       }
     };
 
@@ -313,6 +357,7 @@ export default function HostV3RoomPage() {
       'capture-now-v3',
       'photos-merged-v3',
       'session-complete-v3',
+      'session-reset-festa',
     ];
 
     v3MessageTypes.forEach((type) => {
@@ -442,12 +487,14 @@ export default function HostV3RoomPage() {
   };
 
   const handlePrepareForNextGuest = () => {
+    // Festa: keep connection, only reset session state
+    sendMessage({ type: 'session-reset-festa', roomId: store.roomId! });
     setLastSessionResult(null);
     setRecordedVideoBlob(null);
     setIsVideoProcessing(false);
     setVideoProcessingProgress('');
     photoCapture.reset();
-    setSessionState(SessionState.WAITING_FOR_GUEST);
+    setSessionState(SessionState.GUEST_CONNECTED); // Not WAITING_FOR_GUEST - connection maintained
   };
 
   const toggleLocalMic = () => {
@@ -466,7 +513,7 @@ export default function HostV3RoomPage() {
     }
     store.setRoomId(null as any);
     store.setRole(null);
-    router.push('/host-v3/ready');
+    router.push('/festa-host/ready');
   };
 
   const openSettings = () => {

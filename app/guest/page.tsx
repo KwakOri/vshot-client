@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-export default function GuestPage() {
+export default function GuestV3Page() {
   const router = useRouter();
 
   useEffect(() => {
