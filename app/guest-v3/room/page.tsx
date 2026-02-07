@@ -45,7 +45,7 @@ export default function GuestV3RoomPage() {
   const [hostChromaKeyColor, setHostChromaKeyColor] = useState('#00ff00');
 
   // Display options
-  const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
+  const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(store.guestFlipHorizontal);
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
 
   // Flash
@@ -351,6 +351,7 @@ export default function GuestV3RoomPage() {
   const toggleGuestFlip = () => {
     const newFlipState = !guestFlipHorizontal;
     setGuestFlipHorizontal(newFlipState);
+    store.setGuestFlipHorizontal(newFlipState);
 
     if (store.roomId) {
       sendMessage({

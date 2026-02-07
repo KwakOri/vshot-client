@@ -576,6 +576,18 @@ export default function HostV3RoomPage() {
     };
   }, []);
 
+  // Broadcast host display options when guest connects or flip changes
+  useEffect(() => {
+    if (store.roomId && store.peerId) {
+      sendMessage({
+        type: 'host-display-options',
+        roomId: store.roomId,
+        options: { flipHorizontal: hostFlipHorizontal },
+      });
+      console.log('[Host V3] Sent display options:', { flipHorizontal: hostFlipHorizontal });
+    }
+  }, [store.roomId, store.peerId, hostFlipHorizontal, sendMessage]);
+
   // Listen for guest display options
   useEffect(() => {
     on('guest-display-options', (message: any) => {
