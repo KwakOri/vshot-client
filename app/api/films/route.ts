@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { nanoid } from 'nanoid';
 import { supabaseServer } from '@/lib/supabase-server';
 import { getSignedFileUrl } from '@/lib/r2';
 import type { FilmRecord } from '@/types/films';
@@ -8,7 +9,26 @@ import type { FilmRecord } from '@/types/films';
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+    if (!rawBody) {
+      console.error('[Films API] Empty request body');
+      return NextResponse.json(
+        { success: false, error: 'Request body is empty' },
+        { status: 400 }
+      );
+    }
+
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (parseError) {
+      console.error('[Films API] JSON parse error. Raw body:', rawBody);
+      return NextResponse.json(
+        { success: false, error: 'Invalid JSON body' },
+        { status: 400 }
+      );
+    }
+
     const { roomId, sessionId, photoFileId, videoFileId } = body;
 
     if (!roomId) {
@@ -18,19 +38,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: film, error } = await supabaseServer
-      .from('films')
-      .insert({
-        room_id: roomId,
-        session_id: sessionId || null,
-        photo_file_id: photoFileId || null,
-        video_file_id: videoFileId || null,
-      })
-      .select()
-      .single();
+    let film: any = null;
+    let insertError: any = null;
 
-    if (error) {
-      console.error('[Films API] Insert error:', error);
+    // nanoid(8)로 ID 생성, unique 위반 시 1회 재시도
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const id = nanoid(8);
+      const { data, error } = await supabaseServer
+        .from('films')
+        .insert({
+          id,
+          room_id: roomId,
+          session_id: sessionId || null,
+          photo_file_id: photoFileId || null,
+          video_file_id: videoFileId || null,
+        })
+        .select()
+        .single();
+
+      if (!error) {
+        film = data;
+        break;
+      }
+
+      // unique violation (23505) → retry with new nanoid
+      if (error.code === '23505' && attempt === 0) {
+        console.warn('[Films API] nanoid collision, retrying...');
+        continue;
+      }
+
+      insertError = error;
+      break;
+    }
+
+    if (insertError || !film) {
+      console.error('[Films API] Insert error:', insertError);
       return NextResponse.json(
         { success: false, error: 'Failed to create film record' },
         { status: 500 }

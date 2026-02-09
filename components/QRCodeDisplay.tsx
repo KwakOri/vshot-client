@@ -15,7 +15,7 @@ export function QRCodeDisplay({ filmId, size = 200 }: QRCodeDisplayProps) {
       <QRCodeSVG
         value={downloadUrl}
         size={size}
-        level="M"
+        level="L"
         includeMargin
       />
       <span className="text-xs text-dark/40 font-mono">{filmId.slice(0, 8)}</span>
