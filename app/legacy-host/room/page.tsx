@@ -2116,7 +2116,6 @@ export default function HostRoomPage() {
               remoteVideoRef={remoteVideoRef}
               compositeCanvasRef={compositeCanvasRef}
               flipHorizontal={hostFlipHorizontal}
-              countdown={countdown}
               remoteAudioEnabled={remoteAudioEnabled}
             />
           </div>

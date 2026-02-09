@@ -1,5 +1,4 @@
 import { RefObject } from 'react';
-import { CountdownOverlay } from './CountdownOverlay';
 
 interface VideoDisplayPanelProps {
   role: 'host' | 'guest';
@@ -17,9 +16,6 @@ interface VideoDisplayPanelProps {
 
   // Display settings
   flipHorizontal: boolean;
-
-  // UI state
-  countdown: number | null;
 
   // Audio settings
   remoteAudioEnabled?: boolean;
@@ -40,7 +36,6 @@ export function VideoDisplayPanel({
   remoteCanvasRef,
   compositeCanvasRef,
   flipHorizontal,
-  countdown,
   remoteAudioEnabled = true,
   frameOverlaySrc,
   frameOverlayVisible = false,
@@ -142,9 +137,6 @@ export function VideoDisplayPanel({
             style={{ opacity: frameOverlayOpacity }}
           />
         )}
-
-        {/* Countdown overlay */}
-        <CountdownOverlay countdown={countdown} />
 
         {/* Inactive message */}
         {!isActive && (

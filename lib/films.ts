@@ -1,11 +1,22 @@
 import type { FilmCreateRequest, FilmResponse, FilmListResponse } from '@/types/films';
 
 export async function createFilm(request: FilmCreateRequest): Promise<FilmResponse> {
+  const body = JSON.stringify(request);
+  console.log('[createFilm] Sending request:', body);
+  if (!body || body === 'undefined') {
+    console.error('[createFilm] Invalid request body:', request);
+    return { success: false, error: 'Invalid request body' };
+  }
   const response = await fetch('/api/films', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
+    body,
   });
+  if (!response.ok) {
+    const text = await response.text();
+    console.error('[createFilm] Server error:', response.status, text);
+    return { success: false, error: `Server error: ${response.status}` };
+  }
   return response.json();
 }
 

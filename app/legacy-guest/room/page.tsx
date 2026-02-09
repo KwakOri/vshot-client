@@ -1094,7 +1094,6 @@ export default function GuestRoomPage() {
           remoteCanvasRef={remoteCanvasRef}
           compositeCanvasRef={compositeCanvasRef}
           flipHorizontal={guestFlipHorizontal}
-          countdown={countdown}
           remoteAudioEnabled={remoteAudioEnabled}
         />
       </div>

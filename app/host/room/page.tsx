@@ -656,7 +656,6 @@ export default function HostV3RoomPage() {
           remoteCanvasRef={remoteCanvasRef}
           compositeCanvasRef={compositeCanvasRef}
           flipHorizontal={hostFlipHorizontal}
-          countdown={photoCapture.countdown}
           remoteAudioEnabled={remoteAudioEnabled}
           frameOverlaySrc={selectedLayout?.frameSrc}
           frameOverlayVisible={true}
