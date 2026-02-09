@@ -75,6 +75,17 @@ export function getAuthHeaders(): HeadersInit {
   return headers;
 }
 
+export function getUserRole(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.role || null;
+  } catch {
+    return null;
+  }
+}
+
 function setTokenCookie(token: string): void {
   // 24h expiry matching JWT
   const maxAge = 24 * 60 * 60;

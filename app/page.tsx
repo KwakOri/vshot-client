@@ -1,6 +1,6 @@
 'use client';
 
-import { getToken } from '@/lib/auth';
+import { getToken, getUserRole, logout } from '@/lib/auth';
 import { useAppStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
@@ -16,17 +16,22 @@ export default function Home() {
     router.push('/festa-guest');
   }, [store, router]);
 
+  const isLoggedIn = !!getToken();
+  const role = getUserRole();
+
   const handleMenuNav = useCallback(
     (path: string) => {
       setMenuOpen(false);
-      if (!getToken()) {
-        router.push(`/login?redirect=${encodeURIComponent(path)}`);
-      } else {
-        router.push(path);
-      }
+      router.push(path);
     },
     [router]
   );
+
+  const handleLogout = useCallback(() => {
+    logout();
+    setMenuOpen(false);
+    router.refresh();
+  }, [router]);
 
   return (
     <main className="relative min-h-[100dvh] overflow-hidden bg-dark">
@@ -186,57 +191,78 @@ export default function Home() {
 
             {/* Menu items */}
             <nav className="mt-4 flex flex-col gap-1 px-4">
-              <button
-                onClick={() => handleMenuNav('/festa-host')}
-                className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
-              >
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary transition-colors group-hover:bg-primary/25">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="2" y="3" width="20" height="14" rx="2" />
-                    <path d="M8 21h8M12 17v4" />
-                  </svg>
-                </span>
-                <div>
-                  <div className="text-sm font-semibold text-white">
-                    Festa Host 로그인
+              {!isLoggedIn ? (
+                <button
+                  onClick={() => handleMenuNav('/login')}
+                  className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary transition-colors group-hover:bg-primary/25">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                      <polyline points="10 17 15 12 10 7" />
+                      <line x1="15" y1="12" x2="3" y2="12" />
+                    </svg>
+                  </span>
+                  <div>
+                    <div className="text-sm font-semibold text-white">로그인</div>
+                    <div className="text-xs text-white/40">호스트 / 관리자</div>
                   </div>
-                  <div className="text-xs text-white/40">부스 운영자 모드</div>
-                </div>
-              </button>
+                </button>
+              ) : (
+                <>
+                  {role === 'host' && (
+                    <button
+                      onClick={() => handleMenuNav('/festa-host')}
+                      className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary transition-colors group-hover:bg-primary/25">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="3" width="20" height="14" rx="2" />
+                          <path d="M8 21h8M12 17v4" />
+                        </svg>
+                      </span>
+                      <div>
+                        <div className="text-sm font-semibold text-white">부스 만들기</div>
+                        <div className="text-xs text-white/40">Festa Host 모드</div>
+                      </div>
+                    </button>
+                  )}
 
-              <button
-                onClick={() => handleMenuNav('/admin')}
-                className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
-              >
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/15 text-secondary transition-colors group-hover:bg-secondary/25">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                  {role === 'admin' && (
+                    <button
+                      onClick={() => handleMenuNav('/admin')}
+                      className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/15 text-secondary transition-colors group-hover:bg-secondary/25">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      </span>
+                      <div>
+                        <div className="text-sm font-semibold text-white">Admin</div>
+                        <div className="text-xs text-white/40">관리자 대시보드</div>
+                      </div>
+                    </button>
+                  )}
+
+                  <div className="mx-4 my-2 h-px bg-white/10" />
+
+                  <button
+                    onClick={handleLogout}
+                    className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
                   >
-                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </span>
-                <div>
-                  <div className="text-sm font-semibold text-white">Admin</div>
-                  <div className="text-xs text-white/40">관리자 대시보드</div>
-                </div>
-              </button>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-white/50 transition-colors group-hover:bg-white/10">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
+                      </svg>
+                    </span>
+                    <div className="text-sm text-white/50">로그아웃</div>
+                  </button>
+                </>
+              )}
             </nav>
           </div>
         </div>
