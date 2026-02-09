@@ -80,6 +80,8 @@ export default function HostV3RoomPage() {
   const [pendingAudioDeviceId, setPendingAudioDeviceId] = useState<string | null>(null);
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
+  const [isGuestViewingQR, setIsGuestViewingQR] = useState(false);
+
   const [lastSessionResult, setLastSessionResult] = useState<{
     sessionId: string;
     frameResultUrl: string;
@@ -212,6 +214,10 @@ export default function HostV3RoomPage() {
             console.log('[Festa Host] Creating film with:', JSON.stringify(filmRequest));
             const filmResult = await createFilm(filmRequest);
             console.log('[Festa Host] Film creation result:', JSON.stringify(filmResult));
+
+            // Notify guest that film is ready (show QR popup)
+            sendMessage({ type: 'film-ready-festa', roomId: store.roomId!, filmId });
+            setIsGuestViewingQR(true);
           }
         } catch (err) {
           console.error('[Festa Host] Film creation failed:', err);
@@ -310,6 +316,7 @@ export default function HostV3RoomPage() {
           setLastSessionResult(null);
           setRecordedVideoBlob(null);
           recordedVideoBlobRef.current = null;
+          setIsGuestViewingQR(false);
           break;
         case 'guest-left-v3':
           setSessionState(SessionState.WAITING_FOR_GUEST);
@@ -365,6 +372,9 @@ export default function HostV3RoomPage() {
             }
           }, 2000);
           break;
+        case 'qr-dismissed-festa':
+          setIsGuestViewingQR(false);
+          break;
       }
     };
 
@@ -378,6 +388,8 @@ export default function HostV3RoomPage() {
       'photos-merged-v3',
       'session-complete-v3',
       'session-reset-festa',
+      'film-ready-festa',
+      'qr-dismissed-festa',
     ];
 
     v3MessageTypes.forEach((type) => {
@@ -985,9 +997,14 @@ export default function HostV3RoomPage() {
               {/* Next guest button */}
               <button
                 onClick={handlePrepareForNextGuest}
-                className="booth-btn w-full mt-3 px-4 py-3.5 bg-primary hover:bg-primary-dark text-white rounded-xl font-display font-bold transition shadow-md shadow-primary/20"
+                disabled={isGuestViewingQR}
+                className={`booth-btn w-full mt-3 px-4 py-3.5 text-white rounded-xl font-display font-bold transition shadow-md shadow-primary/20 ${
+                  isGuestViewingQR
+                    ? 'bg-primary/50 opacity-50 cursor-not-allowed'
+                    : 'bg-primary hover:bg-primary-dark'
+                }`}
               >
-                다음 게스트
+                {isGuestViewingQR ? '게스트가 QR 확인 중...' : '다음 게스트'}
               </button>
             </div>
           </div>

@@ -18,6 +18,7 @@ import { useGuestManagement } from '@/hooks/v3/useGuestManagement';
 import { useV3PhotoCapture } from '@/hooks/v3/useV3PhotoCapture';
 import { useAppStore } from '@/lib/store';
 import { SessionState, SignalMessage } from '@/types';
+import { QRCodeDisplay } from '@/components/QRCodeDisplay';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -45,6 +46,9 @@ export default function GuestV3RoomPage() {
   const [showFlash, setShowFlash] = useState(false);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = useState(true);
   const [localMicMuted, setLocalMicMuted] = useState(false);
+
+  const [filmId, setFilmId] = useState<string | null>(null);
+  const [showQRPopup, setShowQRPopup] = useState(false);
 
   const { videoDevices, audioDevices, audioOutputDevices, refreshDevices } = useMediaDevices();
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState<string | null>(
@@ -104,8 +108,8 @@ export default function GuestV3RoomPage() {
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
       console.log('[Festa Guest] Session complete:', sessionId);
-      // Festa: skip result view, auto-reset to ready state
-      setSessionState(SessionState.GUEST_CONNECTED);
+      // Wait for film-ready-festa signal from Host to show QR popup
+      setSessionState(SessionState.PROCESSING);
     },
     onError: (error) => {
       console.error('[Guest V3] Capture error:', error);
@@ -248,8 +252,14 @@ export default function GuestV3RoomPage() {
         case 'countdown-tick-v3':
           setSessionState(SessionState.CAPTURING);
           break;
+        case 'film-ready-festa':
+          setFilmId(message.filmId);
+          setShowQRPopup(true);
+          break;
         case 'session-reset-festa':
           photoCapture.reset();
+          setShowQRPopup(false);
+          setFilmId(null);
           setSessionState(SessionState.GUEST_CONNECTED);
           break;
       }
@@ -265,6 +275,7 @@ export default function GuestV3RoomPage() {
       'photos-merged-v3',
       'session-complete-v3',
       'session-reset-festa',
+      'film-ready-festa',
     ];
 
     v3MessageTypes.forEach((type) => {
@@ -426,6 +437,32 @@ export default function GuestV3RoomPage() {
   return (
     <div className="flex flex-col h-full p-3 gap-3 overflow-hidden bg-light">
       <FlashOverlay show={showFlash} />
+
+      {/* QR Code Popup */}
+      {showQRPopup && filmId && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full flex flex-col items-center gap-4 animate-slide-up">
+            <div className="text-center">
+              <p className="font-display font-bold text-lg text-dark mb-1">촬영 완료!</p>
+              <p className="text-sm text-dark/60">QR 코드를 스캔하여 사진을 다운로드하세요</p>
+            </div>
+            <QRCodeDisplay filmId={filmId} size={200} />
+            <button
+              onClick={() => {
+                if (store.roomId) {
+                  sendMessage({ type: 'qr-dismissed-festa', roomId: store.roomId });
+                }
+                setShowQRPopup(false);
+                setFilmId(null);
+                setSessionState(SessionState.GUEST_CONNECTED);
+              }}
+              className="w-full py-3 bg-primary hover:bg-primary-dark text-white rounded-xl font-display font-bold transition"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
 
       <CountdownOverlay
         countdown={photoCapture.countdown}
