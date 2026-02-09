@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAppStore } from '@/lib/store';
 import { getToken } from '@/lib/auth';
+import { useAppStore } from '@/lib/store';
+import { useRouter } from 'next/navigation';
+import { useCallback, useState } from 'react';
 import UnicornScene from 'unicornstudio-react';
 
 export default function Home() {
@@ -67,7 +67,8 @@ export default function Home() {
           <div
             className="animate-fade-in mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5"
             style={{
-              background: 'linear-gradient(135deg, rgba(252,113,43,0.25), rgba(253,147,25,0.15))',
+              background:
+                'linear-gradient(135deg, rgba(252,113,43,0.25), rgba(253,147,25,0.15))',
               border: '1px solid rgba(252,113,43,0.3)',
               backdropFilter: 'blur(8px)',
               animationDelay: '0.2s',
@@ -81,27 +82,29 @@ export default function Home() {
 
           {/* Headline */}
           <h1
-            className="animate-slide-up font-display text-[clamp(2.2rem,6vw,4.5rem)] font-extrabold leading-[1.1] tracking-tight text-white"
+            className="animate-slide-up font-display text-[clamp(1.6rem,5vw,3.2rem)] font-extrabold leading-[1.25] tracking-tight text-white"
             style={{ animationDelay: '0.35s' }}
           >
-            VR + 실사 합성
+            가상과 현실이
             <br />
             <span
               className="bg-clip-text text-transparent"
               style={{
-                backgroundImage: 'linear-gradient(135deg, #FC712B, #FD9319, #FEA741)',
+                backgroundImage:
+                  'linear-gradient(135deg, #FC712B, #FD9319, #FEA741)',
               }}
             >
-              포토부스
+              한 장의 사진
             </span>
+            이 되는 순간.
           </h1>
 
           {/* Subtitle */}
           <p
-            className="animate-slide-up mt-5 max-w-md text-base text-white/60 sm:text-lg"
+            className="animate-slide-up mt-5 max-w-md text-[clamp(0.875rem,2.5vw,1.125rem)] leading-relaxed text-white/50"
             style={{ animationDelay: '0.5s' }}
           >
-            버튜버와 함께 특별한 사진을 남겨보세요
+            지연 없이 만나고, 선명하게 남기다.
           </p>
 
           {/* CTA */}
@@ -116,7 +119,9 @@ export default function Home() {
             {/* Glow ring */}
             <span
               className="absolute -inset-1 -z-10 rounded-2xl opacity-50 blur-xl transition-opacity duration-300 group-hover:opacity-80"
-              style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)' }}
+              style={{
+                background: 'linear-gradient(135deg, #FC712B, #FD9319)',
+              }}
             />
             {/* Shine */}
             <span className="absolute inset-0 rounded-2xl bg-gradient-to-b from-white/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
@@ -161,7 +166,15 @@ export default function Home() {
                 className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-white/70 transition-colors hover:bg-white/20 hover:text-white"
                 aria-label="메뉴 닫기"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
                   <path d="M4 4l8 8M12 4l-8 8" />
                 </svg>
               </button>
@@ -178,13 +191,24 @@ export default function Home() {
                 className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary transition-colors group-hover:bg-primary/25">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <rect x="2" y="3" width="20" height="14" rx="2" />
                     <path d="M8 21h8M12 17v4" />
                   </svg>
                 </span>
                 <div>
-                  <div className="text-sm font-semibold text-white">Festa Host 로그인</div>
+                  <div className="text-sm font-semibold text-white">
+                    Festa Host 로그인
+                  </div>
                   <div className="text-xs text-white/40">부스 운영자 모드</div>
                 </div>
               </button>
@@ -194,7 +218,16 @@ export default function Home() {
                 className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/15 text-secondary transition-colors group-hover:bg-secondary/25">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
                     <circle cx="12" cy="12" r="3" />
                   </svg>
@@ -208,7 +241,6 @@ export default function Home() {
           </div>
         </div>
       )}
-
     </main>
   );
 }
