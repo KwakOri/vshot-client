@@ -144,8 +144,9 @@ export function useV3PhotoCapture({
         // Brief flash effect delay
         await sleep(100);
 
-        // High-resolution capture
+        // High-resolution capture (local camera only)
         const photoBlob = await captureHighRes(
+          role,
           backgroundVideo,
           foregroundVideo,
           chromaKeySettings,
@@ -398,22 +399,30 @@ function applyChromaKeyOneShot(
 }
 
 /**
- * High-resolution capture: renders background + chroma-keyed foreground
- * at the background video's native resolution (2:3 ratio).
+ * High-resolution capture: captures only the LOCAL camera at native resolution.
+ *
+ * - Guest: captures backgroundVideo (local camera) as opaque PNG
+ * - Host: captures foregroundVideo (local camera) with chroma key → alpha PNG
+ *
+ * Server merges guest (background) + host (alpha foreground) once.
  */
 async function captureHighRes(
+  role: 'host' | 'guest',
   backgroundVideo: HTMLVideoElement,
   foregroundVideo: HTMLVideoElement | null,
   chromaKey: ChromaKeySettings,
   guestFlip: boolean,
   hostFlip: boolean,
 ): Promise<Blob> {
-  const vw = backgroundVideo.videoWidth;
-  const vh = backgroundVideo.videoHeight;
+  const localVideo = role === 'guest' ? backgroundVideo : foregroundVideo;
+  const flip = role === 'guest' ? guestFlip : hostFlip;
 
-  if (vw === 0 || vh === 0) {
-    throw new Error('Background video has no valid dimensions');
+  if (!localVideo || localVideo.videoWidth === 0 || localVideo.videoHeight === 0) {
+    throw new Error(`Local video not ready for ${role}`);
   }
+
+  const vw = localVideo.videoWidth;
+  const vh = localVideo.videoHeight;
 
   // Calculate 2:3 max size from native resolution
   const targetRatio = 2 / 3;
@@ -421,11 +430,9 @@ async function captureHighRes(
   let captureH: number;
 
   if (vw / vh <= targetRatio) {
-    // Width is the limiting factor
     captureW = vw;
     captureH = Math.floor(vw / targetRatio);
   } else {
-    // Height is the limiting factor
     captureH = vh;
     captureW = Math.floor(vh * targetRatio);
   }
@@ -434,30 +441,23 @@ async function captureHighRes(
   captureW = captureW % 2 === 0 ? captureW : captureW - 1;
   captureH = captureH % 2 === 0 ? captureH : captureH - 1;
 
-  console.log(`[V3PhotoCapture] High-res capture: video=${vw}x${vh} → capture=${captureW}x${captureH}`);
+  console.log(`[V3PhotoCapture] ${role} high-res capture: video=${vw}x${vh} → capture=${captureW}x${captureH}`);
 
-  // Create offscreen canvas at high resolution
-  const canvas = new OffscreenCanvas(captureW, captureH);
-  const ctx = canvas.getContext('2d')!;
-
-  // Draw background video (guest camera)
-  drawWithCover(ctx, backgroundVideo, captureW, captureH, guestFlip);
-
-  // Draw foreground video with chroma key (host screen share)
-  if (foregroundVideo && foregroundVideo.videoWidth > 0 && foregroundVideo.videoHeight > 0) {
-    const fgCanvas = applyChromaKeyOneShot(
-      foregroundVideo,
-      captureW,
-      captureH,
-      chromaKey,
-      hostFlip,
-    );
-    ctx.drawImage(fgCanvas, 0, 0, captureW, captureH);
+  if (role === 'host') {
+    // Host: apply chroma key to produce alpha PNG
+    const canvas = applyChromaKeyOneShot(localVideo, captureW, captureH, chromaKey, flip);
+    const blob = await canvas.convertToBlob({ type: 'image/png' });
+    console.log(`[V3PhotoCapture] Host captured alpha PNG: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+    return blob;
   }
 
-  // Convert to PNG blob
+  // Guest: plain opaque capture
+  const canvas = new OffscreenCanvas(captureW, captureH);
+  const ctx = canvas.getContext('2d')!;
+  drawWithCover(ctx, localVideo, captureW, captureH, flip);
+
   const blob = await canvas.convertToBlob({ type: 'image/png' });
-  console.log(`[V3PhotoCapture] Captured blob size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+  console.log(`[V3PhotoCapture] Guest captured PNG: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
   return blob;
 }
 
