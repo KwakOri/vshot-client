@@ -6,12 +6,11 @@ import type { FrameLayout, FrameSlot, FrameSlotRatio } from '@/types';
  */
 export const RESOLUTION = {
   /**
-   * Photo capture resolution (high quality)
-   * Used for final photo frames
-   * 웹캠 기반이므로 1600x2400으로 설정 (2:3 비율 유지)
+   * Photo capture resolution (4x6 inch print @ 300 DPI)
+   * 1200x1800 = 300 DPI 최적 인쇄 품질
    */
-  PHOTO_WIDTH: 1600,
-  PHOTO_HEIGHT: 2400,
+  PHOTO_WIDTH: 1200,
+  PHOTO_HEIGHT: 1800,
 
   /**
    * Video composition resolution (MediaRecorder safe)
