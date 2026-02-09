@@ -5,8 +5,9 @@ import { DEFAULT_LAYOUT } from '@/constants/frame-layouts';
 
 // 300 DPI 기준 cm → px 변환
 const CM_TO_PX = (cm: number) => Math.round((cm / 2.54) * 300);
-const QR_SIZE_PX = CM_TO_PX(0.7);    // ~83px
-const QR_MARGIN_PX = CM_TO_PX(0.5);  // ~59px
+const QR_SIZE_PX = CM_TO_PX(0.7);      // ~83px
+const QR_MARGIN_PX = CM_TO_PX(0.5);   // ~59px
+const QR_BORDER_PX = CM_TO_PX(0.05);  // ~6px (0.5mm)
 
 /**
  * Get recommended capture resolution for a frame layout
@@ -63,9 +64,16 @@ async function drawQROnCanvas(
   });
 
   const qrImage = await loadImage(qrDataUrl);
-  const x = canvasWidth - QR_SIZE_PX - QR_MARGIN_PX;
-  const y = canvasHeight - QR_SIZE_PX - QR_MARGIN_PX;
-  ctx.drawImage(qrImage, x, y, QR_SIZE_PX, QR_SIZE_PX);
+  const totalSize = QR_SIZE_PX + QR_BORDER_PX * 2;
+  const x = canvasWidth - totalSize - QR_MARGIN_PX;
+  const y = canvasHeight - totalSize - QR_MARGIN_PX;
+
+  // White border
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x, y, totalSize, totalSize);
+
+  // QR code inside border
+  ctx.drawImage(qrImage, x + QR_BORDER_PX, y + QR_BORDER_PX, QR_SIZE_PX, QR_SIZE_PX);
 }
 
 /**
