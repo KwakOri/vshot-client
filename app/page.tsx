@@ -1,16 +1,29 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Monitor, Camera } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
+import { getToken } from '@/lib/auth';
 
 export default function Home() {
   const store = useAppStore();
+  const router = useRouter();
 
   const handleRoleSelect = (role: 'host' | 'guest') => {
     // Clear all previous session data when starting fresh from main page
     store.reset();
     console.log(`[Main] Cleared session data before navigating to ${role}`);
+  };
+
+  const handleHostClick = (e: React.MouseEvent, path: string) => {
+    // Check auth before navigating to host pages
+    if (!getToken()) {
+      e.preventDefault();
+      router.push(`/login?redirect=${encodeURIComponent(path)}`);
+      return;
+    }
+    handleRoleSelect('host');
   };
 
   return (
@@ -26,7 +39,7 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Link
             href="/host"
-            onClick={() => handleRoleSelect('host')}
+            onClick={(e) => handleHostClick(e, '/host')}
             className="bg-primary hover:bg-primary-dark text-white font-bold py-8 px-6 rounded-xl text-center transition-colors shadow-md flex flex-col items-center"
           >
             <Monitor size={48} className="mb-3" strokeWidth={2} />
@@ -60,7 +73,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Link
               href="/festa-host"
-              onClick={() => handleRoleSelect('host')}
+              onClick={(e) => handleHostClick(e, '/festa-host')}
               className="font-bold py-6 px-6 rounded-xl text-center transition-all shadow-md flex flex-col items-center border-2 border-primary/30 hover:border-primary text-dark hover:shadow-lg"
               style={{ background: 'linear-gradient(135deg, rgba(252,113,43,0.08), rgba(253,147,25,0.08))' }}
             >

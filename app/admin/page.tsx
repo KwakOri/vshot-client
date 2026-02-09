@@ -3,11 +3,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { QRCodeDisplay } from '@/components/QRCodeDisplay';
 import { getFilms, deleteFilm } from '@/lib/films';
+import { logout } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
 import type { FilmResponse } from '@/types/films';
 
 type Film = NonNullable<FilmResponse['film']>;
 
 export default function AdminPage() {
+  const router = useRouter();
   const [films, setFilms] = useState<Film[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -15,6 +18,11 @@ export default function AdminPage() {
   const [statusFilter, setStatusFilter] = useState('active');
   const [expandedQR, setExpandedQR] = useState<string | null>(null);
   const limit = 20;
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
 
   const fetchFilms = useCallback(async () => {
     setLoading(true);
@@ -62,6 +70,14 @@ export default function AdminPage() {
               총 {total}개의 Film
             </p>
           </div>
+
+          <button
+            onClick={handleLogout}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-neutral/20 transition"
+            style={{ color: '#1B1612' }}
+          >
+            로그아웃
+          </button>
 
           {/* Status Filter */}
           <div className="flex gap-2">
