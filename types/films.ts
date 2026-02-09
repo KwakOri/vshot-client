@@ -11,6 +11,7 @@ export interface FilmRecord {
 }
 
 export interface FilmCreateRequest {
+  id?: string;
   roomId: string;
   sessionId?: string;
   photoFileId?: string;

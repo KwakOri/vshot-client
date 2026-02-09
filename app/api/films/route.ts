@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { roomId, sessionId, photoFileId, videoFileId } = body;
+    const { id: clientId, roomId, sessionId, photoFileId, videoFileId } = body;
 
     if (!roomId) {
       return NextResponse.json(
@@ -41,9 +41,9 @@ export async function POST(request: NextRequest) {
     let film: any = null;
     let insertError: any = null;
 
-    // nanoid(8)로 ID 생성, unique 위반 시 1회 재시도
+    // 클라이언트 제공 ID 또는 nanoid(8) 생성, unique 위반 시 1회 재시도
     for (let attempt = 0; attempt < 2; attempt++) {
-      const id = nanoid(8);
+      const id = (attempt === 0 && clientId) ? clientId : nanoid(8);
       const { data, error } = await supabaseServer
         .from('films')
         .insert({

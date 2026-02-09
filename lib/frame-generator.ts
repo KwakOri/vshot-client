@@ -1,6 +1,12 @@
+import QRCode from 'qrcode';
 import { ASPECT_RATIOS, type AspectRatio, type FrameLayout } from '@/types';
 import { FRAME_LAYOUT, calculateGridCellDimensions } from '@/constants/constants';
 import { DEFAULT_LAYOUT } from '@/constants/frame-layouts';
+
+// 300 DPI 기준 cm → px 변환
+const CM_TO_PX = (cm: number) => Math.round((cm / 2.54) * 300);
+const QR_SIZE_PX = CM_TO_PX(0.7);    // ~83px
+const QR_MARGIN_PX = CM_TO_PX(0.5);  // ~59px
 
 /**
  * Get recommended capture resolution for a frame layout
@@ -33,6 +39,33 @@ export function getRecommendedCaptureResolution(layout: FrameLayout): { width: n
     width: Math.ceil(maxSlot.width * safetyMargin),
     height: Math.ceil(maxSlot.height * safetyMargin),
   };
+}
+
+/**
+ * Draw QR code on canvas (bottom-right corner)
+ * 0.7cm QR at 0.5cm margin from edges (300 DPI basis on 1600x2400 canvas)
+ */
+async function drawQROnCanvas(
+  ctx: CanvasRenderingContext2D,
+  filmId: string,
+  canvasWidth: number,
+  canvasHeight: number
+): Promise<void> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const downloadUrl = `${appUrl}/download/${filmId}`;
+
+  // Generate QR as data URL
+  const qrDataUrl = await QRCode.toDataURL(downloadUrl, {
+    width: QR_SIZE_PX,
+    margin: 0,
+    errorCorrectionLevel: 'L',
+    color: { dark: '#000000', light: '#ffffff' },
+  });
+
+  const qrImage = await loadImage(qrDataUrl);
+  const x = canvasWidth - QR_SIZE_PX - QR_MARGIN_PX;
+  const y = canvasHeight - QR_SIZE_PX - QR_MARGIN_PX;
+  ctx.drawImage(qrImage, x, y, QR_SIZE_PX, QR_SIZE_PX);
 }
 
 /**
@@ -336,7 +369,8 @@ export async function generatePhotoFrameBlob(
  */
 export async function generatePhotoFrameBlobWithLayout(
   photoUrls: string[],
-  layout: FrameLayout
+  layout: FrameLayout,
+  filmId?: string
 ): Promise<string> {
   if (photoUrls.length !== layout.slotCount) {
     throw new Error(`Expected ${layout.slotCount} photos for layout "${layout.label}", but got ${photoUrls.length}`);
@@ -357,6 +391,11 @@ export async function generatePhotoFrameBlobWithLayout(
 
   // Use the core rendering function
   await renderFrameToCanvas(canvas, layout, images);
+
+  // Draw QR code if filmId is provided
+  if (filmId) {
+    await drawQROnCanvas(ctx, filmId, canvas.width, canvas.height);
+  }
 
   // Convert to blob and return URL
   return new Promise((resolve, reject) => {

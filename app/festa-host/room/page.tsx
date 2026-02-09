@@ -9,7 +9,7 @@ import {
   VideoDisplayPanel,
 } from '@/components';
 import { CountdownOverlay } from '@/components/v3/FrameOverlayPreview';
-import { GuestWaitingIndicator, SessionHistoryPanel } from '@/components/v3/GuestWaitingIndicator';
+import { GuestWaitingIndicator } from '@/components/v3/GuestWaitingIndicator';
 import { RESOLUTION } from '@/constants/constants';
 import { getLayoutById } from '@/constants/frame-layouts';
 import { useChromaKey } from '@/hooks/useChromaKey';
@@ -26,6 +26,7 @@ import { VideoRecorder, downloadVideo } from '@/lib/video-recorder';
 import { composeVideoWithWebGL, VideoSource } from '@/lib/webgl-video-composer';
 import { uploadBlob } from '@/lib/files';
 import { createFilm } from '@/lib/films';
+import { nanoid } from 'nanoid';
 import { SessionState, SignalMessage } from '@/types';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -146,13 +147,14 @@ export default function HostV3RoomPage() {
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
       console.log('[Festa Host] Session complete:', sessionId);
+      const filmId = nanoid(8);
       let framedBlobUrl: string | null = null;
       const layout = getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
           const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
           const fullUrl = `${API_URL}${frameResultUrl}`;
-          framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
+          framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout, filmId);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
           console.error('[Festa Host] Failed to apply frame:', err);
@@ -167,7 +169,7 @@ export default function HostV3RoomPage() {
       // Video post-processing may still be in progress, so we wait for it
       (async () => {
         try {
-          // 1. Upload photo
+          // 1. Upload photo (with QR code already rendered)
           const photoSrc = framedBlobUrl || frameResultUrl;
           let photoFileId: string | undefined;
           if (photoSrc) {
@@ -198,15 +200,18 @@ export default function HostV3RoomPage() {
             }
           }
 
-          // 3. Create Film record
+          // 3. Create Film record with pre-generated filmId
           if (photoFileId) {
-            await createFilm({
+            const filmRequest = {
+              id: filmId,
               roomId: store.roomId!,
               sessionId,
               photoFileId,
               videoFileId,
-            });
-            console.log('[Festa Host] Film created successfully', videoFileId ? '(with video)' : '(photo only)');
+            };
+            console.log('[Festa Host] Creating film with:', JSON.stringify(filmRequest));
+            const filmResult = await createFilm(filmRequest);
+            console.log('[Festa Host] Film creation result:', JSON.stringify(filmResult));
           }
         } catch (err) {
           console.error('[Festa Host] Film creation failed:', err);
@@ -988,18 +993,6 @@ export default function HostV3RoomPage() {
           </div>
         )}
 
-        {/* Session History */}
-        {guestManagement.completedSessions.length > 0 && (
-          <div className="mt-3">
-            <SessionHistoryPanel
-              completedSessions={guestManagement.completedSessions.map((s) => ({
-                sessionId: s.sessionId,
-                guestId: s.guestId,
-                frameResultUrl: s.frameResultUrl,
-              }))}
-            />
-          </div>
-        )}
       </div>
     </div>
   );
