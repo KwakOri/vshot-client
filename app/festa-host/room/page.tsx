@@ -166,6 +166,7 @@ export default function HostV3RoomPage() {
         setLastSessionResult({ sessionId, frameResultUrl });
       }
       setSessionState(SessionState.COMPLETED);
+      setIsGuestViewingQR(true); // Disable "다음 게스트" until guest receives QR
 
       // Film auto-creation (background)
       // Video post-processing may still be in progress, so we wait for it
@@ -217,7 +218,6 @@ export default function HostV3RoomPage() {
 
             // Notify guest that film is ready (show QR popup)
             sendMessage({ type: 'film-ready-festa', roomId: store.roomId!, filmId });
-            setIsGuestViewingQR(true);
           }
         } catch (err) {
           console.error('[Festa Host] Film creation failed:', err);
