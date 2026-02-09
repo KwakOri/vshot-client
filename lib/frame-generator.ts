@@ -5,7 +5,7 @@ import { DEFAULT_LAYOUT } from '@/constants/frame-layouts';
 
 // 300 DPI 기준 cm → px 변환
 const CM_TO_PX = (cm: number) => Math.round((cm / 2.54) * 300);
-const QR_SIZE_PX = CM_TO_PX(0.7);      // ~83px
+const QR_SIZE_PX = CM_TO_PX(1.0);      // 1cm (~118px)
 const QR_MARGIN_PX = CM_TO_PX(0.5);   // ~59px
 const QR_BORDER_PX = CM_TO_PX(0.05);  // ~6px (0.5mm)
 
