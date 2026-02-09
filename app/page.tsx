@@ -1,110 +1,214 @@
 'use client';
 
-import Link from 'next/link';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Monitor, Camera } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { getToken } from '@/lib/auth';
+import UnicornScene from 'unicornstudio-react';
 
 export default function Home() {
   const store = useAppStore();
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const handleRoleSelect = (role: 'host' | 'guest') => {
-    // Clear all previous session data when starting fresh from main page
+  const handleStartCapture = useCallback(() => {
     store.reset();
-    console.log(`[Main] Cleared session data before navigating to ${role}`);
-  };
+    router.push('/festa-guest');
+  }, [store, router]);
 
-  const handleHostClick = (e: React.MouseEvent, path: string) => {
-    // Check auth before navigating to host pages
-    if (!getToken()) {
-      e.preventDefault();
-      router.push(`/login?redirect=${encodeURIComponent(path)}`);
-      return;
-    }
-    handleRoleSelect('host');
-  };
+  const handleMenuNav = useCallback(
+    (path: string) => {
+      setMenuOpen(false);
+      if (!getToken()) {
+        router.push(`/login?redirect=${encodeURIComponent(path)}`);
+      } else {
+        router.push(path);
+      }
+    },
+    [router]
+  );
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8 bg-light">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-lg p-8 border-2 border-neutral">
-        <h1 className="text-4xl font-bold text-center mb-4 text-dark">
-          VShot v2
-        </h1>
-        <p className="text-center text-dark/70 mb-8 text-lg">
-          VR + 실사 합성 포토부스
-        </p>
+    <main className="relative min-h-[100dvh] overflow-hidden bg-dark">
+      {/* UnicornScene fullscreen background */}
+      <div className="absolute inset-0 z-0">
+        <UnicornScene
+          projectId="qn7XQR2tCNSwUNALTVFe"
+          width="100%"
+          height="100%"
+          scale={1}
+          dpi={1.5}
+          lazyLoad
+        />
+        {/* Overlay gradient for text legibility */}
+        <div className="absolute inset-0 bg-gradient-to-b from-dark/40 via-transparent to-dark/70" />
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Link
-            href="/host"
-            onClick={(e) => handleHostClick(e, '/host')}
-            className="bg-primary hover:bg-primary-dark text-white font-bold py-8 px-6 rounded-xl text-center transition-colors shadow-md flex flex-col items-center"
-          >
-            <Monitor size={48} className="mb-3" strokeWidth={2} />
-            <div className="text-xl mb-2">Host (VR)</div>
-            <div className="text-sm opacity-90">방 생성 및 화면 공유</div>
-          </Link>
-
-          <Link
-            href="/guest"
-            onClick={() => handleRoleSelect('guest')}
-            className="bg-secondary hover:bg-secondary-dark text-white font-bold py-8 px-6 rounded-xl text-center transition-colors shadow-md flex flex-col items-center"
-          >
-            <Camera size={48} className="mb-3" strokeWidth={2} />
-            <div className="text-xl mb-2">Guest (Camera)</div>
-            <div className="text-sm opacity-90">방 참가 및 카메라 전송</div>
-          </Link>
+      {/* Top bar */}
+      <header className="relative z-20 flex items-center justify-between px-6 py-5 sm:px-10">
+        <div className="font-display text-2xl font-extrabold tracking-tight text-white drop-shadow-lg">
+          VShot
         </div>
+        <button
+          onClick={() => setMenuOpen(true)}
+          className="group flex h-10 w-10 flex-col items-center justify-center gap-[5px] rounded-xl bg-white/10 backdrop-blur-sm transition-all hover:bg-white/20 active:scale-95"
+          aria-label="메뉴 열기"
+        >
+          <span className="block h-[2px] w-5 rounded-full bg-white transition-all group-hover:w-4" />
+          <span className="block h-[2px] w-5 rounded-full bg-white" />
+          <span className="block h-[2px] w-5 rounded-full bg-white transition-all group-hover:w-3" />
+        </button>
+      </header>
 
-        {/* Festa Mode Section */}
-        <div className="mt-6 pt-6 border-t-2 border-neutral">
-          <div className="text-center mb-4">
-            <span className="inline-block px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full"
-              style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)', color: 'white' }}>
-              Festa Mode
+      {/* Hero content */}
+      <div className="relative z-10 flex min-h-[calc(100dvh-80px)] flex-col items-center justify-center px-6">
+        <div className="flex flex-col items-center text-center">
+          {/* Badge */}
+          <div
+            className="animate-fade-in mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5"
+            style={{
+              background: 'linear-gradient(135deg, rgba(252,113,43,0.25), rgba(253,147,25,0.15))',
+              border: '1px solid rgba(252,113,43,0.3)',
+              backdropFilter: 'blur(8px)',
+              animationDelay: '0.2s',
+            }}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-xs font-semibold tracking-wider text-white/90 uppercase">
+              Live Photobooth
             </span>
-            <p className="text-sm text-dark/60 mt-2">
-              페스티벌 현장용 포토부스 모드 (연결 유지 + QR 다운로드)
-            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Link
-              href="/festa-host"
-              onClick={(e) => handleHostClick(e, '/festa-host')}
-              className="font-bold py-6 px-6 rounded-xl text-center transition-all shadow-md flex flex-col items-center border-2 border-primary/30 hover:border-primary text-dark hover:shadow-lg"
-              style={{ background: 'linear-gradient(135deg, rgba(252,113,43,0.08), rgba(253,147,25,0.08))' }}
+          {/* Headline */}
+          <h1
+            className="animate-slide-up font-display text-[clamp(2.2rem,6vw,4.5rem)] font-extrabold leading-[1.1] tracking-tight text-white"
+            style={{ animationDelay: '0.35s' }}
+          >
+            VR + 실사 합성
+            <br />
+            <span
+              className="bg-clip-text text-transparent"
+              style={{
+                backgroundImage: 'linear-gradient(135deg, #FC712B, #FD9319, #FEA741)',
+              }}
             >
-              <Monitor size={36} className="mb-2 text-primary" strokeWidth={2} />
-              <div className="text-lg mb-1">Festa Host</div>
-              <div className="text-xs opacity-70">부스 VR 화면</div>
-            </Link>
+              포토부스
+            </span>
+          </h1>
 
-            <Link
-              href="/festa-guest"
-              onClick={() => handleRoleSelect('guest')}
-              className="font-bold py-6 px-6 rounded-xl text-center transition-all shadow-md flex flex-col items-center border-2 border-secondary/30 hover:border-secondary text-dark hover:shadow-lg"
-              style={{ background: 'linear-gradient(135deg, rgba(253,147,25,0.08), rgba(226,212,196,0.15))' }}
-            >
-              <Camera size={36} className="mb-2 text-secondary" strokeWidth={2} />
-              <div className="text-lg mb-1">Festa Guest</div>
-              <div className="text-xs opacity-70">부스 카메라</div>
-            </Link>
-          </div>
-        </div>
+          {/* Subtitle */}
+          <p
+            className="animate-slide-up mt-5 max-w-md text-base text-white/60 sm:text-lg"
+            style={{ animationDelay: '0.5s' }}
+          >
+            버튜버와 함께 특별한 사진을 남겨보세요
+          </p>
 
-        <div className="mt-8 p-6 bg-neutral/30 rounded-lg border border-neutral">
-          <h2 className="font-bold text-dark mb-3 text-lg">사용 방법</h2>
-          <ol className="text-sm text-dark/80 space-y-2 list-decimal list-inside">
-            <li>Host가 방을 생성하고 VR 화면을 공유합니다</li>
-            <li>Guest가 방 ID를 입력해 참가하고 카메라를 활성화합니다</li>
-            <li>Host가 촬영 버튼을 클릭하면 사진이 촬영됩니다</li>
-            <li>완성된 프레임을 다운로드합니다</li>
-          </ol>
+          {/* CTA */}
+          <button
+            onClick={handleStartCapture}
+            className="animate-slide-up group relative mt-10 overflow-hidden rounded-2xl px-10 py-4 text-lg font-bold text-white shadow-xl transition-all duration-300 hover:scale-[1.03] hover:shadow-2xl active:scale-[0.97]"
+            style={{
+              background: 'linear-gradient(135deg, #FC712B, #FD9319)',
+              animationDelay: '0.65s',
+            }}
+          >
+            {/* Glow ring */}
+            <span
+              className="absolute -inset-1 -z-10 rounded-2xl opacity-50 blur-xl transition-opacity duration-300 group-hover:opacity-80"
+              style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)' }}
+            />
+            {/* Shine */}
+            <span className="absolute inset-0 rounded-2xl bg-gradient-to-b from-white/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            <span className="relative flex items-center gap-3">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                <circle cx="12" cy="13" r="3" />
+              </svg>
+              촬영 시작하기
+            </span>
+          </button>
         </div>
       </div>
+
+      {/* Slide-in menu overlay */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-50" onClick={() => setMenuOpen(false)}>
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" />
+
+          {/* Panel */}
+          <div
+            className="absolute right-0 top-0 h-full w-72 bg-dark-50 shadow-2xl animate-slide-in-right"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close */}
+            <div className="flex items-center justify-between px-6 py-5">
+              <span className="font-display text-sm font-bold uppercase tracking-widest text-white/50">
+                Menu
+              </span>
+              <button
+                onClick={() => setMenuOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-white/70 transition-colors hover:bg-white/20 hover:text-white"
+                aria-label="메뉴 닫기"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M4 4l8 8M12 4l-8 8" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-4">
+              <div className="h-px bg-white/10" />
+            </div>
+
+            {/* Menu items */}
+            <nav className="mt-4 flex flex-col gap-1 px-4">
+              <button
+                onClick={() => handleMenuNav('/festa-host')}
+                className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary transition-colors group-hover:bg-primary/25">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <path d="M8 21h8M12 17v4" />
+                  </svg>
+                </span>
+                <div>
+                  <div className="text-sm font-semibold text-white">Festa Host 로그인</div>
+                  <div className="text-xs text-white/40">부스 운영자 모드</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleMenuNav('/admin')}
+                className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/15 text-secondary transition-colors group-hover:bg-secondary/25">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </span>
+                <div>
+                  <div className="text-sm font-semibold text-white">Admin</div>
+                  <div className="text-xs text-white/40">관리자 대시보드</div>
+                </div>
+              </button>
+            </nav>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
