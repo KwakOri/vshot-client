@@ -323,85 +323,86 @@ export default function HostV3RoomPage() {
     init();
   }, [store._hasHydrated, store.role]);
 
-  useEffect(() => {
-    const handleV3Signal = (message: any) => {
-      if (message.type === 'guest-joined-v3' && message.guestId) {
-        store.setPeerId(message.guestId);
-      }
+  const handleV3SignalRef = useRef<(message: any) => void>(() => {});
+  handleV3SignalRef.current = (message: any) => {
+    if (message.type === 'guest-joined-v3' && message.guestId) {
+      store.setPeerId(message.guestId);
+    }
 
-      guestManagement.registerSignalHandlers(message);
-      photoCapture.handleSignalMessage(message);
+    guestManagement.registerSignalHandlers(message);
+    photoCapture.handleSignalMessage(message);
 
-      switch (message.type) {
-        case 'guest-joined-v3':
-          setSessionState(SessionState.GUEST_CONNECTED);
-          setLastSessionResult(null);
-          setRecordedVideoBlob(null);
-          recordedVideoBlobRef.current = null;
-          setIsGuestViewingQR(false);
-          break;
-        case 'guest-left-v3':
-          setSessionState(SessionState.WAITING_FOR_GUEST);
-          photoCapture.reset();
-          break;
-        case 'waiting-for-guest-v3':
-          setSessionState(SessionState.WAITING_FOR_GUEST);
-          break;
-        case 'countdown-tick-v3':
-          if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
-            videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
-              const layout = getLayoutById(store.selectedFrameLayoutId);
-              if (layout && layout.frameSrc) {
-                try {
-                  setIsVideoProcessing(true);
-                  const videoSource: VideoSource = {
-                    blob: rawBlob,
-                    startTime: 0,
-                    endTime: 0,
-                    photoNumber: 1,
-                  };
-                  const composedBlob = await composeVideoWithWebGL(
-                    [videoSource],
-                    {
-                      width: RESOLUTION.VIDEO_WIDTH,
-                      height: RESOLUTION.VIDEO_HEIGHT,
-                      frameRate: 24,
-                      layout,
-                    },
-                    (msg) => setVideoProcessingProgress(msg)
-                  );
-                  setRecordedVideoBlob(composedBlob);
-                  recordedVideoBlobRef.current = composedBlob;
-                } catch (err) {
-                  console.error('[Festa Host] Video post-processing failed:', err);
-                  setRecordedVideoBlob(rawBlob);
-                  recordedVideoBlobRef.current = rawBlob;
-                } finally {
-                  setIsVideoProcessing(false);
-                  setVideoProcessingProgress('');
-                }
-              } else {
+    switch (message.type) {
+      case 'guest-joined-v3':
+        setSessionState(SessionState.GUEST_CONNECTED);
+        setLastSessionResult(null);
+        setRecordedVideoBlob(null);
+        recordedVideoBlobRef.current = null;
+        setIsGuestViewingQR(false);
+        break;
+      case 'guest-left-v3':
+        setSessionState(SessionState.WAITING_FOR_GUEST);
+        photoCapture.reset();
+        break;
+      case 'waiting-for-guest-v3':
+        setSessionState(SessionState.WAITING_FOR_GUEST);
+        break;
+      case 'countdown-tick-v3':
+        if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
+          videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
+            const layout = getLayoutById(store.selectedFrameLayoutId);
+            if (layout && layout.frameSrc) {
+              try {
+                setIsVideoProcessing(true);
+                const videoSource: VideoSource = {
+                  blob: rawBlob,
+                  startTime: 0,
+                  endTime: 0,
+                  photoNumber: 1,
+                };
+                const composedBlob = await composeVideoWithWebGL(
+                  [videoSource],
+                  {
+                    width: RESOLUTION.VIDEO_WIDTH,
+                    height: RESOLUTION.VIDEO_HEIGHT,
+                    frameRate: 24,
+                    layout,
+                  },
+                  (msg) => setVideoProcessingProgress(msg)
+                );
+                setRecordedVideoBlob(composedBlob);
+                recordedVideoBlobRef.current = composedBlob;
+              } catch (err) {
+                console.error('[Festa Host] Video post-processing failed:', err);
                 setRecordedVideoBlob(rawBlob);
                 recordedVideoBlobRef.current = rawBlob;
+              } finally {
+                setIsVideoProcessing(false);
+                setVideoProcessingProgress('');
               }
-            }).catch((err) => console.error('[Festa Host] Video recording start error:', err));
-          }
-          break;
-        case 'capture-now-v3':
-          setShowFlash(true);
-          setTimeout(() => setShowFlash(false), 300);
-          setTimeout(() => {
-            if (videoRecorderRef.current?.isRecording()) {
-              videoRecorderRef.current.stopRecording();
+            } else {
+              setRecordedVideoBlob(rawBlob);
+              recordedVideoBlobRef.current = rawBlob;
             }
-          }, 2000);
-          break;
-        case 'qr-dismissed-festa':
-          setIsGuestViewingQR(false);
-          break;
-      }
-    };
+          }).catch((err) => console.error('[Festa Host] Video recording start error:', err));
+        }
+        break;
+      case 'capture-now-v3':
+        setShowFlash(true);
+        setTimeout(() => setShowFlash(false), 300);
+        setTimeout(() => {
+          if (videoRecorderRef.current?.isRecording()) {
+            videoRecorderRef.current.stopRecording();
+          }
+        }, 2000);
+        break;
+      case 'qr-dismissed-festa':
+        setIsGuestViewingQR(false);
+        break;
+    }
+  };
 
+  useEffect(() => {
     const v3MessageTypes = [
       'guest-joined-v3',
       'guest-left-v3',
@@ -416,8 +417,10 @@ export default function HostV3RoomPage() {
       'qr-dismissed-festa',
     ];
 
+    const handler = (message: any) => handleV3SignalRef.current(message);
+
     v3MessageTypes.forEach((type) => {
-      on(type, handleV3Signal);
+      on(type, handler);
     });
 
     on('peer-joined', (message: any) => {
@@ -427,7 +430,7 @@ export default function HostV3RoomPage() {
     on('peer-left', (message: any) => {
       store.setPeerId(null);
     });
-  }, [on, guestManagement.registerSignalHandlers, photoCapture.handleSignalMessage]);
+  }, [on]);
 
   const startScreenShare = async () => {
     try {

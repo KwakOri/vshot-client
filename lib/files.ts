@@ -1,11 +1,10 @@
+import { getApiHeadersMultipart } from '@/lib/api';
 import type { FileUploadResponse, FileInfoResponse, FileDeleteResponse } from '@/types/files';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
 /**
- * Upload a file to R2 storage via API
- *
- * @param file - File to upload
- * @param ownerId - Optional owner ID
- * @returns Upload response with file info
+ * Upload a file to R2 storage via Express server (bypasses Vercel cold start)
  */
 export async function uploadFile(
   file: File,
@@ -17,8 +16,9 @@ export async function uploadFile(
     formData.append('ownerId', ownerId);
   }
 
-  const response = await fetch('/api/files', {
+  const response = await fetch(`${API_URL}/api/festa/upload`, {
     method: 'POST',
+    headers: getApiHeadersMultipart(),
     body: formData,
   });
 
@@ -26,12 +26,7 @@ export async function uploadFile(
 }
 
 /**
- * Upload a Blob as a file to R2 storage via API
- *
- * @param blob - Blob data to upload
- * @param filename - Filename for the blob
- * @param ownerId - Optional owner ID
- * @returns Upload response with file info
+ * Upload a Blob as a file to R2 storage via Express server
  */
 export async function uploadBlob(
   blob: Blob,

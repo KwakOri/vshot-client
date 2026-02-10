@@ -62,6 +62,16 @@ export function useV3PhotoCapture({
   const abortControllerRef = useRef<AbortController | null>(null);
   const isCapturingRef = useRef(false);
 
+  // Stable callback refs (avoids re-registering signal handlers on every render)
+  const onCaptureCompleteRef = useRef(onCaptureComplete);
+  const onMergeCompleteRef = useRef(onMergeComplete);
+  const onSessionCompleteRef = useRef(onSessionComplete);
+  const onErrorRef = useRef(onError);
+  useEffect(() => { onCaptureCompleteRef.current = onCaptureComplete; }, [onCaptureComplete]);
+  useEffect(() => { onMergeCompleteRef.current = onMergeComplete; }, [onMergeComplete]);
+  useEffect(() => { onSessionCompleteRef.current = onSessionComplete; }, [onSessionComplete]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+
   /**
    * Start capture (Host only) - sends signal to server
    * Server will coordinate the countdown for both clients
@@ -75,7 +85,7 @@ export function useV3PhotoCapture({
     if (!backgroundVideo) {
       const error = new Error('Background video not ready');
       console.error('[V3PhotoCapture]', error);
-      onError?.(error);
+      onErrorRef.current?.(error);
       return;
     }
 
@@ -100,7 +110,7 @@ export function useV3PhotoCapture({
     });
 
     console.log('[V3PhotoCapture] Capture started, waiting for server countdown');
-  }, [role, backgroundVideo, roomId, sendSignal, onError]);
+  }, [role, backgroundVideo, roomId, sendSignal]);
 
   /**
    * Handle countdown tick from server
@@ -127,7 +137,7 @@ export function useV3PhotoCapture({
 
       if (!backgroundVideo) {
         console.error('[V3PhotoCapture] Background video not ready for capture');
-        onError?.(new Error('Background video not ready'));
+        onErrorRef.current?.(new Error('Background video not ready'));
         return;
       }
 
@@ -174,16 +184,16 @@ export function useV3PhotoCapture({
         });
 
         console.log(`[V3PhotoCapture] Photo captured and uploaded: ${photoUrl}`);
-        onCaptureComplete?.(photoUrl);
+        onCaptureCompleteRef.current?.(photoUrl);
       } catch (error) {
         console.error('[V3PhotoCapture] Capture failed:', error);
-        onError?.(error as Error);
+        onErrorRef.current?.(error as Error);
         setIsCapturing(false);
         isCapturingRef.current = false;
         setCountdown(null);
       }
     },
-    [roomId, backgroundVideo, foregroundVideo, chromaKeySettings, guestFlip, hostFlip, userId, role, sendSignal, onCaptureComplete, onError]
+    [roomId, backgroundVideo, foregroundVideo, chromaKeySettings, guestFlip, hostFlip, userId, role, sendSignal]
   );
 
   /**
@@ -195,9 +205,9 @@ export function useV3PhotoCapture({
 
       console.log(`[V3PhotoCapture] Photos merged: ${message.mergedPhotoUrl}`);
       setMergedPhotoUrl(message.mergedPhotoUrl);
-      onMergeComplete?.(message.mergedPhotoUrl);
+      onMergeCompleteRef.current?.(message.mergedPhotoUrl);
     },
-    [roomId, onMergeComplete]
+    [roomId]
   );
 
   /**
@@ -214,9 +224,9 @@ export function useV3PhotoCapture({
       isCapturingRef.current = false;
       setCountdown(null);
 
-      onSessionComplete?.(message.sessionId, message.frameResultUrl);
+      onSessionCompleteRef.current?.(message.sessionId, message.frameResultUrl);
     },
-    [roomId, onSessionComplete]
+    [roomId]
   );
 
   /**

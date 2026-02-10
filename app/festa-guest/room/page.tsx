@@ -229,53 +229,54 @@ export default function GuestV3RoomPage() {
     }
   };
 
-  useEffect(() => {
-    const handleV3Signal = (message: any) => {
-      guestManagement.registerSignalHandlers(message);
-      photoCapture.handleSignalMessage(message);
+  const handleV3SignalRef = useRef<(message: any) => void>(() => {});
+  handleV3SignalRef.current = (message: any) => {
+    guestManagement.registerSignalHandlers(message);
+    photoCapture.handleSignalMessage(message);
 
-      switch (message.type) {
-        case 'guest-joined-v3':
-          if (message.guestId === store.userId) {
-            setSessionState(SessionState.GUEST_CONNECTED);
-            if (message.hostSettings) {
-              if (message.hostSettings.selectedFrameLayoutId) {
-                store.setSelectedFrameLayoutId(message.hostSettings.selectedFrameLayoutId);
-              }
+    switch (message.type) {
+      case 'guest-joined-v3':
+        if (message.guestId === store.userId) {
+          setSessionState(SessionState.GUEST_CONNECTED);
+          if (message.hostSettings) {
+            if (message.hostSettings.selectedFrameLayoutId) {
+              store.setSelectedFrameLayoutId(message.hostSettings.selectedFrameLayoutId);
             }
           }
-          break;
-        case 'countdown-tick-v3':
-          setSessionState(SessionState.CAPTURING);
-          break;
-        case 'capture-now-v3':
-          setShowFlash(true);
-          setTimeout(() => setShowFlash(false), 300);
-          break;
-        case 'film-ready-festa':
-          setFilmId(message.filmId);
-          setShowQRPopup(true);
-          setQrCountdown(null);
-          break;
-        case 'qr-countdown-festa':
-          setQrCountdown(message.count);
-          break;
-        case 'qr-auto-close-festa':
-          setShowQRPopup(false);
-          setFilmId(null);
-          setQrCountdown(null);
-          setSessionState(SessionState.GUEST_CONNECTED);
-          break;
-        case 'session-reset-festa':
-          photoCapture.reset();
-          setShowQRPopup(false);
-          setFilmId(null);
-          setQrCountdown(null);
-          setSessionState(SessionState.GUEST_CONNECTED);
-          break;
-      }
-    };
+        }
+        break;
+      case 'countdown-tick-v3':
+        setSessionState(SessionState.CAPTURING);
+        break;
+      case 'capture-now-v3':
+        setShowFlash(true);
+        setTimeout(() => setShowFlash(false), 300);
+        break;
+      case 'film-ready-festa':
+        setFilmId(message.filmId);
+        setShowQRPopup(true);
+        setQrCountdown(null);
+        break;
+      case 'qr-countdown-festa':
+        setQrCountdown(message.count);
+        break;
+      case 'qr-auto-close-festa':
+        setShowQRPopup(false);
+        setFilmId(null);
+        setQrCountdown(null);
+        setSessionState(SessionState.GUEST_CONNECTED);
+        break;
+      case 'session-reset-festa':
+        photoCapture.reset();
+        setShowQRPopup(false);
+        setFilmId(null);
+        setQrCountdown(null);
+        setSessionState(SessionState.GUEST_CONNECTED);
+        break;
+    }
+  };
 
+  useEffect(() => {
     const v3MessageTypes = [
       'guest-joined-v3',
       'guest-left-v3',
@@ -291,8 +292,10 @@ export default function GuestV3RoomPage() {
       'qr-auto-close-festa',
     ];
 
+    const handler = (message: any) => handleV3SignalRef.current(message);
+
     v3MessageTypes.forEach((type) => {
-      on(type, handleV3Signal);
+      on(type, handler);
     });
 
     on('peer-joined', (message: any) => {
@@ -302,7 +305,7 @@ export default function GuestV3RoomPage() {
     on('peer-left', (message: any) => {
       store.setPeerId(null);
     });
-  }, [on, guestManagement.registerSignalHandlers, photoCapture.handleSignalMessage]);
+  }, [on]);
 
   useEffect(() => {
     on('chromakey-settings', (message: any) => {

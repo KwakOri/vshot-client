@@ -1,4 +1,7 @@
+import { getApiHeaders } from '@/lib/api';
 import type { FilmCreateRequest, FilmResponse, FilmListResponse } from '@/types/films';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export async function createFilm(request: FilmCreateRequest): Promise<FilmResponse> {
   const body = JSON.stringify(request);
@@ -7,9 +10,9 @@ export async function createFilm(request: FilmCreateRequest): Promise<FilmRespon
     console.error('[createFilm] Invalid request body:', request);
     return { success: false, error: 'Invalid request body' };
   }
-  const response = await fetch('/api/films', {
+  const response = await fetch(`${API_URL}/api/festa/film`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getApiHeaders(),
     body,
   });
   if (!response.ok) {
