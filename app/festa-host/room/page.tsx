@@ -143,7 +143,9 @@ export default function HostV3RoomPage() {
       setSessionState(SessionState.PROCESSING);
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
-      console.log('[Festa Host] Session complete:', sessionId);
+      const t0 = performance.now();
+      console.log('[⏱ Timing] onSessionComplete 시작');
+
       const filmId = nanoid(8);
       let framedBlobUrl: string | null = null;
       const layout = getLayoutById(store.selectedFrameLayoutId);
@@ -151,7 +153,9 @@ export default function HostV3RoomPage() {
         try {
           const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
           const fullUrl = `${API_URL}${frameResultUrl}`;
+          const t1 = performance.now();
           framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout, filmId);
+          console.log(`[⏱ Timing] 1. 프레임 이미지 생성: ${(performance.now() - t1).toFixed(0)}ms`);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
           console.error('[Festa Host] Failed to apply frame:', err);
@@ -169,9 +173,14 @@ export default function HostV3RoomPage() {
           const photoSrc = framedBlobUrl || frameResultUrl;
           let photoFileId: string | undefined;
           if (photoSrc) {
+            const t2 = performance.now();
             const photoResponse = await fetch(photoSrc.startsWith('blob:') ? photoSrc : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${photoSrc}`);
             const photoBlob = await photoResponse.blob();
+            console.log(`[⏱ Timing] 2. 사진 Blob 변환: ${(performance.now() - t2).toFixed(0)}ms (${(photoBlob.size / 1024).toFixed(0)}KB)`);
+
+            const t3 = performance.now();
             const photoUpload = await uploadBlob(photoBlob, `festa-photo-${sessionId}.png`);
+            console.log(`[⏱ Timing] 3. 사진 R2 업로드: ${(performance.now() - t3).toFixed(0)}ms`);
             if (photoUpload.success && photoUpload.file) {
               photoFileId = photoUpload.file.id;
             }
@@ -181,18 +190,25 @@ export default function HostV3RoomPage() {
           const maxWait = 30000;
           const pollInterval = 500;
           let waited = 0;
+          const t4 = performance.now();
           while (!recordedVideoBlobRef.current && waited < maxWait) {
             await new Promise((r) => setTimeout(r, pollInterval));
             waited += pollInterval;
           }
+          console.log(`[⏱ Timing] 4. 영상 후처리 대기: ${(performance.now() - t4).toFixed(0)}ms (waited: ${waited}ms)`);
 
           const videoBlob = recordedVideoBlobRef.current;
           if (videoBlob) {
+            console.log(`[⏱ Timing] 4a. 영상 크기: ${(videoBlob.size / 1024 / 1024).toFixed(2)}MB`);
             const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
+            const t5 = performance.now();
             const videoUpload = await uploadBlob(videoBlob, `festa-video-${sessionId}.${ext}`);
+            console.log(`[⏱ Timing] 5. 영상 R2 업로드: ${(performance.now() - t5).toFixed(0)}ms`);
             if (videoUpload.success && videoUpload.file) {
               videoFileId = videoUpload.file.id;
             }
+          } else {
+            console.log('[⏱ Timing] 4a. 영상 없음 (타임아웃)');
           }
 
           if (photoFileId) {
@@ -203,9 +219,10 @@ export default function HostV3RoomPage() {
               photoFileId,
               videoFileId,
             };
-            console.log('[Festa Host] Creating film with:', JSON.stringify(filmRequest));
+            const t6 = performance.now();
             const filmResult = await createFilm(filmRequest);
-            console.log('[Festa Host] Film creation result:', JSON.stringify(filmResult));
+            console.log(`[⏱ Timing] 6. Film DB 생성: ${(performance.now() - t6).toFixed(0)}ms`);
+            console.log(`[⏱ Timing] ✅ 전체 소요시간: ${(performance.now() - t0).toFixed(0)}ms`);
             sendMessage({ type: 'film-ready-festa', roomId: store.roomId!, filmId });
           }
         } catch (err) {
