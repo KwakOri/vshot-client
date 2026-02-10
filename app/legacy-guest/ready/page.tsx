@@ -153,7 +153,7 @@ export default function GuestReadyPage() {
   }, [localStream]);
 
   return (
-    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden bg-light">
+    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden bg-dark">
       {/* Top bar - Room ID input */}
       <div className="flex-shrink-0 bg-white border-2 border-neutral rounded-lg p-2 shadow-md">
         <div className="flex items-center gap-2">

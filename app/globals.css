@@ -12,20 +12,13 @@
   --light: #F3E9E7;
   --neutral: #E2D4C4;
 
-  /* Default theme (Light mode) */
-  --background: #F3E9E7;
-  --foreground: #1B1612;
+  /* Default theme (Dark mode) */
+  --background: #1B1612;
+  --foreground: #F3E9E7;
 
   /* Photo booth accent */
   --booth-glow: rgba(252, 113, 43, 0.15);
-  --booth-shadow: rgba(27, 22, 18, 0.08);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1B1612;
-    --foreground: #F3E9E7;
-  }
+  --booth-shadow: rgba(0, 0, 0, 0.3);
 }
 
 body {
@@ -145,8 +138,8 @@ body {
 
 /* ── Photo Booth Card Styles ── */
 .booth-card {
-  background: white;
-  border: 1.5px solid var(--neutral);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   box-shadow:
     0 1px 3px var(--booth-shadow),
@@ -160,8 +153,8 @@ body {
 }
 
 .booth-card-warm {
-  background: linear-gradient(135deg, #fff 0%, #FFF8F4 100%);
-  border: 1.5px solid var(--neutral);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   box-shadow:
     0 1px 3px var(--booth-shadow),

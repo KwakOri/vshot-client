@@ -539,7 +539,7 @@ export default function GuestV3RoomPage() {
 
   // ─── Main Video View ───
   return (
-    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden bg-light">
+    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden bg-dark">
       <FlashOverlay show={showFlash} />
 
       <CountdownOverlay

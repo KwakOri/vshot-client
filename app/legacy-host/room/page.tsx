@@ -1800,7 +1800,7 @@ export default function HostRoomPage() {
     selectedLayout
   ) {
     return (
-      <div className="flex flex-col h-full p-4 gap-4 overflow-hidden bg-light">
+      <div className="flex flex-col h-full p-4 gap-4 overflow-hidden bg-dark">
         {/* Hidden elements */}
         <video
           ref={remoteVideoRef}

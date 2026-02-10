@@ -60,7 +60,7 @@ export default function AdminPage() {
   const totalPages = Math.ceil(total / limit);
 
   return (
-    <div className="min-h-screen p-6" style={{ background: '#F3E9E7' }}>
+    <div className="min-h-screen p-6" style={{ background: '#1B1612' }}>
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">

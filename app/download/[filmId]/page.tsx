@@ -31,7 +31,7 @@ export default function DownloadPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#F3E9E7' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#1B1612' }}>
         <div className="w-8 h-8 border-3 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#FC712B' }} />
       </div>
     );
@@ -40,7 +40,7 @@ export default function DownloadPage() {
   if (error || !film) {
     const isExpired = film?.status === 'expired';
     return (
-      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: '#F3E9E7' }}>
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: '#1B1612' }}>
         <div className="max-w-sm w-full text-center">
           <div className="text-5xl mb-4">{isExpired ? '⏳' : '🔍'}</div>
           <h1 className="text-xl font-bold mb-2" style={{ color: '#1B1612' }}>
@@ -74,7 +74,7 @@ export default function DownloadPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#F3E9E7' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: '#1B1612' }}>
       {/* Header */}
       <div className="flex-shrink-0 p-4 text-center">
         <h1 className="text-lg font-bold" style={{ color: '#1B1612' }}>VShot</h1>

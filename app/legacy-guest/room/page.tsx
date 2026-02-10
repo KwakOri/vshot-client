@@ -732,7 +732,7 @@ export default function GuestRoomPage() {
   // Result view - show completed photo and video frames
   if (!isComposing && photoFrameUrl && videoFrameUrl) {
     return (
-      <div className="flex flex-col h-full p-4 gap-4 overflow-hidden bg-light">
+      <div className="flex flex-col h-full p-4 gap-4 overflow-hidden bg-dark">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between bg-white border-2 border-neutral rounded-lg p-3 shadow-md">
           <h1 className="text-lg font-bold text-dark">촬영 완료!</h1>

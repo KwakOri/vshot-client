@@ -11,8 +11,8 @@ export default function GuestV3Page() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-light flex items-center justify-center">
-      <div className="text-dark">Loading...</div>
+    <div className="min-h-screen bg-dark flex items-center justify-center">
+      <div className="text-white/40">Loading...</div>
     </div>
   );
 }

@@ -36,7 +36,7 @@ function LoginForm() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6" style={{ background: '#F3E9E7' }}>
+    <main className="min-h-screen flex items-center justify-center p-6" style={{ background: '#1B1612' }}>
       <div className="w-full max-w-sm">
         <h1 className="text-3xl font-bold text-center mb-8" style={{ color: '#1B1612' }}>
           VShot

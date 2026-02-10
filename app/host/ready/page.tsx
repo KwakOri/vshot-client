@@ -140,7 +140,7 @@ export default function HostV3ReadyPage() {
   });
 
   return (
-    <div className="min-h-screen bg-light text-dark flex items-center justify-center p-3 sm:p-8 landscape:p-3 relative overflow-hidden booth-noise">
+    <div className="min-h-screen bg-dark text-light flex items-center justify-center p-3 sm:p-8 landscape:p-3 relative overflow-hidden booth-noise">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-[0.04] pointer-events-none"
         style={{ background: 'radial-gradient(circle, #FC712B, transparent 70%)' }} />
@@ -185,7 +185,7 @@ export default function HostV3ReadyPage() {
             </div>
 
             {/* Mic Test Section */}
-            <div className="bg-light/60 rounded-xl p-4 border border-neutral/50">
+            <div className="bg-white/[0.04] rounded-xl p-4 border border-white/[0.06]">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full transition-colors ${isTestingMic ? 'bg-green-500' : 'bg-neutral'}`} />

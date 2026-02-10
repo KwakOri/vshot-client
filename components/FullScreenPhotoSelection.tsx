@@ -62,7 +62,7 @@ export const FullScreenPhotoSelection = memo(function FullScreenPhotoSelection({
   // Read-only mode for host - just display peer's selections
   if (readOnly) {
     return (
-      <div className="h-full flex flex-col bg-light p-4 overflow-hidden">
+      <div className="h-full flex flex-col bg-dark p-4 overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 mb-4">
           <h2 className="text-lg font-bold text-dark">Guest의 사진 선택</h2>
@@ -111,7 +111,7 @@ export const FullScreenPhotoSelection = memo(function FullScreenPhotoSelection({
 
   // Interactive mode for guest
   return (
-    <div className="h-full flex flex-col bg-light overflow-hidden">
+    <div className="h-full flex flex-col bg-dark overflow-hidden">
       {/* Desktop Layout (lg+) */}
       <div className="hidden lg:flex flex-1 min-h-0 p-4 gap-6">
         {/* Left: Frame Preview (large) */}

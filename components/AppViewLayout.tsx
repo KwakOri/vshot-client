@@ -12,7 +12,7 @@ interface AppViewLayoutProps {
  */
 export function AppViewLayout({ children }: AppViewLayoutProps) {
   return (
-    <div className="h-dvh w-full overflow-hidden bg-light text-dark flex flex-col">
+    <div className="h-dvh w-full overflow-hidden bg-dark text-light flex flex-col">
       {children}
     </div>
   );

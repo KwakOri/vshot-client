@@ -135,7 +135,7 @@ export default function HostReadyPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-light text-dark flex items-center justify-center p-3 sm:p-8 landscape:p-3">
+    <div className="min-h-screen bg-dark text-light flex items-center justify-center p-3 sm:p-8 landscape:p-3">
       <div className="max-w-md w-full bg-white border-2 border-neutral rounded-2xl shadow-lg p-4 sm:p-8 landscape:p-4">
         <h1 className="text-xl sm:text-3xl landscape:text-xl font-bold mb-3 sm:mb-6 landscape:mb-3 text-center text-dark">
           Host 설정
