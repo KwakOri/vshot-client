@@ -1,10 +1,8 @@
 'use client';
 
 import {
-  ConnectionStatus,
   FlashOverlay,
   SettingsModal,
-  VideoDisplayPanel,
 } from '@/components';
 import { CountdownOverlay } from '@/components/v3/FrameOverlayPreview';
 import { RESOLUTION } from '@/constants/constants';
@@ -108,7 +106,6 @@ export default function GuestV3RoomPage() {
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
       console.log('[Festa Guest] Session complete:', sessionId);
-      // Wait for film-ready-festa signal from Host to show QR popup
       setSessionState(SessionState.PROCESSING);
     },
     onError: (error) => {
@@ -345,17 +342,13 @@ export default function GuestV3RoomPage() {
   const toggleLocalMic = () => {
     if (localStream) {
       const audioTracks = localStream.getAudioTracks();
-      audioTracks.forEach((track) => {
-        track.enabled = localMicMuted;
-      });
+      audioTracks.forEach((track) => { track.enabled = localMicMuted; });
       setLocalMicMuted(!localMicMuted);
     }
   };
 
   const leaveRoom = () => {
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-    }
+    if (localStream) localStream.getTracks().forEach((track) => track.stop());
     store.setRoomId(null as any);
     store.setRole(null);
     router.push('/festa-guest/ready');
@@ -427,26 +420,37 @@ export default function GuestV3RoomPage() {
 
   useEffect(() => {
     return () => {
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-      }
+      if (localStream) localStream.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
-  // ─── Main Video View ───
   return (
-    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden bg-light">
+    <div className="relative w-full h-screen overflow-hidden" style={{ background: '#1B1612' }}>
       <FlashOverlay show={showFlash} />
+      <CountdownOverlay countdown={photoCapture.countdown} frameLayout={selectedLayout || null} />
 
-      {/* QR Code Popup */}
+      {/* ===== QR Code Popup ===== */}
       {showQRPopup && filmId && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full flex flex-col items-center gap-4 animate-slide-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: 'rgba(27,22,18,0.9)' }}>
+          <div
+            className="rounded-2xl p-8 max-w-sm w-full flex flex-col items-center gap-5 animate-slide-up"
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+          >
             <div className="text-center">
-              <p className="font-display font-bold text-lg text-dark mb-1">촬영 완료!</p>
-              <p className="text-sm text-dark/60">QR 코드를 스캔하여 사진을 다운로드하세요</p>
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <p className="font-bold text-xl text-white">촬영 완료!</p>
+              </div>
+              <p className="text-sm text-white/50">QR 코드를 스캔하여 사진을 다운로드하세요</p>
             </div>
-            <QRCodeDisplay filmId={filmId} size={200} />
+
+            <div className="bg-white rounded-xl p-3">
+              <QRCodeDisplay filmId={filmId} size={200} />
+            </div>
+
             <button
               onClick={() => {
                 if (store.roomId) {
@@ -456,7 +460,8 @@ export default function GuestV3RoomPage() {
                 setFilmId(null);
                 setSessionState(SessionState.GUEST_CONNECTED);
               }}
-              className="w-full py-3 bg-primary hover:bg-primary-dark text-white rounded-xl font-display font-bold transition"
+              className="w-full py-3 rounded-xl font-bold text-white text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)', boxShadow: '0 4px 20px rgba(252,113,43,0.4)' }}
             >
               닫기
             </button>
@@ -464,102 +469,198 @@ export default function GuestV3RoomPage() {
         </div>
       )}
 
-      <CountdownOverlay
-        countdown={photoCapture.countdown}
-        frameLayout={selectedLayout || null}
-      />
-
-      {/* Navbar */}
-      <div className="flex-shrink-0 flex items-center gap-2 booth-card px-3 py-2">
-        <button
-          onClick={leaveRoom}
-          className="flex-shrink-0 w-9 h-9 flex items-center justify-center bg-neutral/30 hover:bg-neutral/50 rounded-full transition"
-          title="나가기"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-        </button>
-
-        {store.roomId && (
-          <div className="px-3 py-1.5 rounded-full shadow-sm" style={{
-            background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
-          }}>
-            <span className="text-xs font-display font-bold text-white tracking-wider">{store.roomId}</span>
-          </div>
-        )}
-
-        <ConnectionStatus
-          isConnected={isConnected}
-          peerId={store.peerId}
-          remoteStream={remoteStream}
-          role="guest"
+      {/* ===== FULLSCREEN VIDEO ===== */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        {/* Checkerboard background */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `
+              linear-gradient(45deg, #252017 25%, transparent 25%),
+              linear-gradient(-45deg, #252017 25%, transparent 25%),
+              linear-gradient(45deg, transparent 75%, #252017 75%),
+              linear-gradient(-45deg, transparent 75%, #252017 75%)
+            `,
+            backgroundSize: '20px 20px',
+            backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+          }}
         />
 
-        <div className="flex-1" />
+        {/* Own video when alone */}
+        <video
+          ref={localVideoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity z-[1] ${remoteStream ? 'opacity-0' : 'opacity-100'}`}
+          style={{ transform: guestFlipHorizontal ? 'scaleX(-1)' : 'scaleX(1)' }}
+        />
 
-        {/* Mic mute */}
-        <button
-          onClick={toggleLocalMic}
-          className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full transition ${
-            localMicMuted ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-neutral/30 hover:bg-neutral/50 text-dark'
-          }`}
-          title={localMicMuted ? '마이크 켜기' : '마이크 끄기'}
-        >
-          {localMicMuted ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="1" y1="1" x2="23" y2="23" />
-              <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-              <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-          )}
-        </button>
+        {/* Composite canvas when connected */}
+        <canvas
+          ref={compositeCanvasRef}
+          className={`absolute max-w-full max-h-full transition-opacity z-[1] ${!remoteStream ? 'opacity-0' : 'opacity-100'}`}
+          style={{ aspectRatio: '2/3' }}
+        />
 
-        {/* Remote audio */}
-        <button
-          onClick={() => setRemoteAudioEnabled(!remoteAudioEnabled)}
-          className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full transition ${
-            remoteAudioEnabled ? 'bg-neutral/30 hover:bg-neutral/50 text-dark' : 'bg-red-500 hover:bg-red-600 text-white'
-          }`}
-          title={remoteAudioEnabled ? '상대방 음성 끄기' : '상대방 음성 켜기'}
-        >
-          {remoteAudioEnabled ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              <line x1="23" y1="9" x2="17" y2="15" />
-              <line x1="17" y1="9" x2="23" y2="15" />
-            </svg>
-          )}
-        </button>
+        {/* Frame overlay */}
+        {selectedLayout?.frameSrc && (
+          <img
+            src={selectedLayout.frameSrc}
+            alt=""
+            className="absolute max-w-full max-h-full object-fill pointer-events-none z-[2]"
+            style={{ aspectRatio: '2/3', opacity: 1 }}
+          />
+        )}
 
-        {/* Settings */}
-        <button
-          onClick={openSettings}
-          className="flex-shrink-0 w-9 h-9 flex items-center justify-center bg-neutral/30 hover:bg-neutral/50 rounded-full transition"
-          title="설정"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="1" />
-            <circle cx="12" cy="5" r="1" />
-            <circle cx="12" cy="19" r="1" />
-          </svg>
-        </button>
+        {/* Hidden video/canvas elements */}
+        <video ref={remoteVideoRef} autoPlay playsInline muted={!remoteAudioEnabled} className="absolute w-px h-px opacity-0 pointer-events-none" />
+        <canvas ref={localCanvasRef} className="absolute w-0 h-0 opacity-0 pointer-events-none" />
+        <canvas ref={remoteCanvasRef} className="absolute w-0 h-0 opacity-0 pointer-events-none" />
       </div>
 
+      {/* ===== TOP BAR (floating) ===== */}
+      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3">
+        {/* Left: Back */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={leaveRoom}
+            className="w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition hover:bg-white/20"
+            style={{ background: 'rgba(0,0,0,0.4)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </button>
+
+          {/* Connection indicator */}
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.4)' }}>
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} />
+            <span className="text-white/60 text-xs">{isConnected ? 'WS' : 'OFF'}</span>
+          </div>
+        </div>
+
+        {/* Right: Controls */}
+        <div className="flex items-center gap-2">
+          {/* Flip toggle */}
+          <button
+            onClick={toggleGuestFlip}
+            className={`px-3 py-2 rounded-xl backdrop-blur-md text-xs font-bold transition ${guestFlipHorizontal ? 'text-white' : 'text-white/60 hover:bg-white/20'}`}
+            style={{ background: guestFlipHorizontal ? 'rgba(252,113,43,0.8)' : 'rgba(0,0,0,0.4)' }}
+          >
+            반전
+          </button>
+
+          {/* Mic */}
+          <button
+            onClick={toggleLocalMic}
+            className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition ${localMicMuted ? 'bg-red-500/80' : 'hover:bg-white/20'}`}
+            style={localMicMuted ? undefined : { background: 'rgba(0,0,0,0.4)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {localMicMuted ? (
+                <>
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                  <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                  <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </>
+              ) : (
+                <>
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </>
+              )}
+            </svg>
+          </button>
+
+          {/* Speaker */}
+          <button
+            onClick={() => setRemoteAudioEnabled(!remoteAudioEnabled)}
+            className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition ${!remoteAudioEnabled ? 'bg-red-500/80' : 'hover:bg-white/20'}`}
+            style={!remoteAudioEnabled ? undefined : { background: 'rgba(0,0,0,0.4)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {remoteAudioEnabled ? (
+                <>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                </>
+              ) : (
+                <>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </>
+              )}
+            </svg>
+          </button>
+
+          {/* Settings */}
+          <button
+            onClick={openSettings}
+            className="w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition hover:bg-white/20"
+            style={{ background: 'rgba(0,0,0,0.4)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* ===== BOTTOM STATUS BAR ===== */}
+      {sessionState === SessionState.GUEST_CONNECTED && (
+        <div
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 rounded-2xl backdrop-blur-xl px-5 py-3 animate-slide-up"
+          style={{ background: 'rgba(27,22,18,0.9)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-2.5 h-2.5 rounded-full ${remoteStream ? 'bg-green-400' : 'bg-orange-400 animate-pulse'}`} />
+            <span className="text-white text-sm font-bold">
+              {remoteStream ? 'Host 연결됨 - 촬영 대기 중' : 'Host를 기다리는 중...'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Capturing indicator */}
+      {sessionState === SessionState.CAPTURING && (
+        <div
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 rounded-2xl backdrop-blur-xl px-5 py-3 animate-slide-up"
+          style={{ background: 'rgba(27,22,18,0.9)', border: '1px solid rgba(252,113,43,0.3)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-white text-sm font-bold">
+              {photoCapture.countdown !== null && photoCapture.countdown > 0
+                ? `${photoCapture.countdown}초 후 촬영`
+                : photoCapture.uploadProgress > 0
+                ? `업로드 중... ${photoCapture.uploadProgress}%`
+                : '촬영 중...'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Processing indicator */}
+      {sessionState === SessionState.PROCESSING && (
+        <div
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 rounded-2xl backdrop-blur-xl px-5 py-3 animate-slide-up"
+          style={{ background: 'rgba(27,22,18,0.9)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+            <span className="text-white text-sm font-bold">사진 합성 중...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -574,82 +675,6 @@ export default function GuestV3RoomPage() {
         onAudioOutputDeviceChange={setPendingAudioOutputDeviceId}
         onApply={applySettings}
       />
-
-      {/* Video Display */}
-      <div className="flex-1 min-h-0 booth-video-container p-1.5 flex items-center justify-center">
-        <VideoDisplayPanel
-          role="guest"
-          isActive={isCameraActive}
-          remoteStream={remoteStream}
-          localVideoRef={localVideoRef}
-          localCanvasRef={localCanvasRef}
-          remoteVideoRef={remoteVideoRef}
-          remoteCanvasRef={remoteCanvasRef}
-          compositeCanvasRef={compositeCanvasRef}
-          flipHorizontal={guestFlipHorizontal}
-          remoteAudioEnabled={remoteAudioEnabled}
-          frameOverlaySrc={selectedLayout?.frameSrc}
-          frameOverlayVisible={true}
-          frameOverlayOpacity={1}
-        />
-      </div>
-
-      {/* Bottom Panel */}
-      <div className="flex-shrink-0 overflow-y-auto max-h-[40vh] booth-scroll">
-        {/* Capturing state */}
-        {sessionState === SessionState.CAPTURING && (
-          <div className="booth-card p-5 animate-slide-up" style={{ borderColor: '#FC712B' }}>
-            <div className="flex items-center justify-center gap-3">
-              <div className="relative">
-                <div className="w-3 h-3 bg-red-500 rounded-full animate-recording-pulse" />
-                <div className="absolute inset-0 w-3 h-3 bg-red-500 rounded-full animate-pulse-ring" />
-              </div>
-              <div className="font-display text-lg font-bold text-dark">
-                {photoCapture.countdown !== null && photoCapture.countdown > 0
-                  ? `${photoCapture.countdown}초 후 촬영`
-                  : photoCapture.uploadProgress > 0
-                  ? `업로드 중... ${photoCapture.uploadProgress}%`
-                  : '촬영 중...'}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Processing state */}
-        {sessionState === SessionState.PROCESSING && (
-          <div className="booth-card-warm p-5 animate-slide-up">
-            <div className="flex items-center justify-center gap-3">
-              <div className="w-6 h-6 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
-              <div className="font-display text-sm font-semibold text-dark">사진 합성 중...</div>
-            </div>
-          </div>
-        )}
-
-        {/* Default state - waiting for host action */}
-        {sessionState === SessionState.GUEST_CONNECTED && (
-          <div className="booth-card px-4 py-3 animate-fade-in">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className={`w-2 h-2 rounded-full ${remoteStream ? 'bg-green-500' : 'bg-secondary animate-pulse'}`} />
-                <span className="text-sm text-dark/60 font-medium">
-                  {remoteStream ? 'Host 연결됨 - 촬영 대기 중' : 'Host를 기다리는 중...'}
-                </span>
-              </div>
-
-              <button
-                onClick={toggleGuestFlip}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition ${
-                  guestFlipHorizontal
-                    ? 'bg-primary/10 text-primary border border-primary/20'
-                    : 'bg-neutral/30 text-dark/50 border border-neutral/50'
-                }`}
-              >
-                반전
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
