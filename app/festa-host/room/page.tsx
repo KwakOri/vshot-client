@@ -76,7 +76,6 @@ export default function HostV3RoomPage() {
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
   const [isGuestViewingQR, setIsGuestViewingQR] = useState(false);
-  const qrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [lastSessionResult, setLastSessionResult] = useState<{
     sessionId: string;
@@ -163,12 +162,6 @@ export default function HostV3RoomPage() {
       }
       setSessionState(SessionState.COMPLETED);
       setIsGuestViewingQR(true);
-
-      // QR timeout safety: auto-enable "next guest" after 30s
-      if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
-      qrTimeoutRef.current = setTimeout(() => {
-        setIsGuestViewingQR(false);
-      }, 30000);
 
       // Film auto-creation (background)
       (async () => {
@@ -329,7 +322,6 @@ export default function HostV3RoomPage() {
           setRecordedVideoBlob(null);
           recordedVideoBlobRef.current = null;
           setIsGuestViewingQR(false);
-          if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
           break;
         case 'guest-left-v3':
           setSessionState(SessionState.WAITING_FOR_GUEST);
@@ -389,7 +381,6 @@ export default function HostV3RoomPage() {
           break;
         case 'qr-dismissed-festa':
           setIsGuestViewingQR(false);
-          if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
           break;
       }
     };
@@ -576,7 +567,6 @@ export default function HostV3RoomPage() {
   useEffect(() => {
     return () => {
       if (localStream) localStream.getTracks().forEach((track) => track.stop());
-      if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
     };
   }, []);
 

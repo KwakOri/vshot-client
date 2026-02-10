@@ -47,6 +47,7 @@ export default function GuestV3RoomPage() {
 
   const [filmId, setFilmId] = useState<string | null>(null);
   const [showQRPopup, setShowQRPopup] = useState(false);
+  const [qrCountdown, setQrCountdown] = useState<number | null>(null);
 
   const { videoDevices, audioDevices, audioOutputDevices, refreshDevices } = useMediaDevices();
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState<string | null>(
@@ -254,11 +255,22 @@ export default function GuestV3RoomPage() {
         case 'film-ready-festa':
           setFilmId(message.filmId);
           setShowQRPopup(true);
+          setQrCountdown(null);
+          break;
+        case 'qr-countdown-festa':
+          setQrCountdown(message.count);
+          break;
+        case 'qr-auto-close-festa':
+          setShowQRPopup(false);
+          setFilmId(null);
+          setQrCountdown(null);
+          setSessionState(SessionState.GUEST_CONNECTED);
           break;
         case 'session-reset-festa':
           photoCapture.reset();
           setShowQRPopup(false);
           setFilmId(null);
+          setQrCountdown(null);
           setSessionState(SessionState.GUEST_CONNECTED);
           break;
       }
@@ -275,6 +287,8 @@ export default function GuestV3RoomPage() {
       'session-complete-v3',
       'session-reset-festa',
       'film-ready-festa',
+      'qr-countdown-festa',
+      'qr-auto-close-festa',
     ];
 
     v3MessageTypes.forEach((type) => {
@@ -453,6 +467,12 @@ export default function GuestV3RoomPage() {
               <QRCodeDisplay filmId={filmId} size={200} />
             </div>
 
+            {qrCountdown !== null && (
+              <p className="text-sm text-white/40">
+                이 팝업은 {qrCountdown}초 후에 닫힙니다
+              </p>
+            )}
+
             <button
               onClick={() => {
                 if (store.roomId) {
@@ -460,6 +480,7 @@ export default function GuestV3RoomPage() {
                 }
                 setShowQRPopup(false);
                 setFilmId(null);
+                setQrCountdown(null);
                 setSessionState(SessionState.GUEST_CONNECTED);
               }}
               className="w-full py-3 rounded-xl font-bold text-white text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
