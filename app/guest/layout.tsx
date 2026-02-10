@@ -4,7 +4,7 @@ import { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "VShot | 게스트",
-  description: "VShot 포토부스 게스트 — 실시간 포토 촬영 참여",
+  description: "VShot 버츄얼 포토부스 게스트 — 포토 촬영 참여",
 };
 
 export default function GuestV3Layout({ children }: { children: ReactNode }) {
