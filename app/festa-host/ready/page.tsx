@@ -133,38 +133,61 @@ export default function HostV3ReadyPage() {
   }, []);
 
   // Audio level bars for visualization
-  const bars = 12;
+  const bars = 16;
   const barLevels = Array.from({ length: bars }, (_, i) => {
     const threshold = (i / bars) * 100;
     return audioLevel > threshold;
   });
 
   return (
-    <div className="min-h-screen bg-light text-dark flex items-center justify-center p-3 sm:p-8 landscape:p-3 relative overflow-hidden booth-noise">
-      {/* Background decoration */}
-      <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-[0.04] pointer-events-none"
-        style={{ background: 'radial-gradient(circle, #FC712B, transparent 70%)' }} />
-      <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full opacity-[0.03] pointer-events-none"
-        style={{ background: 'radial-gradient(circle, #FD9319, transparent 70%)' }} />
+    <div className="min-h-screen flex items-center justify-center p-3 sm:p-8 landscape:p-3 relative overflow-hidden" style={{ background: '#1B1612' }}>
+      {/* Ambient gradient orbs */}
+      <div
+        className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(252,113,43,0.08) 0%, transparent 70%)' }}
+      />
+      <div
+        className="absolute bottom-[-15%] left-[-10%] w-[400px] h-[400px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(253,147,25,0.06) 0%, transparent 70%)' }}
+      />
+      <div
+        className="absolute top-[40%] left-[50%] w-[300px] h-[300px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(252,113,43,0.04) 0%, transparent 70%)' }}
+      />
+
+      {/* Noise texture */}
+      <div className="absolute inset-0 booth-noise pointer-events-none" />
 
       <div className="max-w-lg w-full relative z-10">
         {/* Header */}
         <div className="text-center mb-6 sm:mb-8 landscape:mb-4 animate-slide-up">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+          <div
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold tracking-wider mb-4"
+            style={{ background: 'rgba(252,113,43,0.12)', color: '#FC712B' }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#FC712B' }} />
             PHOTO BOOTH HOST
           </div>
-          <h1 className="font-display text-2xl sm:text-4xl landscape:text-2xl font-bold text-dark tracking-tight">
+          <h1 className="font-display text-3xl sm:text-4xl landscape:text-2xl font-bold text-white tracking-tight">
             촬영 준비
           </h1>
-          <p className="text-dark/50 text-sm mt-1">장치 설정 후 포토부스를 시작하세요</p>
+          <p className="text-white/40 text-sm mt-2">장치 설정 후 포토부스를 시작하세요</p>
         </div>
 
-        <div className="booth-card p-5 sm:p-7 landscape:p-4 max-h-[75vh] overflow-y-auto booth-scroll animate-slide-up" style={{ animationDelay: '0.1s' }}>
+        {/* Main card - glassmorphism */}
+        <div
+          className="rounded-2xl p-5 sm:p-7 landscape:p-4 max-h-[75vh] overflow-y-auto booth-scroll backdrop-blur-xl animate-slide-up"
+          style={{
+            animationDelay: '0.1s',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)',
+          }}
+        >
           <div className="space-y-5 sm:space-y-6 landscape:space-y-4">
             {/* Device Selection */}
             <div>
-              <label className="font-display text-xs font-semibold text-dark/40 uppercase tracking-wider mb-3 block">
+              <label className="font-display text-[11px] font-bold text-white/30 uppercase tracking-wider mb-3 block">
                 오디오 장치
               </label>
               <DeviceSelector
@@ -181,70 +204,89 @@ export default function HostV3ReadyPage() {
                 showMicrophone={true}
                 showSpeaker={true}
                 disabled={isTestingMic}
+                variant="dark"
               />
             </div>
 
             {/* Mic Test Section */}
-            <div className="bg-light/60 rounded-xl p-4 border border-neutral/50">
+            <div
+              className="rounded-xl p-4"
+              style={{
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.06)',
+              }}
+            >
               <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full transition-colors ${isTestingMic ? 'bg-green-500' : 'bg-neutral'}`} />
-                  <span className="text-sm font-semibold text-dark">마이크 테스트</span>
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-2.5 h-2.5 rounded-full transition-colors ${isTestingMic ? 'bg-green-400 animate-pulse' : 'bg-white/15'}`} />
+                  <span className="text-sm font-semibold text-white">마이크 테스트</span>
                 </div>
                 <button
                   onClick={isTestingMic ? stopMicTest : startMicTest}
-                  className={`booth-btn px-4 py-1.5 rounded-full text-xs font-bold transition touch-manipulation ${
-                    isTestingMic
-                      ? 'bg-dark/80 hover:bg-dark text-white'
-                      : 'bg-primary hover:bg-primary-dark text-white'
-                  }`}
+                  className="booth-btn px-5 py-1.5 rounded-full text-xs font-bold text-white transition touch-manipulation"
+                  style={{
+                    background: isTestingMic
+                      ? 'rgba(255,255,255,0.1)'
+                      : 'linear-gradient(135deg, #FC712B, #FD9319)',
+                    boxShadow: isTestingMic ? 'none' : '0 2px 12px rgba(252,113,43,0.3)',
+                  }}
                 >
                   {isTestingMic ? '중지' : '테스트'}
                 </button>
               </div>
 
               {/* Audio Level Bars */}
-              <div className="flex items-end gap-1 h-8">
+              <div className="flex items-end gap-[3px] h-10">
                 {barLevels.map((active, i) => (
                   <div
                     key={i}
-                    className="flex-1 rounded-sm transition-all duration-75"
+                    className="flex-1 rounded-[2px] transition-all duration-75"
                     style={{
-                      height: active ? `${Math.min(100, 40 + (i / bars) * 60)}%` : '20%',
-                      backgroundColor: active
-                        ? i < bars * 0.6
+                      height: active ? `${Math.min(100, 30 + (i / bars) * 70)}%` : '15%',
+                      background: active
+                        ? i < bars * 0.5
                           ? '#FC712B'
-                          : i < bars * 0.8
+                          : i < bars * 0.75
                           ? '#FD9319'
                           : '#ef4444'
-                        : '#E2D4C4',
-                      opacity: active ? 1 : 0.4,
+                        : 'rgba(255,255,255,0.06)',
+                      boxShadow: active ? `0 0 8px ${i < bars * 0.75 ? 'rgba(252,113,43,0.3)' : 'rgba(239,68,68,0.3)'}` : 'none',
                     }}
                   />
                 ))}
               </div>
               {isTestingMic && (
-                <p className="text-xs text-dark/40 mt-2">마이크에 말해보세요</p>
+                <p className="text-xs text-white/30 mt-2.5">마이크에 말해보세요</p>
               )}
             </div>
 
             {/* Frame Selection */}
             {activeLayouts.length > 1 && (
               <div>
-                <label className="font-display text-xs font-semibold text-dark/40 uppercase tracking-wider mb-3 block">
+                <label className="font-display text-[11px] font-bold text-white/30 uppercase tracking-wider mb-3 block">
                   프레임 선택
                 </label>
                 <FrameSelector
                   layouts={activeLayouts}
                   selectedLayoutId={selectedFrameLayoutId}
                   onSelect={handleFrameSelect}
+                  variant="dark"
                 />
               </div>
             )}
 
             {/* V3 Mode Info */}
-            <div className="flex items-start gap-3 p-3 rounded-xl bg-secondary/5 border border-secondary/15">
-              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center mt-0.5">
+            <div
+              className="flex items-start gap-3 p-4 rounded-xl"
+              style={{
+                background: 'rgba(253,147,25,0.06)',
+                border: '1px solid rgba(253,147,25,0.12)',
+              }}
+            >
+              <div
+                className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center mt-0.5"
+                style={{ background: 'rgba(253,147,25,0.1)' }}
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FD9319" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                   <circle cx="9" cy="7" r="4" />
@@ -253,8 +295,8 @@ export default function HostV3ReadyPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-semibold text-dark">게스트 로테이션 모드</p>
-                <p className="text-xs text-dark/50 mt-0.5 leading-relaxed">
+                <p className="text-sm font-semibold text-white">게스트 로테이션 모드</p>
+                <p className="text-xs text-white/40 mt-0.5 leading-relaxed">
                   게스트가 교체되어도 설정이 유지됩니다. 방에 입장한 후 화면 공유를 시작해주세요.
                 </p>
               </div>
@@ -263,7 +305,11 @@ export default function HostV3ReadyPage() {
             {/* Create Room Button */}
             <button
               onClick={createRoom}
-              className="booth-btn w-full bg-primary hover:bg-primary-dark text-white font-display font-bold py-4 sm:py-5 landscape:py-3 rounded-xl text-base sm:text-lg landscape:text-base shadow-lg shadow-primary/20 touch-manipulation"
+              className="booth-btn w-full text-white font-display font-bold py-4 sm:py-5 landscape:py-3 rounded-xl text-base sm:text-lg landscape:text-base touch-manipulation transition-all hover:scale-[1.01] active:scale-[0.98]"
+              style={{
+                background: 'linear-gradient(135deg, #FC712B, #FD9319)',
+                boxShadow: '0 4px 24px rgba(252,113,43,0.35), inset 0 1px 0 rgba(255,255,255,0.15)',
+              }}
             >
               포토부스 시작
             </button>

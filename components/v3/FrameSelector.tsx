@@ -9,6 +9,7 @@ interface FrameSelectorProps {
   selectedLayoutId: string | null;
   onSelect: (layout: FrameLayout) => void;
   className?: string;
+  variant?: 'light' | 'dark';
 }
 
 export function FrameSelector({
@@ -16,7 +17,9 @@ export function FrameSelector({
   selectedLayoutId,
   onSelect,
   className = '',
+  variant = 'light',
 }: FrameSelectorProps) {
+  const isDark = variant === 'dark';
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   return (
@@ -40,7 +43,7 @@ export function FrameSelector({
                   : 'ring-1.5 ring-neutral/60 hover:ring-secondary hover:shadow-md'
                 }
               `}
-              style={{ backgroundColor: '#F3E9E7' }}
+              style={{ backgroundColor: isDark ? '#2a2320' : '#F3E9E7' }}
             >
               {/* Thumbnail */}
               <div className="relative w-full h-full">
@@ -79,7 +82,7 @@ export function FrameSelector({
 
       {/* Selected frame info */}
       {selectedLayoutId && (
-        <div className="mt-3 p-3 rounded-xl bg-light/60 border border-neutral/30">
+        <div className={`mt-3 p-3 rounded-xl border ${isDark ? 'bg-white/[0.04] border-white/[0.08]' : 'bg-light/60 border-neutral/30'}`}>
           {(() => {
             const selected = layouts.find((l) => l.id === selectedLayoutId);
             if (!selected) return null;
@@ -87,14 +90,14 @@ export function FrameSelector({
             return (
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-display font-semibold text-dark">
+                  <p className={`text-sm font-display font-semibold ${isDark ? 'text-white' : 'text-dark'}`}>
                     {selected.label}
                   </p>
                   {selected.description && (
-                    <p className="text-xs text-dark/50 mt-0.5">{selected.description}</p>
+                    <p className={`text-xs mt-0.5 ${isDark ? 'text-white/40' : 'text-dark/50'}`}>{selected.description}</p>
                   )}
                 </div>
-                <span className="text-[10px] font-mono text-dark/30">
+                <span className={`text-[10px] font-mono ${isDark ? 'text-white/20' : 'text-dark/30'}`}>
                   {selected.canvasWidth}x{selected.canvasHeight}
                 </span>
               </div>
