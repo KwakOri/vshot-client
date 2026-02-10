@@ -664,32 +664,19 @@ export default function HostV3RoomPage() {
         {!isCameraActive && (
           <div className="absolute inset-0 flex items-center justify-center z-[3]">
             <div className="text-center">
-              <p className="text-white/40 text-sm mb-6">영상 소스를 선택하세요</p>
-              <div className="flex gap-4">
-                <button
-                  onClick={startScreenShare}
-                  className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl transition-all hover:scale-105"
-                  style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)' }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
-                  </svg>
-                  <span className="text-white font-bold text-sm">화면 공유</span>
-                </button>
-                <button
-                  onClick={startCamera}
-                  className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl border-2 border-white/20 hover:border-white/40 transition-all hover:scale-105"
-                  style={{ background: 'rgba(255,255,255,0.05)' }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                    <circle cx="12" cy="13" r="4" />
-                  </svg>
-                  <span className="text-white font-bold text-sm">카메라</span>
-                </button>
-              </div>
+              <p className="text-white/40 text-sm mb-6">화면 공유를 시작하세요</p>
+              <button
+                onClick={startScreenShare}
+                className="flex flex-col items-center gap-3 px-10 py-7 rounded-2xl transition-all hover:scale-105"
+                style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)' }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+                <span className="text-white font-bold text-sm">화면 공유</span>
+              </button>
             </div>
           </div>
         )}
@@ -785,45 +772,48 @@ export default function HostV3RoomPage() {
       </div>
 
       {/* ===== LEFT SIDE TAB (Settings) ===== */}
-      <button
-        onClick={() => setLeftPanelOpen(!leftPanelOpen)}
-        className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-r-xl backdrop-blur-md transition hover:bg-white/20"
-        style={{ background: leftPanelOpen ? 'rgba(252,113,43,0.8)' : 'rgba(0,0,0,0.5)' }}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {leftPanelOpen ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
-        </svg>
-      </button>
+      {!leftPanelOpen && (
+        <button
+          onClick={() => setLeftPanelOpen(true)}
+          className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-r-xl backdrop-blur-md transition hover:bg-white/20"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      )}
 
       {leftPanelOpen && (
         <div
           className="absolute left-0 top-16 bottom-4 z-20 w-72 overflow-y-auto rounded-r-2xl backdrop-blur-xl p-4 space-y-4"
           style={{ background: 'rgba(27,22,18,0.92)', borderRight: '1px solid rgba(255,255,255,0.08)' }}
         >
-          <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">설정</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">설정</h3>
+            <button
+              onClick={() => setLeftPanelOpen(false)}
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
 
-          {/* Source selection */}
-          {isCameraActive && (
-            <div className="space-y-2">
-              <p className="text-white/50 text-xs">소스</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={startScreenShare}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition ${sourceType === 'screen' ? 'text-white' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                  style={sourceType === 'screen' ? { background: 'linear-gradient(135deg, #FC712B, #FD9319)' } : undefined}
-                >
-                  화면 공유
-                </button>
-                <button
-                  onClick={startCamera}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition ${sourceType === 'camera' ? 'text-white' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
-                  style={sourceType === 'camera' ? { background: 'linear-gradient(135deg, #FC712B, #FD9319)' } : undefined}
-                >
-                  카메라
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Screen share button */}
+          <button
+            onClick={startScreenShare}
+            className="w-full py-2.5 px-3 rounded-lg text-xs font-bold text-white transition hover:opacity-90 flex items-center justify-center gap-2"
+            style={{ background: isCameraActive ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #FC712B, #FD9319)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+            {isCameraActive ? '화면 공유 변경' : '화면 공유 시작'}
+          </button>
 
           {/* Chroma Key */}
           <div className="space-y-3">
@@ -836,7 +826,7 @@ export default function HostV3RoomPage() {
                   updateSetting('chromaKeyEnabled', newVal);
                   syncChromaKeySettings();
                 }}
-                className={`relative w-10 h-5 rounded-full transition-colors ${chromaKeyEnabled ? 'bg-green-500' : 'bg-white/20'}`}
+                className={`relative w-10 h-5 rounded-full transition-colors ${chromaKeyEnabled ? 'bg-orange-500' : 'bg-white/20'}`}
               >
                 <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${chromaKeyEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
               </button>
@@ -845,14 +835,27 @@ export default function HostV3RoomPage() {
             {chromaKeyEnabled && (
               <>
                 <div>
-                  <label className="text-white/40 text-xs block mb-1">색상</label>
-                  <input
-                    type="color"
-                    value={chromaKeyColor}
-                    onChange={(e) => { setChromaKeyColor(e.target.value); updateSetting('chromaKeyColor', e.target.value); }}
-                    onBlur={syncChromaKeySettings}
-                    className="w-full h-8 rounded-lg cursor-pointer border border-white/10 bg-transparent"
-                  />
+                  <label className="text-white/40 text-xs block mb-1">색상 (HEX)</label>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-8 h-8 rounded-lg border border-white/20 flex-shrink-0"
+                      style={{ background: chromaKeyColor }}
+                    />
+                    <input
+                      type="text"
+                      value={chromaKeyColor}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setChromaKeyColor(val);
+                        if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                          updateSetting('chromaKeyColor', val);
+                        }
+                      }}
+                      onBlur={syncChromaKeySettings}
+                      placeholder="#00ff00"
+                      className="flex-1 h-8 px-2 rounded-lg text-xs text-white font-mono border border-white/10 bg-white/5 outline-none focus:border-orange-500/50"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="text-white/40 text-xs flex justify-between mb-1">
@@ -919,22 +922,34 @@ export default function HostV3RoomPage() {
       )}
 
       {/* ===== RIGHT SIDE TAB (Info) ===== */}
-      <button
-        onClick={() => setRightPanelOpen(!rightPanelOpen)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-l-xl backdrop-blur-md transition hover:bg-white/20"
-        style={{ background: rightPanelOpen ? 'rgba(252,113,43,0.8)' : 'rgba(0,0,0,0.5)' }}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {rightPanelOpen ? <polyline points="9 18 15 12 9 6" /> : <polyline points="15 18 9 12 15 6" />}
-        </svg>
-      </button>
+      {!rightPanelOpen && (
+        <button
+          onClick={() => setRightPanelOpen(true)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-l-xl backdrop-blur-md transition hover:bg-white/20"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+      )}
 
       {rightPanelOpen && (
         <div
           className="absolute right-0 top-16 bottom-4 z-20 w-64 overflow-y-auto rounded-l-2xl backdrop-blur-xl p-4 space-y-4"
           style={{ background: 'rgba(27,22,18,0.92)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}
         >
-          <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">상태</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">상태</h3>
+            <button
+              onClick={() => setRightPanelOpen(false)}
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
 
           {/* Guest status */}
           <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
