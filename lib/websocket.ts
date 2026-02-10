@@ -6,6 +6,7 @@ export class SignalingClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 2000;
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(private url: string) {}
 
@@ -24,12 +25,16 @@ export class SignalingClient {
           clearTimeout(timeout);
           console.log('[WS] Connected to signaling server');
           this.reconnectAttempts = 0;
+          this.startHeartbeat();
           resolve();
         };
 
         this.ws.onmessage = (event) => {
           try {
-            const message: SignalMessage = JSON.parse(event.data);
+            const message = JSON.parse(event.data);
+            // Silently ignore pong responses
+            if (message.type === 'pong') return;
+
             console.log('[WS] Received:', message.type);
 
             const handler = this.messageHandlers.get(message.type);
@@ -50,6 +55,7 @@ export class SignalingClient {
         this.ws.onclose = () => {
           clearTimeout(timeout);
           console.log('[WS] Connection closed');
+          this.stopHeartbeat();
           this.attemptReconnect();
         };
       } catch (error) {
@@ -90,7 +96,24 @@ export class SignalingClient {
     this.messageHandlers.delete(messageType);
   }
 
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
   disconnect(): void {
+    this.stopHeartbeat();
     if (this.ws) {
       this.ws.close();
       this.ws = null;

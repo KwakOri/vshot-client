@@ -1,15 +1,10 @@
 'use client';
 
 import {
-  ConnectionStatus,
   FlashOverlay,
-  HostRoomHeader,
   SettingsModal,
-  SettingsPanel,
-  VideoDisplayPanel,
 } from '@/components';
 import { CountdownOverlay } from '@/components/v3/FrameOverlayPreview';
-import { GuestWaitingIndicator } from '@/components/v3/GuestWaitingIndicator';
 import { RESOLUTION } from '@/constants/constants';
 import { getLayoutById } from '@/constants/frame-layouts';
 import { useChromaKey } from '@/hooks/useChromaKey';
@@ -59,7 +54,7 @@ export default function HostV3RoomPage() {
   const [sensitivity, setSensitivity] = useState(50);
   const [smoothness, setSmoothness] = useState(10);
   const [chromaKeyColor, setChromaKeyColor] = useState('#00ff00');
-  const [guestBlurAmount, setGuestBlurAmount] = useState(30);
+  const [guestBlurAmount, setGuestBlurAmount] = useState(50);
 
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
   const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
@@ -81,6 +76,7 @@ export default function HostV3RoomPage() {
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
   const [isGuestViewingQR, setIsGuestViewingQR] = useState(false);
+  const qrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [lastSessionResult, setLastSessionResult] = useState<{
     sessionId: string;
@@ -93,17 +89,19 @@ export default function HostV3RoomPage() {
   const [isVideoProcessing, setIsVideoProcessing] = useState(false);
   const [videoProcessingProgress, setVideoProcessingProgress] = useState('');
 
+  // Side panel states
+  const [leftPanelOpen, setLeftPanelOpen] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+
   const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteCanvasRef = useRef<HTMLCanvasElement>(null);
-  const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const compositeCanvasRef = useRef<HTMLCanvasElement>(null); // Recording canvas (no blur)
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null); // Preview canvas (with blur)
   const initializedRef = useRef(false);
-
-  // Chroma key settings panel toggle
-  const [showChromaSettings, setShowChromaSettings] = useState(false);
 
   const guestManagement = useGuestManagement({
     roomId: store.roomId || '',
@@ -166,13 +164,17 @@ export default function HostV3RoomPage() {
         setLastSessionResult({ sessionId, frameResultUrl });
       }
       setSessionState(SessionState.COMPLETED);
-      setIsGuestViewingQR(true); // Disable "다음 게스트" until guest receives QR
+      setIsGuestViewingQR(true);
+
+      // QR timeout safety: auto-enable "next guest" after 30s
+      if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
+      qrTimeoutRef.current = setTimeout(() => {
+        setIsGuestViewingQR(false);
+      }, 30000);
 
       // Film auto-creation (background)
-      // Video post-processing may still be in progress, so we wait for it
       (async () => {
         try {
-          // 1. Upload photo (with QR code already rendered)
           const photoSrc = framedBlobUrl || frameResultUrl;
           let photoFileId: string | undefined;
           if (photoSrc) {
@@ -184,9 +186,8 @@ export default function HostV3RoomPage() {
             }
           }
 
-          // 2. Wait for video post-processing to complete (poll ref)
           let videoFileId: string | undefined;
-          const maxWait = 30000; // 30s max
+          const maxWait = 30000;
           const pollInterval = 500;
           let waited = 0;
           while (!recordedVideoBlobRef.current && waited < maxWait) {
@@ -203,7 +204,6 @@ export default function HostV3RoomPage() {
             }
           }
 
-          // 3. Create Film record with pre-generated filmId
           if (photoFileId) {
             const filmRequest = {
               id: filmId,
@@ -215,8 +215,6 @@ export default function HostV3RoomPage() {
             console.log('[Festa Host] Creating film with:', JSON.stringify(filmRequest));
             const filmResult = await createFilm(filmRequest);
             console.log('[Festa Host] Film creation result:', JSON.stringify(filmResult));
-
-            // Notify guest that film is ready (show QR popup)
             sendMessage({ type: 'film-ready-festa', roomId: store.roomId!, filmId });
           }
         } catch (err) {
@@ -244,6 +242,7 @@ export default function HostV3RoomPage() {
     flipHorizontal: hostFlipHorizontal,
   });
 
+  // Recording canvas: no blur (used by VideoRecorder)
   useCompositeCanvas({
     compositeCanvas: compositeCanvasRef.current,
     backgroundVideo: remoteVideoRef.current,
@@ -254,6 +253,21 @@ export default function HostV3RoomPage() {
     height: RESOLUTION.VIDEO_HEIGHT,
     guestFlipHorizontal,
     hostFlipHorizontal,
+    guestBlurAmount: 0,
+  });
+
+  // Preview canvas: with blur (displayed on screen)
+  useCompositeCanvas({
+    compositeCanvas: previewCanvasRef.current,
+    backgroundVideo: remoteVideoRef.current,
+    foregroundCanvas: localCanvasRef.current,
+    localStream,
+    remoteStream,
+    width: RESOLUTION.VIDEO_WIDTH,
+    height: RESOLUTION.VIDEO_HEIGHT,
+    guestFlipHorizontal,
+    hostFlipHorizontal,
+    guestBlurAmount,
   });
 
   useEffect(() => {
@@ -264,7 +278,7 @@ export default function HostV3RoomPage() {
     setChromaKeyColor(savedSettings.chromaKeyColor);
     setHostFlipHorizontal(savedSettings.hostFlipHorizontal);
     setGuestFlipHorizontal(savedSettings.guestFlipHorizontal);
-    setGuestBlurAmount(savedSettings.guestBlurAmount);
+    setGuestBlurAmount(savedSettings.guestBlurAmount ?? 50);
   }, [settingsLoaded]);
 
   useEffect(() => {
@@ -317,6 +331,7 @@ export default function HostV3RoomPage() {
           setRecordedVideoBlob(null);
           recordedVideoBlobRef.current = null;
           setIsGuestViewingQR(false);
+          if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
           break;
         case 'guest-left-v3':
           setSessionState(SessionState.WAITING_FOR_GUEST);
@@ -374,6 +389,7 @@ export default function HostV3RoomPage() {
           break;
         case 'qr-dismissed-festa':
           setIsGuestViewingQR(false);
+          if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
           break;
       }
     };
@@ -412,47 +428,29 @@ export default function HostV3RoomPage() {
           video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: false,
         });
-
         const audioConstraints: MediaTrackConstraints | boolean = store.selectedAudioDeviceId
           ? { deviceId: { exact: store.selectedAudioDeviceId } }
           : true;
-
-        const audioStream = await navigator.mediaDevices.getUserMedia({
-          audio: audioConstraints,
-        });
-
-        audioStream.getAudioTracks().forEach((track) => {
-          mediaStream.addTrack(track);
-        });
-
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        audioStream.getAudioTracks().forEach((track) => mediaStream.addTrack(track));
         return mediaStream;
       });
 
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       setIsCameraActive(true);
       setSourceType('screen');
       refreshDevices();
 
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
-        videoTrack.onended = () => {
-          setIsCameraActive(false);
-        };
+        videoTrack.onended = () => setIsCameraActive(false);
       }
 
       if (store.roomId) {
         sendMessage({
           type: 'chromakey-settings',
           roomId: store.roomId,
-          settings: {
-            enabled: chromaKeyEnabled,
-            color: chromaKeyColor,
-            similarity: sensitivity,
-            smoothness: smoothness,
-          },
+          settings: { enabled: chromaKeyEnabled, color: chromaKeyColor, similarity: sensitivity, smoothness },
         });
       }
     } catch (error) {
@@ -463,25 +461,16 @@ export default function HostV3RoomPage() {
   const startCamera = async () => {
     try {
       const stream = await startLocalStream(async () => {
-        const videoConstraints: MediaTrackConstraints = {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        };
-
         const audioConstraints: MediaTrackConstraints | boolean = store.selectedAudioDeviceId
           ? { deviceId: { exact: store.selectedAudioDeviceId } }
           : true;
-
         return navigator.mediaDevices.getUserMedia({
-          video: videoConstraints,
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: audioConstraints,
         });
       });
 
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       setIsCameraActive(true);
       setSourceType('camera');
       refreshDevices();
@@ -490,12 +479,7 @@ export default function HostV3RoomPage() {
         sendMessage({
           type: 'chromakey-settings',
           roomId: store.roomId,
-          settings: {
-            enabled: chromaKeyEnabled,
-            color: chromaKeyColor,
-            similarity: sensitivity,
-            smoothness: smoothness,
-          },
+          settings: { enabled: chromaKeyEnabled, color: chromaKeyColor, similarity: sensitivity, smoothness },
         });
       }
     } catch (error) {
@@ -512,14 +496,7 @@ export default function HostV3RoomPage() {
     photoCapture.startCapture();
   };
 
-  const handleDownloadVideo = () => {
-    if (!recordedVideoBlob) return;
-    const ext = recordedVideoBlob.type.includes('mp4') ? 'mp4' : 'webm';
-    downloadVideo(recordedVideoBlob, `vshot-v3-${store.roomId}-${Date.now()}.${ext}`);
-  };
-
   const handlePrepareForNextGuest = () => {
-    // Festa: keep connection, only reset session state
     sendMessage({ type: 'session-reset-festa', roomId: store.roomId! });
     setLastSessionResult(null);
     setRecordedVideoBlob(null);
@@ -527,23 +504,19 @@ export default function HostV3RoomPage() {
     setIsVideoProcessing(false);
     setVideoProcessingProgress('');
     photoCapture.reset();
-    setSessionState(SessionState.GUEST_CONNECTED); // Not WAITING_FOR_GUEST - connection maintained
+    setSessionState(SessionState.GUEST_CONNECTED);
   };
 
   const toggleLocalMic = () => {
     if (localStream) {
       const audioTracks = localStream.getAudioTracks();
-      audioTracks.forEach((track) => {
-        track.enabled = localMicMuted;
-      });
+      audioTracks.forEach((track) => { track.enabled = localMicMuted; });
       setLocalMicMuted(!localMicMuted);
     }
   };
 
   const leaveRoom = () => {
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-    }
+    if (localStream) localStream.getTracks().forEach((track) => track.stop());
     store.setRoomId(null as any);
     store.setRole(null);
     router.push('/festa-host/ready');
@@ -556,9 +529,7 @@ export default function HostV3RoomPage() {
   };
 
   const applySettings = async () => {
-    const audioOutputChanged = pendingAudioOutputDeviceId !== selectedAudioOutputDeviceId;
-
-    if (audioOutputChanged && pendingAudioOutputDeviceId && remoteVideoRef.current) {
+    if (pendingAudioOutputDeviceId !== selectedAudioOutputDeviceId && pendingAudioOutputDeviceId && remoteVideoRef.current) {
       try {
         if ('setSinkId' in remoteVideoRef.current) {
           await (remoteVideoRef.current as any).setSinkId(pendingAudioOutputDeviceId);
@@ -569,9 +540,7 @@ export default function HostV3RoomPage() {
     }
     setSelectedAudioOutputDeviceId(pendingAudioOutputDeviceId);
     store.setSelectedAudioOutputDeviceId(pendingAudioOutputDeviceId);
-
-    const audioChanged = pendingAudioDeviceId !== selectedAudioDeviceId;
-    if (audioChanged) {
+    if (pendingAudioDeviceId !== selectedAudioDeviceId) {
       setSelectedAudioDeviceId(pendingAudioDeviceId);
       store.setSelectedAudioDeviceId(pendingAudioDeviceId);
     }
@@ -582,12 +551,7 @@ export default function HostV3RoomPage() {
       sendMessage({
         type: 'chromakey-settings',
         roomId: store.roomId,
-        settings: {
-          enabled: chromaKeyEnabled,
-          color: chromaKeyColor,
-          similarity: sensitivity,
-          smoothness: smoothness,
-        },
+        settings: { enabled: chromaKeyEnabled, color: chromaKeyColor, similarity: sensitivity, smoothness },
       });
     }
   }, [store.roomId, chromaKeyEnabled, chromaKeyColor, sensitivity, smoothness, sendMessage]);
@@ -596,45 +560,8 @@ export default function HostV3RoomPage() {
     const newFlipState = !hostFlipHorizontal;
     setHostFlipHorizontal(newFlipState);
     updateSetting('hostFlipHorizontal', newFlipState);
-
     if (store.roomId) {
-      sendMessage({
-        type: 'host-display-options',
-        roomId: store.roomId,
-        options: { flipHorizontal: newFlipState },
-      });
-    }
-  };
-
-  const downloadResult = async () => {
-    if (!lastSessionResult?.frameResultUrl) return;
-
-    const url = lastSessionResult.frameResultUrl;
-    const isBlobUrl = url.startsWith('blob:');
-
-    try {
-      let downloadUrl: string;
-      if (isBlobUrl) {
-        downloadUrl = url;
-      } else {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${API_URL}${url}`);
-        const blob = await response.blob();
-        downloadUrl = URL.createObjectURL(blob);
-      }
-
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `vshot-v3-${store.roomId}-${Date.now()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      if (!isBlobUrl) {
-        URL.revokeObjectURL(downloadUrl);
-      }
-    } catch (error) {
-      console.error('[Host V3] Download error:', error);
+      sendMessage({ type: 'host-display-options', roomId: store.roomId, options: { flipHorizontal: newFlipState } });
     }
   };
 
@@ -648,67 +575,487 @@ export default function HostV3RoomPage() {
 
   useEffect(() => {
     return () => {
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-      }
+      if (localStream) localStream.getTracks().forEach((track) => track.stop());
+      if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
     };
   }, []);
 
   useEffect(() => {
     if (store.roomId && store.peerId) {
-      sendMessage({
-        type: 'host-display-options',
-        roomId: store.roomId,
-        options: { flipHorizontal: hostFlipHorizontal },
-      });
+      sendMessage({ type: 'host-display-options', roomId: store.roomId, options: { flipHorizontal: hostFlipHorizontal } });
     }
   }, [store.roomId, store.peerId, hostFlipHorizontal, sendMessage]);
 
   useEffect(() => {
     on('guest-display-options', (message: any) => {
-      if (message.options) {
-        setGuestFlipHorizontal(message.options.flipHorizontal);
-      }
+      if (message.options) setGuestFlipHorizontal(message.options.flipHorizontal);
     });
   }, [on]);
 
   useEffect(() => {
-    if (remoteStream && remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = remoteStream;
-    }
+    if (remoteStream && remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
   }, [remoteStream]);
 
   useEffect(() => {
-    if (localStream && localVideoRef.current) {
-      localVideoRef.current.srcObject = localStream;
-    }
+    if (localStream && localVideoRef.current) localVideoRef.current.srcObject = localStream;
   }, [localStream]);
 
+  const handleCopyRoomCode = () => {
+    if (store.roomId) {
+      navigator.clipboard.writeText(store.roomId);
+    }
+  };
+
+  const isGuestConnected = !guestManagement.waitingForGuest && sessionState !== SessionState.WAITING_FOR_GUEST;
+  const canCapture = isGuestConnected && sessionState === SessionState.GUEST_CONNECTED && !!remoteStream;
+
   return (
-    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden bg-light">
+    <div className="relative w-full h-screen overflow-hidden" style={{ background: '#1B1612' }}>
       <FlashOverlay show={showFlash} />
+      <CountdownOverlay countdown={photoCapture.countdown} frameLayout={selectedLayout || null} />
 
-      <CountdownOverlay
-        countdown={photoCapture.countdown}
-        frameLayout={selectedLayout || null}
-      />
+      {/* ===== FULLSCREEN VIDEO ===== */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        {/* Checkerboard background */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `
+              linear-gradient(45deg, #252017 25%, transparent 25%),
+              linear-gradient(-45deg, #252017 25%, transparent 25%),
+              linear-gradient(45deg, transparent 75%, #252017 75%),
+              linear-gradient(-45deg, transparent 75%, #252017 75%)
+            `,
+            backgroundSize: '20px 20px',
+            backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+          }}
+        />
 
-      {/* Header */}
-      <HostRoomHeader
-        onBack={leaveRoom}
-        backButtonTitle="나가기"
-        roomId={store.roomId}
-        showRoomCode={isCameraActive}
-        isConnected={isConnected}
-        peerId={store.peerId}
-        remoteStream={remoteStream}
-        localMicMuted={localMicMuted}
-        onToggleLocalMic={toggleLocalMic}
-        remoteAudioEnabled={remoteAudioEnabled}
-        onToggleRemoteAudio={() => setRemoteAudioEnabled(!remoteAudioEnabled)}
-        onOpenSettings={openSettings}
-      />
+        {/* Preview canvas (with guest blur) - shown to host */}
+        <canvas
+          ref={localCanvasRef}
+          className={`absolute max-w-full max-h-full transition-opacity z-[1] ${remoteStream ? 'opacity-0' : 'opacity-100'}`}
+          style={{ aspectRatio: '2/3' }}
+        />
+        <canvas
+          ref={previewCanvasRef}
+          className={`absolute max-w-full max-h-full transition-opacity z-[1] ${!remoteStream ? 'opacity-0' : 'opacity-100'}`}
+          style={{ aspectRatio: '2/3' }}
+        />
 
+        {/* Recording canvas (no blur) - hidden */}
+        <canvas ref={compositeCanvasRef} className="absolute opacity-0 pointer-events-none" style={{ width: 1, height: 1 }} />
+
+        {/* Frame overlay */}
+        {selectedLayout?.frameSrc && (
+          <img
+            src={selectedLayout.frameSrc}
+            alt=""
+            className="absolute max-w-full max-h-full object-fill pointer-events-none z-[2]"
+            style={{ aspectRatio: '2/3', opacity: 1 }}
+          />
+        )}
+
+        {/* Hidden video elements */}
+        <video ref={remoteVideoRef} autoPlay playsInline muted={!remoteAudioEnabled} className="absolute w-px h-px opacity-0 pointer-events-none" />
+        <video ref={localVideoRef} autoPlay playsInline muted className="absolute w-0 h-0 opacity-0 pointer-events-none" />
+
+        {/* Inactive overlay */}
+        {!isCameraActive && (
+          <div className="absolute inset-0 flex items-center justify-center z-[3]">
+            <div className="text-center">
+              <p className="text-white/40 text-sm mb-6">영상 소스를 선택하세요</p>
+              <div className="flex gap-4">
+                <button
+                  onClick={startScreenShare}
+                  className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl transition-all hover:scale-105"
+                  style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)' }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                  <span className="text-white font-bold text-sm">화면 공유</span>
+                </button>
+                <button
+                  onClick={startCamera}
+                  className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl border-2 border-white/20 hover:border-white/40 transition-all hover:scale-105"
+                  style={{ background: 'rgba(255,255,255,0.05)' }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                  <span className="text-white font-bold text-sm">카메라</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ===== TOP BAR (floating) ===== */}
+      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3">
+        {/* Left: Back + Room code */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={leaveRoom}
+            className="w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition hover:bg-white/20"
+            style={{ background: 'rgba(0,0,0,0.4)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </button>
+          {store.roomId && (
+            <button
+              onClick={handleCopyRoomCode}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md transition hover:bg-white/20"
+              style={{ background: 'rgba(0,0,0,0.4)' }}
+            >
+              <span className="text-white/60 text-xs">ROOM</span>
+              <span className="text-white font-bold text-sm tracking-wider">{store.roomId}</span>
+            </button>
+          )}
+        </div>
+
+        {/* Right: Audio controls + Settings */}
+        <div className="flex items-center gap-2">
+          {/* Connection indicator */}
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.4)' }}>
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} />
+            <span className="text-white/60 text-xs">{isConnected ? 'WS' : 'OFF'}</span>
+          </div>
+          <button
+            onClick={toggleLocalMic}
+            className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition ${localMicMuted ? 'bg-red-500/80' : 'hover:bg-white/20'}`}
+            style={localMicMuted ? undefined : { background: 'rgba(0,0,0,0.4)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {localMicMuted ? (
+                <>
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                  <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                  <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </>
+              ) : (
+                <>
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </>
+              )}
+            </svg>
+          </button>
+          <button
+            onClick={() => setRemoteAudioEnabled(!remoteAudioEnabled)}
+            className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition ${!remoteAudioEnabled ? 'bg-red-500/80' : 'hover:bg-white/20'}`}
+            style={!remoteAudioEnabled ? undefined : { background: 'rgba(0,0,0,0.4)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {remoteAudioEnabled ? (
+                <>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                </>
+              ) : (
+                <>
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </>
+              )}
+            </svg>
+          </button>
+          <button
+            onClick={openSettings}
+            className="w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition hover:bg-white/20"
+            style={{ background: 'rgba(0,0,0,0.4)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* ===== LEFT SIDE TAB (Settings) ===== */}
+      <button
+        onClick={() => setLeftPanelOpen(!leftPanelOpen)}
+        className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-r-xl backdrop-blur-md transition hover:bg-white/20"
+        style={{ background: leftPanelOpen ? 'rgba(252,113,43,0.8)' : 'rgba(0,0,0,0.5)' }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {leftPanelOpen ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
+        </svg>
+      </button>
+
+      {leftPanelOpen && (
+        <div
+          className="absolute left-0 top-16 bottom-4 z-20 w-72 overflow-y-auto rounded-r-2xl backdrop-blur-xl p-4 space-y-4"
+          style={{ background: 'rgba(27,22,18,0.92)', borderRight: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">설정</h3>
+
+          {/* Source selection */}
+          {isCameraActive && (
+            <div className="space-y-2">
+              <p className="text-white/50 text-xs">소스</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={startScreenShare}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition ${sourceType === 'screen' ? 'text-white' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+                  style={sourceType === 'screen' ? { background: 'linear-gradient(135deg, #FC712B, #FD9319)' } : undefined}
+                >
+                  화면 공유
+                </button>
+                <button
+                  onClick={startCamera}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition ${sourceType === 'camera' ? 'text-white' : 'bg-white/5 text-white/50 hover:bg-white/10'}`}
+                  style={sourceType === 'camera' ? { background: 'linear-gradient(135deg, #FC712B, #FD9319)' } : undefined}
+                >
+                  카메라
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Chroma Key */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-white/50 text-xs">크로마키</p>
+              <button
+                onClick={() => {
+                  const newVal = !chromaKeyEnabled;
+                  setChromaKeyEnabled(newVal);
+                  updateSetting('chromaKeyEnabled', newVal);
+                  syncChromaKeySettings();
+                }}
+                className={`relative w-10 h-5 rounded-full transition-colors ${chromaKeyEnabled ? 'bg-green-500' : 'bg-white/20'}`}
+              >
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${chromaKeyEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+
+            {chromaKeyEnabled && (
+              <>
+                <div>
+                  <label className="text-white/40 text-xs block mb-1">색상</label>
+                  <input
+                    type="color"
+                    value={chromaKeyColor}
+                    onChange={(e) => { setChromaKeyColor(e.target.value); updateSetting('chromaKeyColor', e.target.value); }}
+                    onBlur={syncChromaKeySettings}
+                    className="w-full h-8 rounded-lg cursor-pointer border border-white/10 bg-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="text-white/40 text-xs flex justify-between mb-1">
+                    <span>민감도</span>
+                    <span className="font-mono">{sensitivity}</span>
+                  </label>
+                  <input
+                    type="range" min="0" max="100" value={sensitivity}
+                    onChange={(e) => { const v = Number(e.target.value); setSensitivity(v); updateSetting('sensitivity', v); }}
+                    onMouseUp={syncChromaKeySettings}
+                    onTouchEnd={syncChromaKeySettings}
+                    className="w-full accent-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-white/40 text-xs flex justify-between mb-1">
+                    <span>부드러움</span>
+                    <span className="font-mono">{smoothness}</span>
+                  </label>
+                  <input
+                    type="range" min="0" max="50" value={smoothness}
+                    onChange={(e) => { const v = Number(e.target.value); setSmoothness(v); updateSetting('smoothness', v); }}
+                    onMouseUp={syncChromaKeySettings}
+                    onTouchEnd={syncChromaKeySettings}
+                    className="w-full accent-orange-500"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Host flip */}
+          <div className="flex items-center justify-between">
+            <p className="text-white/50 text-xs">호스트 반전</p>
+            <button
+              onClick={toggleHostFlip}
+              className={`relative w-10 h-5 rounded-full transition-colors ${hostFlipHorizontal ? 'bg-orange-500' : 'bg-white/20'}`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${hostFlipHorizontal ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+
+          {/* Capture button */}
+          {isCameraActive && (
+            <button
+              onClick={handleStartCapture}
+              disabled={!canCapture}
+              className="w-full py-3 rounded-xl font-bold text-white text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
+              style={{
+                background: canCapture ? 'linear-gradient(135deg, #FC712B, #FD9319)' : 'rgba(255,255,255,0.1)',
+                boxShadow: canCapture ? '0 4px 20px rgba(252,113,43,0.4)' : 'none',
+              }}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+                촬영 시작
+              </div>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ===== RIGHT SIDE TAB (Info) ===== */}
+      <button
+        onClick={() => setRightPanelOpen(!rightPanelOpen)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-l-xl backdrop-blur-md transition hover:bg-white/20"
+        style={{ background: rightPanelOpen ? 'rgba(252,113,43,0.8)' : 'rgba(0,0,0,0.5)' }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {rightPanelOpen ? <polyline points="9 18 15 12 9 6" /> : <polyline points="15 18 9 12 15 6" />}
+        </svg>
+      </button>
+
+      {rightPanelOpen && (
+        <div
+          className="absolute right-0 top-16 bottom-4 z-20 w-64 overflow-y-auto rounded-l-2xl backdrop-blur-xl p-4 space-y-4"
+          style={{ background: 'rgba(27,22,18,0.92)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">상태</h3>
+
+          {/* Guest status */}
+          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`w-2.5 h-2.5 rounded-full ${isGuestConnected ? 'bg-green-400 animate-pulse' : 'bg-white/20'}`} />
+              <span className="text-white text-sm font-bold">
+                {isGuestConnected ? '게스트 연결됨' : '게스트 대기 중'}
+              </span>
+            </div>
+            {!isGuestConnected && (
+              <p className="text-white/30 text-xs ml-5">게스트가 입장할 때까지 기다려주세요</p>
+            )}
+          </div>
+
+          {/* Capture status */}
+          {(sessionState === SessionState.CAPTURING || sessionState === SessionState.PROCESSING) && (
+            <div className="p-3 rounded-xl border" style={{ background: 'rgba(252,113,43,0.1)', borderColor: 'rgba(252,113,43,0.3)' }}>
+              <div className="flex items-center gap-2">
+                {sessionState === SessionState.CAPTURING ? (
+                  <>
+                    <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-white text-sm font-bold">
+                      {photoCapture.countdown !== null && photoCapture.countdown > 0
+                        ? `${photoCapture.countdown}초 후 촬영`
+                        : photoCapture.uploadProgress > 0
+                        ? `업로드 중... ${photoCapture.uploadProgress}%`
+                        : '촬영 준비 중'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-white text-sm font-bold">사진 합성 중</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Session count */}
+          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
+            <div className="flex items-center justify-between">
+              <span className="text-white/50 text-xs">촬영 세션</span>
+              <span className="text-white font-bold text-lg">{guestManagement.sessionCount}</span>
+            </div>
+          </div>
+
+          {/* Video processing status */}
+          {isVideoProcessing && (
+            <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 border-2 border-white/30 border-t-transparent rounded-full animate-spin" />
+                <span className="text-white/50 text-xs">{videoProcessingProgress || '영상 처리 중...'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== BOTTOM-RIGHT TOAST (Capture complete) ===== */}
+      {sessionState === SessionState.COMPLETED && lastSessionResult && (
+        <div
+          className="absolute bottom-4 right-4 z-30 w-80 rounded-2xl backdrop-blur-xl p-4 animate-slide-up"
+          style={{ background: 'rgba(27,22,18,0.95)', border: '1px solid rgba(255,255,255,0.1)' }}
+        >
+          {isGuestViewingQR ? (
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(252,113,43,0.2)' }}>
+                  <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                </div>
+              </div>
+              <div>
+                <p className="text-white text-sm font-bold">게스트가 사진을 확인하는 중</p>
+                <p className="text-white/40 text-xs mt-0.5">QR코드를 확인하고 있습니다</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <span className="text-white text-sm font-bold">촬영 완료</span>
+              </div>
+              <button
+                onClick={handlePrepareForNextGuest}
+                className="w-full py-2.5 rounded-xl font-bold text-white text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)', boxShadow: '0 4px 20px rgba(252,113,43,0.4)' }}
+              >
+                다음 게스트
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== BOTTOM-LEFT: Waiting indicator ===== */}
+      {isCameraActive && guestManagement.waitingForGuest && (
+        <div
+          className="absolute bottom-4 left-4 z-30 rounded-2xl backdrop-blur-xl px-4 py-3 animate-slide-up"
+          style={{ background: 'rgba(27,22,18,0.9)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-3 h-3 rounded-full bg-orange-400 animate-pulse" />
+            </div>
+            <div>
+              <p className="text-white text-sm font-bold">
+                {guestManagement.sessionCount === 0 ? '게스트 대기 중' : '다음 게스트 대기 중'}
+              </p>
+              {guestManagement.sessionCount > 0 && (
+                <p className="text-white/40 text-xs">{guestManagement.sessionCount}명 촬영 완료</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -723,293 +1070,6 @@ export default function HostV3RoomPage() {
         onAudioOutputDeviceChange={setPendingAudioOutputDeviceId}
         onApply={applySettings}
       />
-
-      {/* Video Display */}
-      <div className="flex-1 min-h-0 booth-video-container p-1.5 flex items-center justify-center">
-        <VideoDisplayPanel
-          role="host"
-          isActive={isCameraActive}
-          remoteStream={remoteStream}
-          localVideoRef={localVideoRef}
-          localCanvasRef={localCanvasRef}
-          remoteVideoRef={remoteVideoRef}
-          remoteCanvasRef={remoteCanvasRef}
-          compositeCanvasRef={compositeCanvasRef}
-          flipHorizontal={hostFlipHorizontal}
-          remoteAudioEnabled={remoteAudioEnabled}
-          frameOverlaySrc={selectedLayout?.frameSrc}
-          frameOverlayVisible={true}
-          frameOverlayOpacity={1}
-        />
-      </div>
-
-      {/* Bottom Panel */}
-      <div className="flex-shrink-0 overflow-y-auto max-h-[40vh] booth-scroll">
-        {/* Source selection */}
-        {!isCameraActive && (
-          <div className="booth-card-warm p-5 animate-slide-up">
-            <p className="font-display text-xs font-semibold text-dark/40 uppercase tracking-wider mb-3">
-              영상 소스 선택
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={startScreenShare}
-                className="booth-btn flex-1 flex flex-col items-center gap-2 px-4 py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-semibold transition shadow-md shadow-primary/15"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                  <line x1="8" y1="21" x2="16" y2="21" />
-                  <line x1="12" y1="17" x2="12" y2="21" />
-                </svg>
-                <span className="text-sm">화면 공유</span>
-              </button>
-              <button
-                onClick={startCamera}
-                className="booth-btn flex-1 flex flex-col items-center gap-2 px-4 py-4 bg-secondary hover:bg-secondary-dark text-white rounded-xl font-semibold transition shadow-md shadow-secondary/15"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                  <circle cx="12" cy="13" r="4" />
-                </svg>
-                <span className="text-sm">카메라</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Waiting for guest */}
-        {isCameraActive && guestManagement.waitingForGuest && (
-          <div className="animate-slide-up">
-            <GuestWaitingIndicator
-              waitingForGuest={true}
-              completedSessionCount={guestManagement.sessionCount}
-            />
-          </div>
-        )}
-
-        {/* Guest connected - ready to capture */}
-        {isCameraActive &&
-          !guestManagement.waitingForGuest &&
-          sessionState === SessionState.GUEST_CONNECTED && (
-            <div className="space-y-3 animate-slide-up">
-              {/* Chroma Key Toggle + Capture */}
-              <div className="booth-card p-4">
-                {/* Quick controls row */}
-                <div className="flex items-center gap-2 mb-3">
-                  <button
-                    onClick={() => {
-                      const newVal = !chromaKeyEnabled;
-                      setChromaKeyEnabled(newVal);
-                      updateSetting('chromaKeyEnabled', newVal);
-                      syncChromaKeySettings();
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition ${
-                      chromaKeyEnabled
-                        ? 'bg-green-500/10 text-green-600 border border-green-500/20'
-                        : 'bg-neutral/30 text-dark/50 border border-neutral/50'
-                    }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${chromaKeyEnabled ? 'bg-green-500' : 'bg-neutral'}`} />
-                    크로마키
-                  </button>
-
-                  <button
-                    onClick={toggleHostFlip}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition ${
-                      hostFlipHorizontal
-                        ? 'bg-primary/10 text-primary border border-primary/20'
-                        : 'bg-neutral/30 text-dark/50 border border-neutral/50'
-                    }`}
-                  >
-                    반전
-                  </button>
-
-                  <button
-                    onClick={() => setShowChromaSettings(!showChromaSettings)}
-                    className="ml-auto flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold bg-neutral/30 text-dark/60 hover:bg-neutral/50 transition"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="3" />
-                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                    </svg>
-                    설정
-                  </button>
-                </div>
-
-                {/* Expanded chroma settings */}
-                {showChromaSettings && chromaKeyEnabled && (
-                  <div className="space-y-3 pt-3 border-t border-neutral/30 animate-slide-up">
-                    <div>
-                      <label className="text-xs text-dark/50 block mb-1.5">크로마키 색상</label>
-                      <input
-                        type="color"
-                        value={chromaKeyColor}
-                        onChange={(e) => {
-                          setChromaKeyColor(e.target.value);
-                          updateSetting('chromaKeyColor', e.target.value);
-                        }}
-                        onBlur={syncChromaKeySettings}
-                        className="w-full h-8 rounded-lg cursor-pointer border border-neutral/50"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-dark/50 flex justify-between mb-1.5">
-                        <span>민감도</span>
-                        <span className="font-mono text-dark/40">{sensitivity}</span>
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={sensitivity}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setSensitivity(val);
-                          updateSetting('sensitivity', val);
-                        }}
-                        onMouseUp={syncChromaKeySettings}
-                        onTouchEnd={syncChromaKeySettings}
-                        className="w-full accent-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-dark/50 flex justify-between mb-1.5">
-                        <span>부드러움</span>
-                        <span className="font-mono text-dark/40">{smoothness}</span>
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="50"
-                        value={smoothness}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setSmoothness(val);
-                          updateSetting('smoothness', val);
-                        }}
-                        onMouseUp={syncChromaKeySettings}
-                        onTouchEnd={syncChromaKeySettings}
-                        className="w-full accent-primary"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Capture button */}
-              <button
-                onClick={handleStartCapture}
-                disabled={!remoteStream}
-                className="booth-btn w-full py-4 bg-primary hover:bg-primary-dark disabled:opacity-40 text-white rounded-xl font-display font-bold text-lg shadow-lg shadow-primary/25 touch-manipulation transition-all"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                    <circle cx="12" cy="13" r="4" />
-                  </svg>
-                  촬영 시작
-                </div>
-              </button>
-            </div>
-          )}
-
-        {/* Capturing state */}
-        {sessionState === SessionState.CAPTURING && (
-          <div className="booth-card p-5 border-primary/30 animate-slide-up" style={{ borderColor: '#FC712B' }}>
-            <div className="flex items-center justify-center gap-3">
-              <div className="relative">
-                <div className="w-3 h-3 bg-red-500 rounded-full animate-recording-pulse" />
-                <div className="absolute inset-0 w-3 h-3 bg-red-500 rounded-full animate-pulse-ring" />
-              </div>
-              <div className="font-display text-lg font-bold text-dark">
-                {photoCapture.countdown !== null && photoCapture.countdown > 0
-                  ? `${photoCapture.countdown}초 후 촬영`
-                  : photoCapture.uploadProgress > 0
-                  ? `업로드 중... ${photoCapture.uploadProgress}%`
-                  : '촬영 준비 중...'}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Processing state */}
-        {sessionState === SessionState.PROCESSING && (
-          <div className="booth-card-warm p-5 animate-slide-up">
-            <div className="flex items-center justify-center gap-3">
-              <div className="w-6 h-6 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
-              <div className="font-display text-sm font-semibold text-dark">사진 합성 중...</div>
-            </div>
-          </div>
-        )}
-
-        {/* Completed state */}
-        {sessionState === SessionState.COMPLETED && lastSessionResult && (
-          <div className="space-y-3 animate-slide-up">
-            <div className="booth-card p-5">
-              {/* Success badge */}
-              <div className="flex items-center justify-center gap-2 p-2.5 bg-green-50 rounded-xl mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                  <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-                <span className="text-sm text-green-700 font-display font-bold">촬영 완료!</span>
-              </div>
-
-              {/* Result preview */}
-              {lastSessionResult.frameResultUrl && (
-                <div className="mb-4 flex justify-center">
-                  <img
-                    src={lastSessionResult.frameResultUrl.startsWith('blob:')
-                      ? lastSessionResult.frameResultUrl
-                      : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
-                    }
-                    alt="촬영 결과"
-                    className="max-h-48 rounded-xl shadow-lg"
-                  />
-                </div>
-              )}
-
-              {/* Download buttons */}
-              <div className="flex gap-2">
-                <button
-                  onClick={downloadResult}
-                  className="booth-btn flex-1 px-4 py-3 bg-secondary hover:bg-secondary-dark text-white rounded-xl font-semibold text-sm transition shadow-md shadow-secondary/15"
-                >
-                  사진 저장
-                </button>
-                {isVideoProcessing && (
-                  <div className="flex-1 px-4 py-3 bg-dark/10 text-dark/50 rounded-xl font-semibold text-center text-xs flex items-center justify-center gap-2">
-                    <div className="w-3 h-3 border-2 border-dark/30 border-t-transparent rounded-full animate-spin" />
-                    {videoProcessingProgress || '영상 처리 중...'}
-                  </div>
-                )}
-                {!isVideoProcessing && recordedVideoBlob && (
-                  <button
-                    onClick={handleDownloadVideo}
-                    className="booth-btn flex-1 px-4 py-3 bg-dark hover:bg-dark-50 text-white rounded-xl font-semibold text-sm transition shadow-md"
-                  >
-                    영상 저장
-                  </button>
-                )}
-              </div>
-
-              {/* Next guest button */}
-              <button
-                onClick={handlePrepareForNextGuest}
-                disabled={isGuestViewingQR}
-                className={`booth-btn w-full mt-3 px-4 py-3.5 text-white rounded-xl font-display font-bold transition shadow-md shadow-primary/20 ${
-                  isGuestViewingQR
-                    ? 'bg-primary/50 opacity-50 cursor-not-allowed'
-                    : 'bg-primary hover:bg-primary-dark'
-                }`}
-              >
-                {isGuestViewingQR ? '게스트가 QR 확인 중...' : '다음 게스트'}
-              </button>
-            </div>
-          </div>
-        )}
-
-      </div>
     </div>
   );
 }
