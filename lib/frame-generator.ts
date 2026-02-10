@@ -173,26 +173,6 @@ export async function renderFrameToCanvas(
 }
 
 /**
- * Render frame preview for testing/preview purposes
- * @param canvas Canvas element to render to
- * @param layout Frame layout configuration
- * @param sampleImageUrl Optional URL to sample image (defaults to /sample.png)
- */
-export async function renderFramePreview(
-  canvas: HTMLCanvasElement,
-  layout: FrameLayout,
-  sampleImageUrl: string = '/sample.png'
-): Promise<void> {
-  // Load sample images (all using the same sample image)
-  const images = await Promise.all(
-    Array(layout.slotCount).fill(sampleImageUrl).map((url) => loadImage(url))
-  );
-
-  // Use the core rendering function
-  await renderFrameToCanvas(canvas, layout, images);
-}
-
-/**
  * Generate a photo frame with custom layout
  * @param photoUrls Array of photo URLs (must match layout.slotCount)
  * @param layout Frame layout configuration
