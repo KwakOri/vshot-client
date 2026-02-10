@@ -138,8 +138,6 @@ export default function HostV3RoomPage() {
     sendSignal: sendMessage,
     onCaptureComplete: (photoUrl) => {
       console.log('[Host V3] Photo captured:', photoUrl);
-      setShowFlash(true);
-      setTimeout(() => setShowFlash(false), 300);
     },
     onMergeComplete: (mergedPhotoUrl) => {
       console.log('[Host V3] Photos merged:', mergedPhotoUrl);
@@ -381,6 +379,8 @@ export default function HostV3RoomPage() {
           }
           break;
         case 'capture-now-v3':
+          setShowFlash(true);
+          setTimeout(() => setShowFlash(false), 300);
           setTimeout(() => {
             if (videoRecorderRef.current?.isRecording()) {
               videoRecorderRef.current.stopRecording();

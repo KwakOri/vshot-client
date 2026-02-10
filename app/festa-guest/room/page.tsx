@@ -97,8 +97,6 @@ export default function GuestV3RoomPage() {
     sendSignal: sendMessage,
     onCaptureComplete: (photoUrl) => {
       console.log('[Guest V3] Photo captured:', photoUrl);
-      setShowFlash(true);
-      setTimeout(() => setShowFlash(false), 300);
     },
     onMergeComplete: (mergedPhotoUrl) => {
       console.log('[Guest V3] Photos merged:', mergedPhotoUrl);
@@ -248,6 +246,10 @@ export default function GuestV3RoomPage() {
           break;
         case 'countdown-tick-v3':
           setSessionState(SessionState.CAPTURING);
+          break;
+        case 'capture-now-v3':
+          setShowFlash(true);
+          setTimeout(() => setShowFlash(false), 300);
           break;
         case 'film-ready-festa':
           setFilmId(message.filmId);
