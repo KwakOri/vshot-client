@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useCallback, useState } from 'react';
 import { WebRTCConnection, fetchIceServers } from '@/lib/webrtc';
 import { useAppStore } from '@/lib/store';
 import { SignalMessage } from '@/types';
@@ -155,39 +155,40 @@ export function useWebRTC({ sendMessage, on }: UseWebRTCProps) {
     await webrtcRef.current.addIceCandidate(candidate);
   }, []);
 
-  // Setup signaling handlers
+  // Stable event handlers - always access latest closures without re-triggering useEffect
+  const onOffer = useEffectEvent(async (message: any) => {
+    console.log('[WebRTC] Received offer:', message);
+    const currentUserId = useAppStore.getState().userId;
+    if (message.to === currentUserId) {
+      console.log('[WebRTC] Handling offer');
+      await handleOffer(message.sdp);
+    }
+  });
+
+  const onAnswer = useEffectEvent(async (message: any) => {
+    console.log('[WebRTC] Received answer:', message);
+    const currentUserId = useAppStore.getState().userId;
+    if (message.to === currentUserId) {
+      console.log('[WebRTC] Handling answer');
+      await handleAnswer(message.sdp);
+    }
+  });
+
+  const onIce = useEffectEvent(async (message: any) => {
+    console.log('[WebRTC] Received ICE candidate');
+    const currentUserId = useAppStore.getState().userId;
+    if (message.to === currentUserId) {
+      await handleIceCandidate(message.candidate);
+    }
+  });
+
+  // Setup signaling handlers (once)
   useEffect(() => {
     console.log('[WebRTC] Setting up signaling handlers');
-
-    on('offer', async (message: any) => {
-      console.log('[WebRTC] Received offer:', message);
-      const currentUserId = useAppStore.getState().userId;
-      console.log('[WebRTC] Current userId:', currentUserId, 'Message to:', message.to);
-      if (message.to === currentUserId) {
-        console.log('[WebRTC] Handling offer');
-        await handleOffer(message.sdp);
-      } else {
-        console.log('[WebRTC] Ignoring offer (not for me)');
-      }
-    });
-
-    on('answer', async (message: any) => {
-      console.log('[WebRTC] Received answer:', message);
-      const currentUserId = useAppStore.getState().userId;
-      if (message.to === currentUserId) {
-        console.log('[WebRTC] Handling answer');
-        await handleAnswer(message.sdp);
-      }
-    });
-
-    on('ice', async (message: any) => {
-      console.log('[WebRTC] Received ICE candidate');
-      const currentUserId = useAppStore.getState().userId;
-      if (message.to === currentUserId) {
-        await handleIceCandidate(message.candidate);
-      }
-    });
-  }, [on, handleOffer, handleAnswer, handleIceCandidate]);
+    on('offer', onOffer);
+    on('answer', onAnswer);
+    on('ice', onIce);
+  }, [on]);
 
   // Cleanup only on unmount
   useEffect(() => {

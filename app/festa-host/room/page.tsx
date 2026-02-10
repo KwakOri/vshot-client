@@ -63,6 +63,19 @@ export default function HostV3RoomPage() {
   const [remoteAudioEnabled, setRemoteAudioEnabled] = useState(true);
   const [localMicMuted, setLocalMicMuted] = useState(false);
 
+  // Volume controls
+  const [remoteVolume, setRemoteVolume] = useState(100);
+  const [localMicVolume, setLocalMicVolume] = useState(100);
+  const prevRemoteVolumeRef = useRef(100);
+  const prevLocalMicVolumeRef = useRef(100);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  // Collapsible sections
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) =>
+    setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
+
   const { audioDevices, audioOutputDevices, refreshDevices } = useMediaDevices();
   const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState<string | null>(
     store.selectedAudioDeviceId
@@ -429,6 +442,36 @@ export default function HostV3RoomPage() {
     });
   }, [on]);
 
+  const setupAudioGainNode = (stream: MediaStream): MediaStream => {
+    // Clean up previous audio context
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+      gainNodeRef.current = null;
+    }
+
+    const audioTrack = stream.getAudioTracks()[0];
+    if (!audioTrack) return stream;
+
+    const ctx = new AudioContext();
+    const source = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = localMicVolume / 100;
+    const dest = ctx.createMediaStreamDestination();
+    source.connect(gainNode);
+    gainNode.connect(dest);
+
+    audioContextRef.current = ctx;
+    gainNodeRef.current = gainNode;
+
+    // Replace the audio track in the original stream with the processed one
+    const processedTrack = dest.stream.getAudioTracks()[0];
+    stream.removeTrack(audioTrack);
+    stream.addTrack(processedTrack);
+
+    return stream;
+  };
+
   const startScreenShare = async () => {
     try {
       const stream = await startLocalStream(async () => {
@@ -441,7 +484,7 @@ export default function HostV3RoomPage() {
           : true;
         const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
         audioStream.getAudioTracks().forEach((track) => mediaStream.addTrack(track));
-        return mediaStream;
+        return setupAudioGainNode(mediaStream);
       });
 
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
@@ -472,10 +515,11 @@ export default function HostV3RoomPage() {
         const audioConstraints: MediaTrackConstraints | boolean = store.selectedAudioDeviceId
           ? { deviceId: { exact: store.selectedAudioDeviceId } }
           : true;
-        return navigator.mediaDevices.getUserMedia({
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: audioConstraints,
         });
+        return setupAudioGainNode(mediaStream);
       });
 
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
@@ -516,11 +560,27 @@ export default function HostV3RoomPage() {
   };
 
   const toggleLocalMic = () => {
-    if (localStream) {
-      const audioTracks = localStream.getAudioTracks();
-      audioTracks.forEach((track) => { track.enabled = localMicMuted; });
-      setLocalMicMuted(!localMicMuted);
+    if (!localMicMuted) {
+      prevLocalMicVolumeRef.current = localMicVolume;
+      setLocalMicVolume(0);
+      if (gainNodeRef.current) gainNodeRef.current.gain.value = 0;
+    } else {
+      const restored = prevLocalMicVolumeRef.current || 100;
+      setLocalMicVolume(restored);
+      if (gainNodeRef.current) gainNodeRef.current.gain.value = restored / 100;
     }
+    setLocalMicMuted(!localMicMuted);
+  };
+
+  const toggleRemoteAudio = () => {
+    if (remoteAudioEnabled) {
+      prevRemoteVolumeRef.current = remoteVolume;
+      setRemoteVolume(0);
+    } else {
+      const restored = prevRemoteVolumeRef.current || 100;
+      setRemoteVolume(restored);
+    }
+    setRemoteAudioEnabled(!remoteAudioEnabled);
   };
 
   const leaveRoom = () => {
@@ -584,6 +644,11 @@ export default function HostV3RoomPage() {
   useEffect(() => {
     return () => {
       if (localStream) localStream.getTracks().forEach((track) => track.stop());
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+        gainNodeRef.current = null;
+      }
     };
   }, []);
 
@@ -602,6 +667,20 @@ export default function HostV3RoomPage() {
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
   }, [remoteStream]);
+
+  // Output volume: control remote video element volume
+  useEffect(() => {
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.volume = remoteVolume / 100;
+    }
+  }, [remoteVolume]);
+
+  // Input volume: sync gainNode value when slider changes
+  useEffect(() => {
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = localMicVolume / 100;
+    }
+  }, [localMicVolume]);
 
   useEffect(() => {
     if (localStream && localVideoRef.current) localVideoRef.current.srcObject = localStream;
@@ -668,7 +747,7 @@ export default function HostV3RoomPage() {
         )}
 
         {/* Hidden video elements */}
-        <video ref={remoteVideoRef} autoPlay playsInline muted={!remoteAudioEnabled} className="absolute w-px h-px opacity-0 pointer-events-none" />
+        <video ref={remoteVideoRef} autoPlay playsInline className="absolute w-px h-px opacity-0 pointer-events-none" />
         <video ref={localVideoRef} autoPlay playsInline muted className="absolute w-0 h-0 opacity-0 pointer-events-none" />
 
         {/* Inactive overlay */}
@@ -729,50 +808,6 @@ export default function HostV3RoomPage() {
             <span className="text-white/60 text-xs">{isConnected ? 'WS' : 'OFF'}</span>
           </div>
           <button
-            onClick={toggleLocalMic}
-            className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition ${localMicMuted ? 'bg-red-500/80' : 'hover:bg-white/20'}`}
-            style={localMicMuted ? undefined : { background: 'rgba(0,0,0,0.4)' }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {localMicMuted ? (
-                <>
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                  <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                  <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
-                  <line x1="12" y1="19" x2="12" y2="23" />
-                  <line x1="8" y1="23" x2="16" y2="23" />
-                </>
-              ) : (
-                <>
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="23" />
-                  <line x1="8" y1="23" x2="16" y2="23" />
-                </>
-              )}
-            </svg>
-          </button>
-          <button
-            onClick={() => setRemoteAudioEnabled(!remoteAudioEnabled)}
-            className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition ${!remoteAudioEnabled ? 'bg-red-500/80' : 'hover:bg-white/20'}`}
-            style={!remoteAudioEnabled ? undefined : { background: 'rgba(0,0,0,0.4)' }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {remoteAudioEnabled ? (
-                <>
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                </>
-              ) : (
-                <>
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                  <line x1="23" y1="9" x2="17" y2="15" />
-                  <line x1="17" y1="9" x2="23" y2="15" />
-                </>
-              )}
-            </svg>
-          </button>
-          <button
             onClick={openSettings}
             className="w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md transition hover:bg-white/20"
             style={{ background: 'rgba(0,0,0,0.4)' }}
@@ -811,7 +846,7 @@ export default function HostV3RoomPage() {
         }}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">설정</h3>
+          <h3 className="text-white/40 text-[11px] font-bold uppercase tracking-wider">제어</h3>
           <button
             onClick={() => setLeftPanelOpen(false)}
             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition"
@@ -822,124 +857,245 @@ export default function HostV3RoomPage() {
           </button>
         </div>
 
-          {/* Screen share button */}
-          <button
-            onClick={startScreenShare}
-            className="w-full py-2.5 px-3 rounded-lg text-xs font-bold text-white transition hover:opacity-90 flex items-center justify-center gap-2"
-            style={{ background: isCameraActive ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #FC712B, #FD9319)' }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-              <line x1="8" y1="21" x2="16" y2="21" />
-              <line x1="12" y1="17" x2="12" y2="21" />
+        {/* Capture button - always at top */}
+        <button
+          onClick={handleStartCapture}
+          disabled={!canCapture}
+          className="w-full py-3.5 rounded-xl font-bold text-white text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
+          style={{
+            background: canCapture ? 'linear-gradient(135deg, #FC712B, #FD9319)' : 'rgba(255,255,255,0.1)',
+            boxShadow: canCapture ? '0 4px 20px rgba(252,113,43,0.4)' : 'none',
+          }}
+        >
+          <div className="flex items-center justify-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
             </svg>
-            {isCameraActive ? '화면 공유 변경' : '화면 공유 시작'}
+            촬영 시작
+          </div>
+        </button>
+
+        <div className="border-b border-white/[0.06]" />
+
+        {/* === Section: 화면 소스 === */}
+        <div>
+          <button
+            onClick={() => toggleSection('source')}
+            className="w-full flex items-center justify-between py-1"
+          >
+            <span className="text-[11px] uppercase tracking-wider text-white/40 font-bold">화면 소스</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className={`text-white/30 transition-transform duration-200 ${collapsedSections['source'] ? '-rotate-90' : 'rotate-0'}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </button>
-
-          {/* Chroma Key */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-white/50 text-xs">크로마키</p>
+          {!collapsedSections['source'] && (
+            <div className="space-y-3 mt-2">
               <button
-                onClick={() => {
-                  const newVal = !chromaKeyEnabled;
-                  setChromaKeyEnabled(newVal);
-                  updateSetting('chromaKeyEnabled', newVal);
-                  syncChromaKeySettings();
-                }}
-                className={`relative w-10 h-5 rounded-full transition-colors ${chromaKeyEnabled ? 'bg-orange-500' : 'bg-white/20'}`}
+                onClick={startScreenShare}
+                className="w-full py-2.5 px-3 rounded-lg text-xs font-bold text-white transition hover:opacity-90 flex items-center justify-center gap-2"
+                style={{ background: isCameraActive ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #FC712B, #FD9319)' }}
               >
-                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${chromaKeyEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-              </button>
-            </div>
-
-            {chromaKeyEnabled && (
-              <>
-                <div>
-                  <label className="text-white/40 text-xs block mb-1">색상 (HEX)</label>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-8 h-8 rounded-lg border border-white/20 flex-shrink-0"
-                      style={{ background: chromaKeyColor }}
-                    />
-                    <input
-                      type="text"
-                      value={chromaKeyColor}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setChromaKeyColor(val);
-                        if (/^#[0-9a-fA-F]{6}$/.test(val)) {
-                          updateSetting('chromaKeyColor', val);
-                        }
-                      }}
-                      onBlur={syncChromaKeySettings}
-                      placeholder="#00ff00"
-                      className="flex-1 h-8 px-2 rounded-lg text-xs text-white font-mono border border-white/10 bg-white/5 outline-none focus:border-orange-500/50"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-white/40 text-xs flex justify-between mb-1">
-                    <span>민감도</span>
-                    <span className="font-mono">{sensitivity}</span>
-                  </label>
-                  <input
-                    type="range" min="0" max="100" value={sensitivity}
-                    onChange={(e) => { const v = Number(e.target.value); setSensitivity(v); updateSetting('sensitivity', v); }}
-                    onMouseUp={syncChromaKeySettings}
-                    onTouchEnd={syncChromaKeySettings}
-                    className="w-full accent-orange-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-white/40 text-xs flex justify-between mb-1">
-                    <span>부드러움</span>
-                    <span className="font-mono">{smoothness}</span>
-                  </label>
-                  <input
-                    type="range" min="0" max="50" value={smoothness}
-                    onChange={(e) => { const v = Number(e.target.value); setSmoothness(v); updateSetting('smoothness', v); }}
-                    onMouseUp={syncChromaKeySettings}
-                    onTouchEnd={syncChromaKeySettings}
-                    className="w-full accent-orange-500"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Host flip */}
-          <div className="flex items-center justify-between">
-            <p className="text-white/50 text-xs">호스트 반전</p>
-            <button
-              onClick={toggleHostFlip}
-              className={`relative w-10 h-5 rounded-full transition-colors ${hostFlipHorizontal ? 'bg-orange-500' : 'bg-white/20'}`}
-            >
-              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${hostFlipHorizontal ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-
-          {/* Capture button */}
-          {isCameraActive && (
-            <button
-              onClick={handleStartCapture}
-              disabled={!canCapture}
-              className="w-full py-3 rounded-xl font-bold text-white text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
-              style={{
-                background: canCapture ? 'linear-gradient(135deg, #FC712B, #FD9319)' : 'rgba(255,255,255,0.1)',
-                boxShadow: canCapture ? '0 4px 20px rgba(252,113,43,0.4)' : 'none',
-              }}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                  <circle cx="12" cy="13" r="4" />
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
                 </svg>
-                촬영 시작
+                {isCameraActive ? '화면 공유 변경' : '화면 공유 시작'}
+              </button>
+              <div className="flex items-center justify-between">
+                <p className="text-white/50 text-xs">호스트 좌우반전</p>
+                <button
+                  onClick={toggleHostFlip}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${hostFlipHorizontal ? 'bg-orange-500' : 'bg-white/20'}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${hostFlipHorizontal ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
               </div>
-            </button>
+            </div>
           )}
         </div>
+
+        <div className="border-b border-white/[0.06]" />
+
+        {/* === Section: 크로마키 === */}
+        <div>
+          <button
+            onClick={() => toggleSection('chromakey')}
+            className="w-full flex items-center justify-between py-1"
+          >
+            <span className="text-[11px] uppercase tracking-wider text-white/40 font-bold">크로마키</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className={`text-white/30 transition-transform duration-200 ${collapsedSections['chromakey'] ? '-rotate-90' : 'rotate-0'}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {!collapsedSections['chromakey'] && (
+            <div className="space-y-3 mt-2">
+              <div className="flex items-center justify-between">
+                <p className="text-white/50 text-xs">활성화</p>
+                <button
+                  onClick={() => {
+                    const newVal = !chromaKeyEnabled;
+                    setChromaKeyEnabled(newVal);
+                    updateSetting('chromaKeyEnabled', newVal);
+                    syncChromaKeySettings();
+                  }}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${chromaKeyEnabled ? 'bg-orange-500' : 'bg-white/20'}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${chromaKeyEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+
+              {chromaKeyEnabled && (
+                <>
+                  <div>
+                    <label className="text-white/40 text-xs block mb-1">색상 (HEX)</label>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-8 h-8 rounded-lg border border-white/20 flex-shrink-0"
+                        style={{ background: chromaKeyColor }}
+                      />
+                      <input
+                        type="text"
+                        value={chromaKeyColor}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setChromaKeyColor(val);
+                          if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                            updateSetting('chromaKeyColor', val);
+                          }
+                        }}
+                        onBlur={syncChromaKeySettings}
+                        placeholder="#00ff00"
+                        className="flex-1 h-8 px-2 rounded-lg text-xs text-white font-mono border border-white/10 bg-white/5 outline-none focus:border-orange-500/50"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-white/40 text-xs flex justify-between mb-1">
+                      <span>민감도</span>
+                      <span className="font-mono">{sensitivity}</span>
+                    </label>
+                    <input
+                      type="range" min="0" max="100" value={sensitivity}
+                      onChange={(e) => { const v = Number(e.target.value); setSensitivity(v); updateSetting('sensitivity', v); }}
+                      onMouseUp={syncChromaKeySettings}
+                      onTouchEnd={syncChromaKeySettings}
+                      className="w-full accent-orange-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-white/40 text-xs flex justify-between mb-1">
+                      <span>부드러움</span>
+                      <span className="font-mono">{smoothness}</span>
+                    </label>
+                    <input
+                      type="range" min="0" max="50" value={smoothness}
+                      onChange={(e) => { const v = Number(e.target.value); setSmoothness(v); updateSetting('smoothness', v); }}
+                      onMouseUp={syncChromaKeySettings}
+                      onTouchEnd={syncChromaKeySettings}
+                      className="w-full accent-orange-500"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="border-b border-white/[0.06]" />
+
+        {/* === Section: 오디오 === */}
+        <div>
+          <button
+            onClick={() => toggleSection('audio')}
+            className="w-full flex items-center justify-between py-1"
+          >
+            <span className="text-[11px] uppercase tracking-wider text-white/40 font-bold">오디오</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className={`text-white/30 transition-transform duration-200 ${collapsedSections['audio'] ? '-rotate-90' : 'rotate-0'}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {!collapsedSections['audio'] && (
+            <div className="space-y-4 mt-2">
+              {/* My mic */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={localMicMuted ? '#ef4444' : 'rgba(255,255,255,0.5)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </svg>
+                    <span className="text-white/60 text-xs">내 마이크</span>
+                  </div>
+                  <button
+                    onClick={toggleLocalMic}
+                    className={`px-2 py-1 rounded text-[10px] font-bold transition ${localMicMuted ? 'bg-red-500/20 text-red-400' : 'bg-white/10 text-white/50 hover:bg-white/15'}`}
+                  >
+                    {localMicMuted ? 'OFF' : 'ON'}
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/30 text-[10px] w-6 text-right font-mono">{localMicVolume}</span>
+                  <input
+                    type="range" min="0" max="100" value={localMicVolume}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setLocalMicVolume(v);
+                      if (v > 0 && localMicMuted) setLocalMicMuted(false);
+                      if (v === 0 && !localMicMuted) setLocalMicMuted(true);
+                    }}
+                    className="flex-1 accent-orange-500"
+                  />
+                </div>
+              </div>
+
+              {/* Remote audio */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={!remoteAudioEnabled ? '#ef4444' : 'rgba(255,255,255,0.5)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    </svg>
+                    <span className="text-white/60 text-xs">상대방 소리</span>
+                  </div>
+                  <button
+                    onClick={toggleRemoteAudio}
+                    className={`px-2 py-1 rounded text-[10px] font-bold transition ${!remoteAudioEnabled ? 'bg-red-500/20 text-red-400' : 'bg-white/10 text-white/50 hover:bg-white/15'}`}
+                  >
+                    {remoteAudioEnabled ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/30 text-[10px] w-6 text-right font-mono">{remoteVolume}</span>
+                  <input
+                    type="range" min="0" max="100" value={remoteVolume}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setRemoteVolume(v);
+                      if (v > 0 && !remoteAudioEnabled) setRemoteAudioEnabled(true);
+                      if (v === 0 && remoteAudioEnabled) setRemoteAudioEnabled(false);
+                    }}
+                    className="flex-1 accent-orange-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* ===== RIGHT SIDE TAB (Info) ===== */}
       <button
@@ -947,7 +1103,7 @@ export default function HostV3RoomPage() {
         className="absolute top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-l-xl backdrop-blur-md transition-all duration-300 ease-in-out hover:bg-white/20"
         style={{
           background: 'rgba(0,0,0,0.5)',
-          right: rightPanelOpen ? '16rem' : '0.75rem',
+          right: rightPanelOpen ? '18rem' : '0.75rem',
           opacity: rightPanelOpen ? 0 : 1,
           pointerEvents: rightPanelOpen ? 'none' : 'auto',
         }}
@@ -958,7 +1114,7 @@ export default function HostV3RoomPage() {
       </button>
 
       <div
-        className="absolute right-0 top-16 bottom-4 z-20 w-64 overflow-y-auto rounded-l-2xl backdrop-blur-xl p-4 space-y-4 transition-transform duration-300 ease-in-out"
+        className="absolute right-0 top-16 bottom-4 z-20 w-72 overflow-y-auto rounded-l-2xl backdrop-blur-xl p-4 space-y-4 transition-transform duration-300 ease-in-out"
         style={{
           background: 'rgba(27,22,18,0.92)',
           borderLeft: '1px solid rgba(255,255,255,0.08)',
@@ -978,49 +1134,59 @@ export default function HostV3RoomPage() {
         </div>
 
           {/* Guest status */}
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
-            <div className="flex items-center gap-2 mb-1">
-              <div className={`w-2.5 h-2.5 rounded-full ${isGuestConnected ? 'bg-green-400 animate-pulse' : 'bg-white/20'}`} />
-              <span className="text-white text-sm font-bold">
+          <div className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
+            <div className="flex items-center gap-3 mb-1">
+              <div className={`w-3 h-3 rounded-full flex-shrink-0 ${isGuestConnected ? 'bg-green-400 animate-pulse' : 'bg-white/20'}`} />
+              <span className="text-white text-base font-bold">
                 {isGuestConnected ? '게스트 연결됨' : '게스트 대기 중'}
               </span>
             </div>
             {!isGuestConnected && (
-              <p className="text-white/30 text-xs ml-5">게스트가 입장할 때까지 기다려주세요</p>
+              <p className="text-white/30 text-xs ml-6">게스트가 입장할 때까지 기다려주세요</p>
             )}
           </div>
 
           {/* Capture status */}
           {(sessionState === SessionState.CAPTURING || sessionState === SessionState.PROCESSING) && (
-            <div className="p-3 rounded-xl border" style={{ background: 'rgba(252,113,43,0.1)', borderColor: 'rgba(252,113,43,0.3)' }}>
+            <div className="p-4 rounded-xl border" style={{ background: 'rgba(252,113,43,0.1)', borderColor: 'rgba(252,113,43,0.3)' }}>
               <div className="flex items-center gap-2">
                 {sessionState === SessionState.CAPTURING ? (
                   <>
-                    <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-white text-sm font-bold">
+                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
+                    <span className="text-white text-base font-bold">
                       {photoCapture.countdown !== null && photoCapture.countdown > 0
                         ? `${photoCapture.countdown}초 후 촬영`
                         : photoCapture.uploadProgress > 0
-                        ? `업로드 중... ${photoCapture.uploadProgress}%`
+                        ? `업로드 중 ${photoCapture.uploadProgress}%`
                         : '촬영 준비 중'}
                     </span>
                   </>
                 ) : (
                   <>
-                    <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-white text-sm font-bold">사진 합성 중</span>
+                    <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                    <span className="text-white text-base font-bold">사진 합성 중</span>
                   </>
                 )}
               </div>
+              {/* Upload progress bar */}
+              {sessionState === SessionState.CAPTURING && photoCapture.uploadProgress > 0 && (
+                <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mt-3">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${photoCapture.uploadProgress}%`,
+                      background: 'linear-gradient(90deg, #FC712B, #FD9319)',
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
 
           {/* Session count */}
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
-            <div className="flex items-center justify-between">
-              <span className="text-white/50 text-xs">촬영 세션</span>
-              <span className="text-white font-bold text-lg">{guestManagement.sessionCount}</span>
-            </div>
+          <div className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
+            <p className="text-white/40 text-xs mb-1">촬영 세션</p>
+            <span className="text-white font-bold text-3xl">{guestManagement.sessionCount}</span>
           </div>
 
           {/* Video processing status */}
