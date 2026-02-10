@@ -18,7 +18,7 @@ import { useAppStore } from '@/lib/store';
 import { SessionState, SignalMessage } from '@/types';
 import { QRCodeDisplay } from '@/components/QRCodeDisplay';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
 export default function GuestV3RoomPage() {
   const router = useRouter();
@@ -229,8 +229,7 @@ export default function GuestV3RoomPage() {
     }
   };
 
-  const handleV3SignalRef = useRef<(message: any) => void>(() => {});
-  handleV3SignalRef.current = (message: any) => {
+  const handleV3Signal = useEffectEvent((message: any) => {
     guestManagement.registerSignalHandlers(message);
     photoCapture.handleSignalMessage(message);
 
@@ -274,7 +273,7 @@ export default function GuestV3RoomPage() {
         setSessionState(SessionState.GUEST_CONNECTED);
         break;
     }
-  };
+  });
 
   useEffect(() => {
     const v3MessageTypes = [
@@ -292,10 +291,8 @@ export default function GuestV3RoomPage() {
       'qr-auto-close-festa',
     ];
 
-    const handler = (message: any) => handleV3SignalRef.current(message);
-
     v3MessageTypes.forEach((type) => {
-      on(type, handler);
+      on(type, handleV3Signal);
     });
 
     on('peer-joined', (message: any) => {

@@ -26,7 +26,7 @@ import { VideoRecorder, downloadVideo } from '@/lib/video-recorder';
 import { composeVideoWithWebGL, VideoSource } from '@/lib/webgl-video-composer';
 import { SessionState, SignalMessage } from '@/types';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function HostV3RoomPage() {
@@ -235,75 +235,75 @@ export default function HostV3RoomPage() {
     init();
   }, [store._hasHydrated, store.role]);
 
-  useEffect(() => {
-    const handleV3Signal = (message: any) => {
-      if (message.type === 'guest-joined-v3' && message.guestId) {
-        store.setPeerId(message.guestId);
-      }
+  const handleV3Signal = useEffectEvent((message: any) => {
+    if (message.type === 'guest-joined-v3' && message.guestId) {
+      store.setPeerId(message.guestId);
+    }
 
-      guestManagement.registerSignalHandlers(message);
-      photoCapture.handleSignalMessage(message);
+    guestManagement.registerSignalHandlers(message);
+    photoCapture.handleSignalMessage(message);
 
-      switch (message.type) {
-        case 'guest-joined-v3':
-          setSessionState(SessionState.GUEST_CONNECTED);
-          setLastSessionResult(null);
-          setRecordedVideoBlob(null);
-          break;
-        case 'guest-left-v3':
-          setSessionState(SessionState.WAITING_FOR_GUEST);
-          photoCapture.reset();
-          break;
-        case 'waiting-for-guest-v3':
-          setSessionState(SessionState.WAITING_FOR_GUEST);
-          break;
-        case 'countdown-tick-v3':
-          if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
-            videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
-              const layout = getLayoutById(store.selectedFrameLayoutId);
-              if (layout && layout.frameSrc) {
-                try {
-                  setIsVideoProcessing(true);
-                  const videoSource: VideoSource = {
-                    blob: rawBlob,
-                    startTime: 0,
-                    endTime: 0,
-                    photoNumber: 1,
-                  };
-                  const composedBlob = await composeVideoWithWebGL(
-                    [videoSource],
-                    {
-                      width: RESOLUTION.VIDEO_WIDTH,
-                      height: RESOLUTION.VIDEO_HEIGHT,
-                      frameRate: 24,
-                      layout,
-                    },
-                    (msg) => setVideoProcessingProgress(msg)
-                  );
-                  setRecordedVideoBlob(composedBlob);
-                } catch (err) {
-                  console.error('[Host V3] Video post-processing failed:', err);
-                  setRecordedVideoBlob(rawBlob);
-                } finally {
-                  setIsVideoProcessing(false);
-                  setVideoProcessingProgress('');
-                }
-              } else {
+    switch (message.type) {
+      case 'guest-joined-v3':
+        setSessionState(SessionState.GUEST_CONNECTED);
+        setLastSessionResult(null);
+        setRecordedVideoBlob(null);
+        break;
+      case 'guest-left-v3':
+        setSessionState(SessionState.WAITING_FOR_GUEST);
+        photoCapture.reset();
+        break;
+      case 'waiting-for-guest-v3':
+        setSessionState(SessionState.WAITING_FOR_GUEST);
+        break;
+      case 'countdown-tick-v3':
+        if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
+          videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
+            const layout = getLayoutById(store.selectedFrameLayoutId);
+            if (layout && layout.frameSrc) {
+              try {
+                setIsVideoProcessing(true);
+                const videoSource: VideoSource = {
+                  blob: rawBlob,
+                  startTime: 0,
+                  endTime: 0,
+                  photoNumber: 1,
+                };
+                const composedBlob = await composeVideoWithWebGL(
+                  [videoSource],
+                  {
+                    width: RESOLUTION.VIDEO_WIDTH,
+                    height: RESOLUTION.VIDEO_HEIGHT,
+                    frameRate: 24,
+                    layout,
+                  },
+                  (msg) => setVideoProcessingProgress(msg)
+                );
+                setRecordedVideoBlob(composedBlob);
+              } catch (err) {
+                console.error('[Host V3] Video post-processing failed:', err);
                 setRecordedVideoBlob(rawBlob);
+              } finally {
+                setIsVideoProcessing(false);
+                setVideoProcessingProgress('');
               }
-            }).catch((err) => console.error('[Host V3] Video recording start error:', err));
-          }
-          break;
-        case 'capture-now-v3':
-          setTimeout(() => {
-            if (videoRecorderRef.current?.isRecording()) {
-              videoRecorderRef.current.stopRecording();
+            } else {
+              setRecordedVideoBlob(rawBlob);
             }
-          }, 2000);
-          break;
-      }
-    };
+          }).catch((err) => console.error('[Host V3] Video recording start error:', err));
+        }
+        break;
+      case 'capture-now-v3':
+        setTimeout(() => {
+          if (videoRecorderRef.current?.isRecording()) {
+            videoRecorderRef.current.stopRecording();
+          }
+        }, 2000);
+        break;
+    }
+  });
 
+  useEffect(() => {
     const v3MessageTypes = [
       'guest-joined-v3',
       'guest-left-v3',
@@ -326,7 +326,7 @@ export default function HostV3RoomPage() {
     on('peer-left', (message: any) => {
       store.setPeerId(null);
     });
-  }, [on, guestManagement.registerSignalHandlers, photoCapture.handleSignalMessage]);
+  }, [on]);
 
   const startScreenShare = async () => {
     try {

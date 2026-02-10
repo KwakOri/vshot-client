@@ -20,7 +20,7 @@ import { generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
 import { useAppStore } from '@/lib/store';
 import { SessionState, SignalMessage } from '@/types';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
 export default function GuestV3RoomPage() {
   const router = useRouter();
@@ -248,28 +248,28 @@ export default function GuestV3RoomPage() {
     }
   };
 
-  useEffect(() => {
-    const handleV3Signal = (message: any) => {
-      guestManagement.registerSignalHandlers(message);
-      photoCapture.handleSignalMessage(message);
+  const handleV3Signal = useEffectEvent((message: any) => {
+    guestManagement.registerSignalHandlers(message);
+    photoCapture.handleSignalMessage(message);
 
-      switch (message.type) {
-        case 'guest-joined-v3':
-          if (message.guestId === store.userId) {
-            setSessionState(SessionState.GUEST_CONNECTED);
-            if (message.hostSettings) {
-              if (message.hostSettings.selectedFrameLayoutId) {
-                store.setSelectedFrameLayoutId(message.hostSettings.selectedFrameLayoutId);
-              }
+    switch (message.type) {
+      case 'guest-joined-v3':
+        if (message.guestId === store.userId) {
+          setSessionState(SessionState.GUEST_CONNECTED);
+          if (message.hostSettings) {
+            if (message.hostSettings.selectedFrameLayoutId) {
+              store.setSelectedFrameLayoutId(message.hostSettings.selectedFrameLayoutId);
             }
           }
-          break;
-        case 'countdown-tick-v3':
-          setSessionState(SessionState.CAPTURING);
-          break;
-      }
-    };
+        }
+        break;
+      case 'countdown-tick-v3':
+        setSessionState(SessionState.CAPTURING);
+        break;
+    }
+  });
 
+  useEffect(() => {
     const v3MessageTypes = [
       'guest-joined-v3',
       'guest-left-v3',
@@ -292,7 +292,7 @@ export default function GuestV3RoomPage() {
     on('peer-left', (message: any) => {
       store.setPeerId(null);
     });
-  }, [on, guestManagement.registerSignalHandlers, photoCapture.handleSignalMessage]);
+  }, [on]);
 
   useEffect(() => {
     on('chromakey-settings', (message: any) => {

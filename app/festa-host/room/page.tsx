@@ -24,7 +24,7 @@ import { createFilm } from '@/lib/films';
 import { nanoid } from 'nanoid';
 import { SessionState, SignalMessage } from '@/types';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function HostV3RoomPage() {
@@ -323,8 +323,7 @@ export default function HostV3RoomPage() {
     init();
   }, [store._hasHydrated, store.role]);
 
-  const handleV3SignalRef = useRef<(message: any) => void>(() => {});
-  handleV3SignalRef.current = (message: any) => {
+  const handleV3Signal = useEffectEvent((message: any) => {
     if (message.type === 'guest-joined-v3' && message.guestId) {
       store.setPeerId(message.guestId);
     }
@@ -400,7 +399,7 @@ export default function HostV3RoomPage() {
         setIsGuestViewingQR(false);
         break;
     }
-  };
+  });
 
   useEffect(() => {
     const v3MessageTypes = [
@@ -417,10 +416,8 @@ export default function HostV3RoomPage() {
       'qr-dismissed-festa',
     ];
 
-    const handler = (message: any) => handleV3SignalRef.current(message);
-
     v3MessageTypes.forEach((type) => {
-      on(type, handler);
+      on(type, handleV3Signal);
     });
 
     on('peer-joined', (message: any) => {

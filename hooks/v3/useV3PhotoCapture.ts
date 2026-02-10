@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useEffectEvent } from 'react';
 import { SignalMessage } from '@/types';
 
 interface ChromaKeySettings {
@@ -62,15 +62,19 @@ export function useV3PhotoCapture({
   const abortControllerRef = useRef<AbortController | null>(null);
   const isCapturingRef = useRef(false);
 
-  // Stable callback refs (avoids re-registering signal handlers on every render)
-  const onCaptureCompleteRef = useRef(onCaptureComplete);
-  const onMergeCompleteRef = useRef(onMergeComplete);
-  const onSessionCompleteRef = useRef(onSessionComplete);
-  const onErrorRef = useRef(onError);
-  useEffect(() => { onCaptureCompleteRef.current = onCaptureComplete; }, [onCaptureComplete]);
-  useEffect(() => { onMergeCompleteRef.current = onMergeComplete; }, [onMergeComplete]);
-  useEffect(() => { onSessionCompleteRef.current = onSessionComplete; }, [onSessionComplete]);
-  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+  // Stable callback refs via useEffectEvent (React 19.2+)
+  const onCaptureCompleteFn = useEffectEvent((photoUrl: string) => {
+    onCaptureComplete?.(photoUrl);
+  });
+  const onMergeCompleteFn = useEffectEvent((mergedPhotoUrl: string) => {
+    onMergeComplete?.(mergedPhotoUrl);
+  });
+  const onSessionCompleteFn = useEffectEvent((sessionId: string, frameResultUrl: string) => {
+    onSessionComplete?.(sessionId, frameResultUrl);
+  });
+  const onErrorFn = useEffectEvent((error: Error) => {
+    onError?.(error);
+  });
 
   /**
    * Start capture (Host only) - sends signal to server
@@ -85,7 +89,7 @@ export function useV3PhotoCapture({
     if (!backgroundVideo) {
       const error = new Error('Background video not ready');
       console.error('[V3PhotoCapture]', error);
-      onErrorRef.current?.(error);
+      onErrorFn(error);
       return;
     }
 
@@ -137,7 +141,7 @@ export function useV3PhotoCapture({
 
       if (!backgroundVideo) {
         console.error('[V3PhotoCapture] Background video not ready for capture');
-        onErrorRef.current?.(new Error('Background video not ready'));
+        onErrorFn(new Error('Background video not ready'));
         return;
       }
 
@@ -184,10 +188,10 @@ export function useV3PhotoCapture({
         });
 
         console.log(`[V3PhotoCapture] Photo captured and uploaded: ${photoUrl}`);
-        onCaptureCompleteRef.current?.(photoUrl);
+        onCaptureCompleteFn(photoUrl);
       } catch (error) {
         console.error('[V3PhotoCapture] Capture failed:', error);
-        onErrorRef.current?.(error as Error);
+        onErrorFn(error as Error);
         setIsCapturing(false);
         isCapturingRef.current = false;
         setCountdown(null);
@@ -205,7 +209,7 @@ export function useV3PhotoCapture({
 
       console.log(`[V3PhotoCapture] Photos merged: ${message.mergedPhotoUrl}`);
       setMergedPhotoUrl(message.mergedPhotoUrl);
-      onMergeCompleteRef.current?.(message.mergedPhotoUrl);
+      onMergeCompleteFn(message.mergedPhotoUrl);
     },
     [roomId]
   );
@@ -224,7 +228,7 @@ export function useV3PhotoCapture({
       isCapturingRef.current = false;
       setCountdown(null);
 
-      onSessionCompleteRef.current?.(message.sessionId, message.frameResultUrl);
+      onSessionCompleteFn(message.sessionId, message.frameResultUrl);
     },
     [roomId]
   );
