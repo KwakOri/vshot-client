@@ -772,34 +772,41 @@ export default function HostV3RoomPage() {
       </div>
 
       {/* ===== LEFT SIDE TAB (Settings) ===== */}
-      {!leftPanelOpen && (
-        <button
-          onClick={() => setLeftPanelOpen(true)}
-          className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-r-xl backdrop-blur-md transition hover:bg-white/20"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </button>
-      )}
+      {/* Open button - slides out with panel */}
+      <button
+        onClick={() => setLeftPanelOpen(true)}
+        className="absolute top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-r-xl backdrop-blur-md transition-all duration-300 ease-in-out hover:bg-white/20"
+        style={{
+          background: 'rgba(0,0,0,0.5)',
+          left: leftPanelOpen ? '18rem' : '0.75rem',
+          opacity: leftPanelOpen ? 0 : 1,
+          pointerEvents: leftPanelOpen ? 'none' : 'auto',
+        }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </button>
 
-      {leftPanelOpen && (
-        <div
-          className="absolute left-0 top-16 bottom-4 z-20 w-72 overflow-y-auto rounded-r-2xl backdrop-blur-xl p-4 space-y-4"
-          style={{ background: 'rgba(27,22,18,0.92)', borderRight: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">설정</h3>
-            <button
-              onClick={() => setLeftPanelOpen(false)}
-              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
+      <div
+        className="absolute left-0 top-16 bottom-4 z-20 w-72 overflow-y-auto rounded-r-2xl backdrop-blur-xl p-4 space-y-4 transition-transform duration-300 ease-in-out"
+        style={{
+          background: 'rgba(27,22,18,0.92)',
+          borderRight: '1px solid rgba(255,255,255,0.08)',
+          transform: leftPanelOpen ? 'translateX(0)' : 'translateX(-100%)',
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">설정</h3>
+          <button
+            onClick={() => setLeftPanelOpen(false)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
 
           {/* Screen share button */}
           <button
@@ -919,37 +926,42 @@ export default function HostV3RoomPage() {
             </button>
           )}
         </div>
-      )}
 
       {/* ===== RIGHT SIDE TAB (Info) ===== */}
-      {!rightPanelOpen && (
-        <button
-          onClick={() => setRightPanelOpen(true)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-l-xl backdrop-blur-md transition hover:bg-white/20"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-      )}
+      <button
+        onClick={() => setRightPanelOpen(true)}
+        className="absolute top-1/2 -translate-y-1/2 z-20 w-10 h-16 flex items-center justify-center rounded-l-xl backdrop-blur-md transition-all duration-300 ease-in-out hover:bg-white/20"
+        style={{
+          background: 'rgba(0,0,0,0.5)',
+          right: rightPanelOpen ? '16rem' : '0.75rem',
+          opacity: rightPanelOpen ? 0 : 1,
+          pointerEvents: rightPanelOpen ? 'none' : 'auto',
+        }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+      </button>
 
-      {rightPanelOpen && (
-        <div
-          className="absolute right-0 top-16 bottom-4 z-20 w-64 overflow-y-auto rounded-l-2xl backdrop-blur-xl p-4 space-y-4"
-          style={{ background: 'rgba(27,22,18,0.92)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">상태</h3>
-            <button
-              onClick={() => setRightPanelOpen(false)}
-              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
+      <div
+        className="absolute right-0 top-16 bottom-4 z-20 w-64 overflow-y-auto rounded-l-2xl backdrop-blur-xl p-4 space-y-4 transition-transform duration-300 ease-in-out"
+        style={{
+          background: 'rgba(27,22,18,0.92)',
+          borderLeft: '1px solid rgba(255,255,255,0.08)',
+          transform: rightPanelOpen ? 'translateX(0)' : 'translateX(100%)',
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider">상태</h3>
+          <button
+            onClick={() => setRightPanelOpen(false)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
 
           {/* Guest status */}
           <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
@@ -1007,7 +1019,6 @@ export default function HostV3RoomPage() {
             </div>
           )}
         </div>
-      )}
 
       {/* ===== BOTTOM-RIGHT TOAST (Capture complete) ===== */}
       {sessionState === SessionState.COMPLETED && lastSessionResult && (
