@@ -5,7 +5,7 @@ const PROTECTED_PATHS = ['/host', '/festa-host'];
 const ADMIN_PATHS = ['/admin'];
 const TOKEN_COOKIE = 'vshot_token';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Check if path needs protection
