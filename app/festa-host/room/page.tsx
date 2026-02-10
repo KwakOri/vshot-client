@@ -510,7 +510,7 @@ export default function HostV3RoomPage() {
     if (localStream) localStream.getTracks().forEach((track) => track.stop());
     store.setRoomId(null as any);
     store.setRole(null);
-    router.push('/festa-host/ready');
+    router.push('/festa-host');
   };
 
   const openSettings = () => {
@@ -591,6 +591,10 @@ export default function HostV3RoomPage() {
   }, [localStream]);
 
   const handleCopyRoomCode = () => {
+    if (!localStream) {
+      alert('먼저 화면 공유를 시작해서 촬영 준비를 완료해주세요');
+      return;
+    }
     if (store.roomId) {
       navigator.clipboard.writeText(store.roomId);
     }
@@ -688,7 +692,7 @@ export default function HostV3RoomPage() {
           {store.roomId && (
             <button
               onClick={handleCopyRoomCode}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md transition hover:bg-white/20"
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md transition ${localStream ? 'hover:bg-white/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
               style={{ background: 'rgba(0,0,0,0.4)' }}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
