@@ -3,7 +3,7 @@
 import { getToken, getUserRole, logout } from '@/lib/auth';
 import { useAppStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import UnicornScene from 'unicornstudio-react';
 
 export default function Home() {
@@ -11,8 +11,13 @@ export default function Home() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const isLoggedIn = !!getToken();
-  const role = getUserRole();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsLoggedIn(!!getToken());
+    setRole(getUserRole());
+  }, []);
 
   const handleStartCapture = useCallback(() => {
     store.reset();
@@ -33,6 +38,8 @@ export default function Home() {
 
   const handleLogout = useCallback(() => {
     logout();
+    setIsLoggedIn(false);
+    setRole(null);
     setMenuOpen(false);
     router.refresh();
   }, [router]);
