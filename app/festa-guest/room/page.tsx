@@ -550,6 +550,7 @@ export default function GuestV3RoomPage() {
           <img
             src={selectedLayout.frameSrc}
             alt=""
+            crossOrigin="anonymous"
             className="absolute max-w-full max-h-full object-fill pointer-events-none z-[2]"
             style={{ aspectRatio: '2/3', opacity: 1 }}
           />
