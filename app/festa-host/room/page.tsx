@@ -7,6 +7,7 @@ import {
 import { CountdownOverlay } from '@/components/v3/FrameOverlayPreview';
 import { RESOLUTION } from '@/constants/constants';
 import { getLayoutById } from '@/constants/frame-layouts';
+import { FrameLayout } from '@/types';
 import { useChromaKey } from '@/hooks/useChromaKey';
 import { useCompositeCanvas } from '@/hooks/useCompositeCanvas';
 import { useHostSettings } from '@/hooks/useHostSettings';
@@ -105,7 +106,7 @@ export default function HostV3RoomPage() {
   const [leftPanelOpen, setLeftPanelOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
 
-  const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
+  const selectedLayout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,6 +128,7 @@ export default function HostV3RoomPage() {
         smoothness: smoothness / 100,
       },
       selectedFrameLayoutId: store.selectedFrameLayoutId,
+      layoutData: store.resolvedFrameLayout || undefined,
     },
     sendSignal: sendMessage,
     resetWebRTCConnection: resetForNextGuest,
@@ -161,7 +163,7 @@ export default function HostV3RoomPage() {
 
       const filmId = nanoid(8);
       let framedBlobUrl: string | null = null;
-      const layout = getLayoutById(store.selectedFrameLayoutId);
+      const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
           const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -362,7 +364,7 @@ export default function HostV3RoomPage() {
       case 'countdown-tick-v3':
         if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
           videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
-            const layout = getLayoutById(store.selectedFrameLayoutId);
+            const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
             if (layout && layout.frameSrc) {
               try {
                 setIsVideoProcessing(true);

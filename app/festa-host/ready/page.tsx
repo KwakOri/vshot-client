@@ -2,7 +2,8 @@
 
 import { DeviceSelector } from '@/components';
 import { FrameSelector } from '@/components/v3/FrameSelector';
-import { getActiveLayouts } from '@/constants/frame-layouts';
+import { useAvailableFrames } from '@/hooks/useAvailableFrames';
+import { resolveFrameLayout } from '@/constants/frame-layouts';
 import { useMediaDevices } from '@/hooks/useMediaDevices';
 import { useAppStore } from '@/lib/store';
 import { FrameLayout } from '@/types';
@@ -28,7 +29,7 @@ export default function HostV3ReadyPage() {
   );
 
   // Frame selection
-  const activeLayouts = getActiveLayouts();
+  const { layouts: activeLayouts } = useAvailableFrames();
   const [selectedFrameLayoutId, setSelectedFrameLayoutId] = useState<string>(
     store.selectedFrameLayoutId
   );
@@ -119,6 +120,10 @@ export default function HostV3ReadyPage() {
     store.setSelectedAudioDeviceId(selectedAudioDeviceId);
     store.setSelectedAudioOutputDeviceId(selectedAudioOutputDeviceId);
     store.setSelectedFrameLayoutId(selectedFrameLayoutId);
+
+    const resolved = resolveFrameLayout(selectedFrameLayoutId, activeLayouts);
+    if (resolved) store.setResolvedFrameLayout(resolved);
+
     store.setRole('host');
 
     stopMicTest();
@@ -261,7 +266,7 @@ export default function HostV3ReadyPage() {
             </div>
 
             {/* Frame Selection */}
-            {activeLayouts.length > 1 && (
+            {activeLayouts.length > 0 && (
               <div>
                 <label className="font-display text-[11px] font-bold text-white/30 uppercase tracking-wider mb-3 block">
                   프레임 선택

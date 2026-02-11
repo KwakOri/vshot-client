@@ -65,7 +65,7 @@ export default function GuestV3RoomPage() {
   const [pendingAudioDeviceId, setPendingAudioDeviceId] = useState<string | null>(null);
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
-  const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
+  const selectedLayout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -241,6 +241,9 @@ export default function GuestV3RoomPage() {
             if (message.hostSettings.selectedFrameLayoutId) {
               store.setSelectedFrameLayoutId(message.hostSettings.selectedFrameLayoutId);
             }
+            if (message.hostSettings.layoutData) {
+              store.setResolvedFrameLayout(message.hostSettings.layoutData);
+            }
           }
         }
         break;
@@ -325,6 +328,9 @@ export default function GuestV3RoomPage() {
     on('frame-layout-settings', (message: any) => {
       if (message.settings) {
         store.setSelectedFrameLayoutId(message.settings.layoutId);
+        if (message.settings.layoutData) {
+          store.setResolvedFrameLayout(message.settings.layoutData);
+        }
       }
     });
   }, [on, store]);

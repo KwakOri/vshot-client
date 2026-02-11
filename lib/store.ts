@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { RoomState, CapturedPhoto } from '@/types';
-import { getLayoutById } from '@/constants/frame-layouts';
+import { RoomState, CapturedPhoto, FrameLayout } from '@/types';
 
 export interface ChromaKeySettings {
   enabled: boolean;
@@ -18,6 +17,10 @@ interface AppStore extends RoomState {
   // Frame layout selection
   selectedFrameLayoutId: string;
   setSelectedFrameLayoutId: (layoutId: string) => void;
+
+  // Resolved frame layout (non-persisted, full FrameLayout object)
+  resolvedFrameLayout: FrameLayout | null;
+  setResolvedFrameLayout: (layout: FrameLayout | null) => void;
 
   // Device selection (persisted)
   selectedVideoDeviceId: string | null;
@@ -89,6 +92,9 @@ export const useAppStore = create<AppStore>()(
   setHasHydrated: (state) => {
     set({ _hasHydrated: state });
   },
+
+  resolvedFrameLayout: null,
+  setResolvedFrameLayout: (layout) => set({ resolvedFrameLayout: layout }),
 
   setSelectedFrameLayoutId: (layoutId) => set({ selectedFrameLayoutId: layoutId }),
 
@@ -172,11 +178,8 @@ export const useAppStore = create<AppStore>()(
         guestFlipHorizontal: state.guestFlipHorizontal,
       }),
       onRehydrateStorage: () => (state) => {
-        // Validate persisted layout ID - fallback to default if invalid
-        if (state && !getLayoutById(state.selectedFrameLayoutId)) {
-          state.setSelectedFrameLayoutId('1cut-polaroid');
-        }
         // Mark hydration as complete
+        // Note: selectedFrameLayoutId can be a DB UUID, so no hardcoded-only validation
         state?.setHasHydrated(true);
       },
     }
