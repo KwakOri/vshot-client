@@ -90,7 +90,8 @@ export default function HostV3RoomPage() {
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
   const [isGuestViewingQR, setIsGuestViewingQR] = useState(false);
-  const [showCopyToast, setShowCopyToast] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [lastSessionResult, setLastSessionResult] = useState<{
     sessionId: string;
@@ -699,17 +700,18 @@ export default function HostV3RoomPage() {
     if (localStream && localVideoRef.current) localVideoRef.current.srcObject = localStream;
   }, [localStream]);
 
-  const handleCopyRoomCode = () => {
+  const handleCopyRoomCode = useCallback(() => {
     if (!localStream) {
       alert('먼저 화면 공유를 시작해서 촬영 준비를 완료해주세요');
       return;
     }
     if (store.roomId) {
       navigator.clipboard.writeText(store.roomId);
-      setShowCopyToast(true);
-      setTimeout(() => setShowCopyToast(false), 2000);
+      setCopied(true);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 1500);
     }
-  };
+  }, [localStream, store.roomId]);
 
   const isGuestConnected = !guestManagement.waitingForGuest && sessionState !== SessionState.WAITING_FOR_GUEST;
   const canCapture = isGuestConnected && sessionState === SessionState.GUEST_CONNECTED && !!remoteStream;
@@ -804,14 +806,32 @@ export default function HostV3RoomPage() {
           {store.roomId && (
             <button
               onClick={handleCopyRoomCode}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md transition ${localStream ? 'hover:bg-white/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
-              style={{ background: 'rgba(0,0,0,0.4)' }}
+              className={`relative flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md overflow-hidden transition-all duration-300 ease-out ${
+                copied
+                  ? 'bg-emerald-500/90 scale-105'
+                  : localStream
+                    ? 'hover:bg-white/20 cursor-pointer'
+                    : 'opacity-40 cursor-not-allowed'
+              }`}
+              style={copied ? undefined : { background: 'rgba(0,0,0,0.4)' }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-              <span className="text-white/80 font-bold text-xs tracking-wider">COPY ROOM ID</span>
+              <span className={`inline-flex items-center gap-2 transition-all duration-300 ${
+                copied ? 'opacity-0 translate-y-3 scale-90' : 'opacity-100 translate-y-0 scale-100'
+              }`}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span className="text-white/80 font-bold text-xs tracking-wider">COPY ROOM ID</span>
+              </span>
+              <span className={`absolute inset-0 flex items-center justify-center gap-1.5 transition-all duration-300 ${
+                copied ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-3 scale-90'
+              }`}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span className="text-white font-bold text-xs tracking-wider">DONE</span>
+              </span>
             </button>
           )}
         </div>
@@ -1255,20 +1275,6 @@ export default function HostV3RoomPage() {
               )}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Copy toast */}
-      {showCopyToast && (
-        <div
-          className="absolute bottom-4 right-4 z-40 flex items-center gap-2 rounded-xl px-4 py-3 backdrop-blur-md animate-slide-up"
-          style={{ background: 'rgba(27,22,18,0.95)', border: '1px solid rgba(255,255,255,0.1)' }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-            <polyline points="22 4 12 14.01 9 11.01" />
-          </svg>
-          <span className="text-white text-sm font-bold">방 번호가 복사되었습니다</span>
         </div>
       )}
 
