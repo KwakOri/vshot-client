@@ -29,21 +29,74 @@ export async function login(email: string, password: string): Promise<AuthRespon
   return data;
 }
 
-export async function register(email: string, password: string): Promise<AuthResponse> {
+export async function createUser(email: string, password: string, role: string = 'host'): Promise<AuthResponse> {
   const res = await fetch(`${API_URL}/api/auth/register`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ email, password, role }),
   });
 
   if (!res.ok) {
-    const data = await res.json().catch(() => ({ error: 'Registration failed' }));
-    throw new Error(data.error || 'Registration failed');
+    const data = await res.json().catch(() => ({ error: 'Failed to create user' }));
+    throw new Error(data.error || 'Failed to create user');
   }
 
-  const data: AuthResponse = await res.json();
-  setTokenCookie(data.token);
-  return data;
+  return res.json();
+}
+
+export async function getUsers(): Promise<{ users: { id: string; email: string; role: string; created_at: string }[]; total: number }> {
+  const res = await fetch(`${API_URL}/api/auth/users`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: 'Failed to fetch users' }));
+    throw new Error(data.error || 'Failed to fetch users');
+  }
+
+  return res.json();
+}
+
+export async function deleteUser(userId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_URL}/api/auth/users/${userId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: 'Failed to delete user' }));
+    throw new Error(data.error || 'Failed to delete user');
+  }
+
+  return res.json();
+}
+
+interface AdminStats {
+  active: number;
+  expired: number;
+  deleted: number;
+  today: number;
+  recentFilms: {
+    id: string;
+    status: string;
+    photoUrl: string | null;
+    videoUrl: string | null;
+    createdAt: string;
+    expiresAt: string;
+  }[];
+}
+
+export async function getAdminStats(): Promise<AdminStats> {
+  const res = await fetch(`${API_URL}/api/auth/stats`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: 'Failed to fetch stats' }));
+    throw new Error(data.error || 'Failed to fetch stats');
+  }
+
+  return res.json();
 }
 
 export function logout(): void {
@@ -81,6 +134,17 @@ export function getUserRole(): string | null {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     return payload.role || null;
+  } catch {
+    return null;
+  }
+}
+
+export function getUserId(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.userId || null;
   } catch {
     return null;
   }
