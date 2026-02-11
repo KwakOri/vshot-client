@@ -244,6 +244,19 @@ export default function GuestV3RoomPage() {
             if (message.hostSettings.layoutData) {
               store.setResolvedFrameLayout(message.hostSettings.layoutData);
             }
+            // Apply host's chromaKey settings
+            if (message.hostSettings.chromaKey) {
+              setHostChromaKeyEnabled(message.hostSettings.chromaKey.enabled);
+              setHostSensitivity(message.hostSettings.chromaKey.similarity);
+              setHostSmoothness(message.hostSettings.chromaKey.smoothness);
+              if (message.hostSettings.chromaKey.color) {
+                setHostChromaKeyColor(message.hostSettings.chromaKey.color);
+              }
+            }
+            // Apply host's flip setting
+            if (message.hostSettings.hostFlipHorizontal !== undefined) {
+              setHostFlipHorizontal(message.hostSettings.hostFlipHorizontal);
+            }
           }
         }
         break;

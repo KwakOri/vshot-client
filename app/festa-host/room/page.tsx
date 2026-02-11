@@ -351,6 +351,19 @@ export default function HostV3RoomPage() {
         setRecordedVideoBlob(null);
         recordedVideoBlobRef.current = null;
         setIsGuestViewingQR(false);
+        // Re-send current settings to new guest
+        if (store.roomId) {
+          sendMessage({
+            type: 'chromakey-settings',
+            roomId: store.roomId,
+            settings: { enabled: chromaKeyEnabled, color: chromaKeyColor, similarity: sensitivity, smoothness },
+          });
+          sendMessage({
+            type: 'host-display-options',
+            roomId: store.roomId,
+            options: { flipHorizontal: hostFlipHorizontal },
+          });
+        }
         break;
       case 'guest-left-v3':
         setSessionState(SessionState.WAITING_FOR_GUEST);
