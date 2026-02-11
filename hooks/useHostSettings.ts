@@ -31,7 +31,7 @@ const DEFAULT_SETTINGS: HostSettings = {
   chromaKeyColor: '#00ff00',
   hostFlipHorizontal: false,
   guestFlipHorizontal: false,
-  guestBlurAmount: 30,
+  guestBlurAmount: 40,
   recordingDuration: 10,
   captureInterval: 3,
   selectedFrameLayoutId: '1cut-polaroid',

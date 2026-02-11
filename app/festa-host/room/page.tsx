@@ -55,7 +55,7 @@ export default function HostV3RoomPage() {
   const [sensitivity, setSensitivity] = useState(50);
   const [smoothness, setSmoothness] = useState(10);
   const [chromaKeyColor, setChromaKeyColor] = useState('#00ff00');
-  const [guestBlurAmount, setGuestBlurAmount] = useState(50);
+  const [guestBlurAmount, setGuestBlurAmount] = useState(40);
 
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
   const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
@@ -299,7 +299,7 @@ export default function HostV3RoomPage() {
     setChromaKeyColor(savedSettings.chromaKeyColor);
     setHostFlipHorizontal(savedSettings.hostFlipHorizontal);
     setGuestFlipHorizontal(savedSettings.guestFlipHorizontal);
-    setGuestBlurAmount(savedSettings.guestBlurAmount ?? 50);
+    setGuestBlurAmount(savedSettings.guestBlurAmount ?? 40);
   }, [settingsLoaded]);
 
   useEffect(() => {
