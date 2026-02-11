@@ -51,7 +51,7 @@ export default function HostV3RoomPage() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [sourceType, setSourceType] = useState<'camera' | 'screen'>('camera');
 
-  const [chromaKeyEnabled, setChromaKeyEnabled] = useState(true);
+  const chromaKeyEnabled = true; // Always enabled
   const [sensitivity, setSensitivity] = useState(50);
   const [smoothness, setSmoothness] = useState(10);
   const [chromaKeyColor, setChromaKeyColor] = useState('#00ff00');
@@ -294,7 +294,6 @@ export default function HostV3RoomPage() {
 
   useEffect(() => {
     if (!settingsLoaded) return;
-    setChromaKeyEnabled(savedSettings.chromaKeyEnabled);
     setSensitivity(savedSettings.sensitivity);
     setSmoothness(savedSettings.smoothness);
     setChromaKeyColor(savedSettings.chromaKeyColor);
@@ -954,23 +953,6 @@ export default function HostV3RoomPage() {
           </button>
           {!collapsedSections['chromakey'] && (
             <div className="space-y-3 mt-2">
-              <div className="flex items-center justify-between">
-                <p className="text-white/50 text-xs">활성화</p>
-                <button
-                  onClick={() => {
-                    const newVal = !chromaKeyEnabled;
-                    setChromaKeyEnabled(newVal);
-                    updateSetting('chromaKeyEnabled', newVal);
-                    syncChromaKeySettings();
-                  }}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${chromaKeyEnabled ? 'bg-orange-500' : 'bg-white/20'}`}
-                >
-                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${chromaKeyEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                </button>
-              </div>
-
-              {chromaKeyEnabled && (
-                <>
                   <div>
                     <label className="text-white/40 text-xs block mb-1">색상 (HEX)</label>
                     <div className="flex items-center gap-2">
@@ -1020,8 +1002,6 @@ export default function HostV3RoomPage() {
                       className="w-full accent-orange-500"
                     />
                   </div>
-                </>
-              )}
             </div>
           )}
         </div>
