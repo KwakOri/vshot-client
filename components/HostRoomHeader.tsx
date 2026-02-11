@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useRef, useCallback } from 'react';
 import { ConnectionStatus } from './ConnectionStatus';
 
 interface HostRoomHeaderProps {
@@ -38,12 +39,17 @@ export function HostRoomHeader({
   showRoomCode = true,
   variant = 'default',
 }: HostRoomHeaderProps) {
-  const handleCopyRoomCode = () => {
+  const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleCopyRoomCode = useCallback(() => {
     if (roomId) {
       navigator.clipboard.writeText(roomId);
-      alert('방 코드가 클립보드에 복사되었습니다!');
+      setCopied(true);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 1500);
     }
-  };
+  }, [roomId]);
 
   // 마이크 아이콘
   const MicOnIcon = () => (
@@ -176,6 +182,24 @@ export function HostRoomHeader({
     </svg>
   );
 
+  // 체크 아이콘
+  const CheckIcon = () => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-white"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+
   // 공통 버튼들
   const renderBackButton = () => (
     <button
@@ -191,22 +215,52 @@ export function HostRoomHeader({
     showRoomCode && roomId && (
       <button
         onClick={handleCopyRoomCode}
-        className={`flex items-center gap-2 bg-secondary hover:bg-secondary-dark rounded-lg shadow-md transition ${
+        className={`relative flex items-center gap-2 rounded-lg shadow-md overflow-hidden transition-all duration-300 ease-out ${
+          copied
+            ? 'bg-emerald-500 scale-105'
+            : 'bg-secondary hover:bg-secondary-dark'
+        } ${
           variant === 'compact'
             ? 'px-3 py-1.5'
             : 'px-2 sm:px-4 py-1 sm:py-2 landscape:py-1'
         }`}
         title="방 코드 복사"
       >
-        <CopyIcon />
         <span
-          className={`font-bold text-white ${
-            variant === 'compact'
-              ? 'text-sm'
-              : 'text-sm sm:text-lg landscape:text-sm'
+          className={`inline-flex items-center gap-2 transition-all duration-300 ${
+            copied
+              ? 'opacity-0 translate-y-3 scale-90'
+              : 'opacity-100 translate-y-0 scale-100'
           }`}
         >
-          방 코드 복사
+          <CopyIcon />
+          <span
+            className={`font-bold text-white ${
+              variant === 'compact'
+                ? 'text-sm'
+                : 'text-sm sm:text-lg landscape:text-sm'
+            }`}
+          >
+            방 코드 복사
+          </span>
+        </span>
+        <span
+          className={`absolute inset-0 flex items-center justify-center gap-1.5 transition-all duration-300 ${
+            copied
+              ? 'opacity-100 translate-y-0 scale-100'
+              : 'opacity-0 -translate-y-3 scale-90'
+          }`}
+        >
+          <CheckIcon />
+          <span
+            className={`font-bold text-white tracking-wide ${
+              variant === 'compact'
+                ? 'text-sm'
+                : 'text-sm sm:text-lg landscape:text-sm'
+            }`}
+          >
+            DONE
+          </span>
         </span>
       </button>
     );
