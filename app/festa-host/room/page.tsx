@@ -7,6 +7,7 @@ import {
 import { CountdownOverlay } from '@/components/v3/FrameOverlayPreview';
 import { RESOLUTION } from '@/constants/constants';
 import { getLayoutById } from '@/constants/frame-layouts';
+import { FrameLayout } from '@/types';
 import { useChromaKey } from '@/hooks/useChromaKey';
 import { useCompositeCanvas } from '@/hooks/useCompositeCanvas';
 import { useHostSettings } from '@/hooks/useHostSettings';
@@ -89,6 +90,7 @@ export default function HostV3RoomPage() {
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
   const [isGuestViewingQR, setIsGuestViewingQR] = useState(false);
+  const [showCopyToast, setShowCopyToast] = useState(false);
 
   const [lastSessionResult, setLastSessionResult] = useState<{
     sessionId: string;
@@ -105,7 +107,7 @@ export default function HostV3RoomPage() {
   const [leftPanelOpen, setLeftPanelOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
 
-  const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
+  const selectedLayout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,6 +129,7 @@ export default function HostV3RoomPage() {
         smoothness: smoothness / 100,
       },
       selectedFrameLayoutId: store.selectedFrameLayoutId,
+      layoutData: store.resolvedFrameLayout || undefined,
     },
     sendSignal: sendMessage,
     resetWebRTCConnection: resetForNextGuest,
@@ -161,13 +164,11 @@ export default function HostV3RoomPage() {
 
       const filmId = nanoid(8);
       let framedBlobUrl: string | null = null;
-      const layout = getLayoutById(store.selectedFrameLayoutId);
+      const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-          const fullUrl = `${API_URL}${frameResultUrl}`;
           const t1 = performance.now();
-          framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout, filmId);
+          framedBlobUrl = await generatePhotoFrameBlobWithLayout([frameResultUrl], layout, filmId);
           console.log(`[⏱ Timing] 1. 프레임 이미지 생성: ${(performance.now() - t1).toFixed(0)}ms`);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
@@ -187,7 +188,7 @@ export default function HostV3RoomPage() {
           let photoFileId: string | undefined;
           if (photoSrc) {
             const t2 = performance.now();
-            const photoResponse = await fetch(photoSrc.startsWith('blob:') ? photoSrc : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${photoSrc}`);
+            const photoResponse = await fetch(photoSrc);
             const photoBlob = await photoResponse.blob();
             console.log(`[⏱ Timing] 2. 사진 Blob 변환: ${(performance.now() - t2).toFixed(0)}ms (${(photoBlob.size / 1024).toFixed(0)}KB)`);
 
@@ -351,6 +352,19 @@ export default function HostV3RoomPage() {
         setRecordedVideoBlob(null);
         recordedVideoBlobRef.current = null;
         setIsGuestViewingQR(false);
+        // Re-send current settings to new guest
+        if (store.roomId) {
+          sendMessage({
+            type: 'chromakey-settings',
+            roomId: store.roomId,
+            settings: { enabled: chromaKeyEnabled, color: chromaKeyColor, similarity: sensitivity, smoothness },
+          });
+          sendMessage({
+            type: 'host-display-options',
+            roomId: store.roomId,
+            options: { flipHorizontal: hostFlipHorizontal },
+          });
+        }
         break;
       case 'guest-left-v3':
         setSessionState(SessionState.WAITING_FOR_GUEST);
@@ -362,7 +376,7 @@ export default function HostV3RoomPage() {
       case 'countdown-tick-v3':
         if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
           videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
-            const layout = getLayoutById(store.selectedFrameLayoutId);
+            const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
             if (layout && layout.frameSrc) {
               try {
                 setIsVideoProcessing(true);
@@ -693,6 +707,8 @@ export default function HostV3RoomPage() {
     }
     if (store.roomId) {
       navigator.clipboard.writeText(store.roomId);
+      setShowCopyToast(true);
+      setTimeout(() => setShowCopyToast(false), 2000);
     }
   };
 
@@ -1258,6 +1274,20 @@ export default function HostV3RoomPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Copy toast */}
+      {showCopyToast && (
+        <div
+          className="absolute bottom-4 right-4 z-40 flex items-center gap-2 rounded-xl px-4 py-3 backdrop-blur-md animate-slide-up"
+          style={{ background: 'rgba(27,22,18,0.95)', border: '1px solid rgba(255,255,255,0.1)' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <span className="text-white text-sm font-bold">방 번호가 복사되었습니다</span>
         </div>
       )}
 

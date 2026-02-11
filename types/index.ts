@@ -176,6 +176,7 @@ export interface LayoutSelectionResult {
 export interface HostSettings {
   chromaKey: ChromaKeySettings;
   selectedFrameLayoutId: string;
+  layoutData?: FrameLayout;
   recordingDuration: number;
   captureInterval: number;
 }

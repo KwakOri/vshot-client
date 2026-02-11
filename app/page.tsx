@@ -11,13 +11,17 @@ export default function Home() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const handleStartCapture = useCallback(() => {
-    store.reset();
-    router.push('/festa-guest');
-  }, [store, router]);
-
   const isLoggedIn = !!getToken();
   const role = getUserRole();
+
+  const handleStartCapture = useCallback(() => {
+    store.reset();
+    if (role === 'host') {
+      router.push('/festa-host');
+    } else {
+      router.push('/festa-guest');
+    }
+  }, [store, router, role]);
 
   const handleMenuNav = useCallback(
     (path: string) => {
@@ -144,7 +148,7 @@ export default function Home() {
                 <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
                 <circle cx="12" cy="13" r="3" />
               </svg>
-              촬영 시작하기
+              {role === 'host' ? '부스 시작하기' : '촬영 시작하기'}
             </span>
           </button>
         </div>

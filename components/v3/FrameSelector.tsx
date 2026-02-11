@@ -52,6 +52,7 @@ export function FrameSelector({
                   alt={layout.label}
                   fill
                   className="object-cover"
+                  unoptimized={layout.thumbnailSrc.startsWith('http')}
                 />
 
                 {/* Selected overlay */}

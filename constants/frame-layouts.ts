@@ -187,7 +187,6 @@ export const DEFAULT_LAYOUT = FRAME_LAYOUTS[0]; // 2x2 grid (인생네컷)
 
 /**
  * Convert a DB Frame to FrameLayout (for rendering)
- * @deprecated Use DB frames directly when possible
  */
 export function dbFrameToLayout(frame: {
   id: string;
@@ -223,6 +222,20 @@ export function dbFrameToLayout(frame: {
     recommendedCaptureWidth: frame.canvasWidth,
     recommendedCaptureHeight: frame.canvasHeight,
   };
+}
+
+/**
+ * Resolve a frame layout by ID from available layouts, with hardcoded fallback
+ */
+export function resolveFrameLayout(
+  id: string,
+  availableLayouts?: FrameLayout[]
+): FrameLayout | undefined {
+  if (availableLayouts) {
+    const found = availableLayouts.find(l => l.id === id);
+    if (found) return found;
+  }
+  return getLayoutById(id);
 }
 
 /**
