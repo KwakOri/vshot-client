@@ -90,6 +90,7 @@ export default function HostV3RoomPage() {
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
   const [isGuestViewingQR, setIsGuestViewingQR] = useState(false);
+  const [showCopyToast, setShowCopyToast] = useState(false);
 
   const [lastSessionResult, setLastSessionResult] = useState<{
     sessionId: string;
@@ -706,6 +707,8 @@ export default function HostV3RoomPage() {
     }
     if (store.roomId) {
       navigator.clipboard.writeText(store.roomId);
+      setShowCopyToast(true);
+      setTimeout(() => setShowCopyToast(false), 2000);
     }
   };
 
@@ -1271,6 +1274,20 @@ export default function HostV3RoomPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Copy toast */}
+      {showCopyToast && (
+        <div
+          className="absolute bottom-4 right-4 z-40 flex items-center gap-2 rounded-xl px-4 py-3 backdrop-blur-md animate-slide-up"
+          style={{ background: 'rgba(27,22,18,0.95)', border: '1px solid rgba(255,255,255,0.1)' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <span className="text-white text-sm font-bold">방 번호가 복사되었습니다</span>
         </div>
       )}
 
