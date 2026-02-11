@@ -114,7 +114,7 @@ export default function GuestV3RoomPage() {
       if (layout) {
         try {
           const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-          const fullUrl = `${API_URL}${frameResultUrl}`;
+          const fullUrl = frameResultUrl.startsWith('http') ? frameResultUrl : `${API_URL}${frameResultUrl}`;
           const framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
@@ -438,11 +438,11 @@ export default function GuestV3RoomPage() {
     if (!lastSessionResult?.frameResultUrl) return;
 
     const url = lastSessionResult.frameResultUrl;
-    const isBlobUrl = url.startsWith('blob:');
+    const isAbsoluteUrl = url.startsWith('blob:') || url.startsWith('http');
 
     try {
       let downloadUrl: string;
-      if (isBlobUrl) {
+      if (isAbsoluteUrl) {
         downloadUrl = url;
       } else {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -458,7 +458,7 @@ export default function GuestV3RoomPage() {
       link.click();
       document.body.removeChild(link);
 
-      if (!isBlobUrl) {
+      if (!isAbsoluteUrl) {
         URL.revokeObjectURL(downloadUrl);
       }
     } catch (error) {
@@ -500,7 +500,7 @@ export default function GuestV3RoomPage() {
             {lastSessionResult.frameResultUrl ? (
               <div className="relative">
                 <img
-                  src={lastSessionResult.frameResultUrl.startsWith('blob:')
+                  src={lastSessionResult.frameResultUrl.startsWith('blob:') || lastSessionResult.frameResultUrl.startsWith('http')
                     ? lastSessionResult.frameResultUrl
                     : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
                   }
