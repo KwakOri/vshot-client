@@ -4,7 +4,9 @@ import { getToken, getUserRole, logout } from '@/lib/auth';
 import { useAppStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import UnicornScene from 'unicornstudio-react';
+import dynamic from 'next/dynamic';
+
+const UnicornScene = dynamic(() => import('unicornstudio-react'), { ssr: false });
 
 export default function Home() {
   const store = useAppStore();
