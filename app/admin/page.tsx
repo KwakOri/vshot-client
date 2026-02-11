@@ -6,12 +6,16 @@ import { useRouter } from 'next/navigation';
 import AdminDashboard from './AdminDashboard';
 import AdminFesta from './AdminFesta';
 import AdminUsers from './AdminUsers';
+import AdminFrames from './AdminFrames';
+import AdminGroups from './AdminGroups';
 
-type Tab = 'dashboard' | 'festa' | 'users';
+type Tab = 'dashboard' | 'festa' | 'users' | 'frames' | 'groups';
 
 const tabs: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: '대시보드' },
   { key: 'festa', label: '페스타' },
+  { key: 'frames', label: '프레임' },
+  { key: 'groups', label: '그룹' },
   { key: 'users', label: '유저' },
 ];
 
@@ -71,6 +75,8 @@ export default function AdminPage() {
       <main className="max-w-6xl mx-auto px-6 py-6">
         {activeTab === 'dashboard' && <AdminDashboard />}
         {activeTab === 'festa' && <AdminFesta />}
+        {activeTab === 'frames' && <AdminFrames />}
+        {activeTab === 'groups' && <AdminGroups />}
         {activeTab === 'users' && <AdminUsers />}
       </main>
     </div>

@@ -184,3 +184,59 @@ export function searchLayoutsByTag(tag: string): FrameLayout[] {
  * Default layout (fallback)
  */
 export const DEFAULT_LAYOUT = FRAME_LAYOUTS[0]; // 2x2 grid (인생네컷)
+
+/**
+ * Convert a DB Frame to FrameLayout (for rendering)
+ * @deprecated Use DB frames directly when possible
+ */
+export function dbFrameToLayout(frame: {
+  id: string;
+  name: string;
+  description?: string | null;
+  canvasWidth: number;
+  canvasHeight: number;
+  slotPositions: FrameSlotRatio[];
+  slotCount: number;
+  frameImageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  category?: string | null;
+  tags?: string[];
+  sortOrder?: number;
+  isActive?: boolean;
+  createdAt?: string;
+}): FrameLayout {
+  return {
+    id: frame.id,
+    label: frame.name,
+    slotCount: frame.slotCount,
+    positions: resolveSlotPositions(frame.slotPositions, frame.canvasWidth, frame.canvasHeight),
+    canvasWidth: frame.canvasWidth,
+    canvasHeight: frame.canvasHeight,
+    thumbnailSrc: frame.thumbnailUrl || frame.frameImageUrl || '',
+    frameSrc: frame.frameImageUrl || '',
+    description: frame.description || undefined,
+    category: frame.category || undefined,
+    isActive: frame.isActive,
+    sortOrder: frame.sortOrder,
+    tags: frame.tags,
+    createdAt: frame.createdAt,
+    recommendedCaptureWidth: frame.canvasWidth,
+    recommendedCaptureHeight: frame.canvasHeight,
+  };
+}
+
+/**
+ * Get layout by ID, checking DB frames first, then falling back to hardcoded
+ */
+export function getLayoutByIdWithFallback(
+  id: string,
+  dbFrames?: Array<Parameters<typeof dbFrameToLayout>[0]>
+): FrameLayout | undefined {
+  // DB 프레임에서 먼저 찾기
+  if (dbFrames) {
+    const dbFrame = dbFrames.find(f => f.id === id);
+    if (dbFrame) return dbFrameToLayout(dbFrame);
+  }
+  // 하드코딩 fallback
+  return getLayoutById(id);
+}
