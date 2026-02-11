@@ -148,9 +148,7 @@ export default function HostV3RoomPage() {
       const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-          const fullUrl = frameResultUrl.startsWith('http') ? frameResultUrl : `${API_URL}${frameResultUrl}`;
-          const framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
+          const framedBlobUrl = await generatePhotoFrameBlobWithLayout([frameResultUrl], layout);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
           console.error('[Host V3] Failed to apply frame:', err);
@@ -532,29 +530,14 @@ export default function HostV3RoomPage() {
     if (!lastSessionResult?.frameResultUrl) return;
 
     const url = lastSessionResult.frameResultUrl;
-    const isAbsoluteUrl = url.startsWith('blob:') || url.startsWith('http');
 
     try {
-      let downloadUrl: string;
-      if (isAbsoluteUrl) {
-        downloadUrl = url;
-      } else {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${API_URL}${url}`);
-        const blob = await response.blob();
-        downloadUrl = URL.createObjectURL(blob);
-      }
-
       const link = document.createElement('a');
-      link.href = downloadUrl;
+      link.href = url;
       link.download = `vshot-v3-${store.roomId}-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      if (!isAbsoluteUrl) {
-        URL.revokeObjectURL(downloadUrl);
-      }
     } catch (error) {
       console.error('[Host V3] Download error:', error);
     }
@@ -881,10 +864,7 @@ export default function HostV3RoomPage() {
               {lastSessionResult.frameResultUrl && (
                 <div className="mb-4 flex justify-center">
                   <img
-                    src={lastSessionResult.frameResultUrl.startsWith('blob:') || lastSessionResult.frameResultUrl.startsWith('http')
-                      ? lastSessionResult.frameResultUrl
-                      : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
-                    }
+                    src={lastSessionResult.frameResultUrl}
                     alt="촬영 결과"
                     className="max-h-48 rounded-xl shadow-lg"
                   />

@@ -166,10 +166,8 @@ export default function HostV3RoomPage() {
       const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-          const fullUrl = frameResultUrl.startsWith('http') ? frameResultUrl : `${API_URL}${frameResultUrl}`;
           const t1 = performance.now();
-          framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout, filmId);
+          framedBlobUrl = await generatePhotoFrameBlobWithLayout([frameResultUrl], layout, filmId);
           console.log(`[⏱ Timing] 1. 프레임 이미지 생성: ${(performance.now() - t1).toFixed(0)}ms`);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
@@ -189,7 +187,7 @@ export default function HostV3RoomPage() {
           let photoFileId: string | undefined;
           if (photoSrc) {
             const t2 = performance.now();
-            const photoResponse = await fetch(photoSrc.startsWith('blob:') || photoSrc.startsWith('http') ? photoSrc : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${photoSrc}`);
+            const photoResponse = await fetch(photoSrc);
             const photoBlob = await photoResponse.blob();
             console.log(`[⏱ Timing] 2. 사진 Blob 변환: ${(performance.now() - t2).toFixed(0)}ms (${(photoBlob.size / 1024).toFixed(0)}KB)`);
 
