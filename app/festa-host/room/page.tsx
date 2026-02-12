@@ -326,6 +326,15 @@ export default function HostV3RoomPage() {
           role: 'host',
           mode: 'festa',
         });
+        // Sync frame selection to server so guest-joined-v3 includes correct layout
+        if (store.selectedFrameLayoutId) {
+          sendMessage({
+            type: 'frame-selected-v3',
+            roomId,
+            layoutId: store.selectedFrameLayoutId,
+            layout: { layoutId: store.selectedFrameLayoutId, slotCount: 1, totalPhotos: 1, selectablePhotos: 1 },
+          });
+        }
         setSessionState(SessionState.WAITING_FOR_GUEST);
       } catch (error) {
         console.error('[Festa Host] Init error:', error);
@@ -364,6 +373,19 @@ export default function HostV3RoomPage() {
             roomId: store.roomId,
             options: { flipHorizontal: hostFlipHorizontal },
           });
+          // Send frame layout settings to guest
+          const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
+          sendMessage({
+            type: 'frame-layout-settings',
+            roomId: store.roomId,
+            settings: {
+              layoutId: store.selectedFrameLayoutId,
+              slotCount: 1,
+              totalPhotos: 1,
+              selectablePhotos: 1,
+              layoutData: layout || undefined,
+            },
+          } as any);
         }
         break;
       case 'guest-left-v3':
