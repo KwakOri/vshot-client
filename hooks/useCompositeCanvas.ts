@@ -113,23 +113,16 @@ export function useCompositeCanvas({
       animationFrameRef.current = requestAnimationFrame(drawComposite);
     };
 
-    const startComposite = () => {
-      if (backgroundVideo.readyState >= 2) {
-        drawComposite();
-      }
-    };
-
-    if (backgroundVideo.readyState >= 2) {
-      drawComposite();
-    } else {
-      backgroundVideo.addEventListener('loadedmetadata', startComposite);
-    }
+    // Always start the rAF loop immediately.
+    // drawComposite already handles videoWidth === 0 by retrying on next frame,
+    // so we don't need to wait for loadedmetadata (which may not re-fire
+    // when the video element is reused across guest rotations).
+    drawComposite();
 
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-      backgroundVideo.removeEventListener('loadedmetadata', startComposite);
     };
   }, [localStream, remoteStream, compositeCanvas, backgroundVideo, foregroundCanvas, width, height, guestFlipHorizontal, hostFlipHorizontal, guestBlurAmount]);
 

@@ -224,6 +224,15 @@ export default function HostV3RoomPage() {
           userId: store.userId,
           role: 'host',
         });
+        // Sync frame selection to server so guest-joined-v3 includes correct layout
+        if (store.selectedFrameLayoutId) {
+          sendMessage({
+            type: 'frame-selected-v3',
+            roomId,
+            layoutId: store.selectedFrameLayoutId,
+            layout: { layoutId: store.selectedFrameLayoutId, slotCount: 1, totalPhotos: 1, selectablePhotos: 1 },
+          });
+        }
         setSessionState(SessionState.WAITING_FOR_GUEST);
       } catch (error) {
         console.error('[Host V3] Init error:', error);
@@ -248,6 +257,31 @@ export default function HostV3RoomPage() {
         setSessionState(SessionState.GUEST_CONNECTED);
         setLastSessionResult(null);
         setRecordedVideoBlob(null);
+        // Re-send current settings to new guest
+        if (store.roomId) {
+          sendMessage({
+            type: 'chromakey-settings',
+            roomId: store.roomId,
+            settings: { enabled: chromaKeyEnabled, color: chromaKeyColor, similarity: sensitivity, smoothness },
+          });
+          sendMessage({
+            type: 'host-display-options',
+            roomId: store.roomId,
+            options: { flipHorizontal: hostFlipHorizontal },
+          });
+          const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
+          sendMessage({
+            type: 'frame-layout-settings',
+            roomId: store.roomId,
+            settings: {
+              layoutId: store.selectedFrameLayoutId,
+              slotCount: 1,
+              totalPhotos: 1,
+              selectablePhotos: 1,
+              layoutData: layout || undefined,
+            },
+          } as any);
+        }
         break;
       case 'guest-left-v3':
         setSessionState(SessionState.WAITING_FOR_GUEST);
