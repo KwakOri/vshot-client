@@ -181,8 +181,12 @@ export default function AdminFesta() {
                 {statusFilter === 'active' && (
                   <button
                     onClick={() => handleDelete(film.id)}
-                    className="text-xs font-semibold transition"
-                    style={{ color: '#ef4444' }}
+                    className="w-full py-2.5 rounded-lg text-sm font-bold transition active:scale-95"
+                    style={{
+                      background: 'rgba(239,68,68,0.12)',
+                      color: '#ef4444',
+                      border: '1px solid rgba(239,68,68,0.25)',
+                    }}
                   >
                     삭제
                   </button>
