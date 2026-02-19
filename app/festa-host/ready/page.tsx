@@ -29,7 +29,7 @@ export default function HostV3ReadyPage() {
   );
 
   // Frame selection
-  const { layouts: activeLayouts } = useAvailableFrames();
+  const { layouts: activeLayouts, isLoading: isFramesLoading } = useAvailableFrames();
   const [selectedFrameLayoutId, setSelectedFrameLayoutId] = useState<string>(
     store.selectedFrameLayoutId
   );
@@ -270,20 +270,19 @@ export default function HostV3ReadyPage() {
             </div>
 
             {/* Frame Selection */}
-            {activeLayouts.length > 0 && (
-              <div>
-                <label className="font-display text-[11px] font-bold text-white/30 uppercase tracking-wider mb-3 block">
-                  프레임 선택
-                </label>
-                <FrameSelector
-                  layouts={activeLayouts}
-                  selectedLayoutId={selectedFrameLayoutId}
-                  onSelect={handleFrameSelect}
-                  onDeselect={handleFrameDeselect}
-                  variant="dark"
-                />
-              </div>
-            )}
+            <div>
+              <label className="font-display text-[11px] font-bold text-white/30 uppercase tracking-wider mb-3 block">
+                프레임 선택
+              </label>
+              <FrameSelector
+                layouts={activeLayouts}
+                selectedLayoutId={selectedFrameLayoutId}
+                onSelect={handleFrameSelect}
+                onDeselect={handleFrameDeselect}
+                isLoading={isFramesLoading}
+                variant="dark"
+              />
+            </div>
 
             {/* V3 Mode Info */}
             <div

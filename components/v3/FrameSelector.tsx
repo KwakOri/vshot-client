@@ -9,6 +9,8 @@ interface FrameSelectorProps {
   selectedLayoutId: string | null;
   onSelect: (layout: FrameLayout) => void;
   onDeselect?: () => void;
+  isLoading?: boolean;
+  skeletonCount?: number;
   className?: string;
   variant?: 'light' | 'dark';
 }
@@ -20,6 +22,8 @@ export function FrameSelector({
   selectedLayoutId,
   onSelect,
   onDeselect,
+  isLoading = false,
+  skeletonCount = 3,
   className = '',
   variant = 'light',
 }: FrameSelectorProps) {
@@ -138,8 +142,34 @@ export function FrameSelector({
           </div>
         </button>
 
+        {/* ── 스켈레톤 카드 (로딩 중) ── */}
+        {isLoading && Array.from({ length: skeletonCount }).map((_, i) => (
+          <div
+            key={`skeleton-${i}`}
+            className="relative aspect-[2/3] rounded-xl overflow-hidden animate-pulse"
+            style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(27,22,18,0.07)' }}
+          >
+            {/* 썸네일 영역 */}
+            <div
+              className="absolute inset-0"
+              style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(27,22,18,0.05)' }}
+            />
+            {/* 라벨 영역 */}
+            <div className="absolute bottom-0 left-0 right-0 p-2 pt-6 flex flex-col items-center gap-1.5">
+              <div
+                className="h-2.5 w-14 rounded-full"
+                style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(27,22,18,0.1)' }}
+              />
+              <div
+                className="h-2 w-8 rounded-full"
+                style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(27,22,18,0.06)' }}
+              />
+            </div>
+          </div>
+        ))}
+
         {/* ── 일반 레이아웃 카드들 ── */}
-        {layouts.map((layout) => {
+        {!isLoading && layouts.map((layout) => {
           const isSelected = layout.id === selectedLayoutId;
           const isHovered = layout.id === hoveredId;
 
