@@ -29,7 +29,7 @@ export default function HostV3ReadyPage() {
   );
 
   // Frame selection
-  const { layouts: activeLayouts } = useAvailableFrames();
+  const { layouts: activeLayouts, isLoading: isFramesLoading } = useAvailableFrames();
   const [selectedFrameLayoutId, setSelectedFrameLayoutId] = useState<string>(
     store.selectedFrameLayoutId
   );
@@ -116,13 +116,17 @@ export default function HostV3ReadyPage() {
     setSelectedFrameLayoutId(layout.id);
   };
 
+  const handleFrameDeselect = () => {
+    setSelectedFrameLayoutId('');
+  };
+
   const createRoom = () => {
     store.setSelectedAudioDeviceId(selectedAudioDeviceId);
     store.setSelectedAudioOutputDeviceId(selectedAudioOutputDeviceId);
     store.setSelectedFrameLayoutId(selectedFrameLayoutId);
 
     const resolved = resolveFrameLayout(selectedFrameLayoutId, activeLayouts);
-    if (resolved) store.setResolvedFrameLayout(resolved);
+    store.setResolvedFrameLayout(resolved ?? null);
 
     store.setRole('host');
 
@@ -266,19 +270,19 @@ export default function HostV3ReadyPage() {
             </div>
 
             {/* Frame Selection */}
-            {activeLayouts.length > 0 && (
-              <div>
-                <label className="font-display text-[11px] font-bold text-white/30 uppercase tracking-wider mb-3 block">
-                  프레임 선택
-                </label>
-                <FrameSelector
-                  layouts={activeLayouts}
-                  selectedLayoutId={selectedFrameLayoutId}
-                  onSelect={handleFrameSelect}
-                  variant="dark"
-                />
-              </div>
-            )}
+            <div>
+              <label className="font-display text-[11px] font-bold text-white/30 uppercase tracking-wider mb-3 block">
+                프레임 선택
+              </label>
+              <FrameSelector
+                layouts={activeLayouts}
+                selectedLayoutId={selectedFrameLayoutId}
+                onSelect={handleFrameSelect}
+                onDeselect={handleFrameDeselect}
+                isLoading={isFramesLoading}
+                variant="dark"
+              />
+            </div>
 
             {/* V3 Mode Info */}
             <div

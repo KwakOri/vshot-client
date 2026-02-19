@@ -43,7 +43,6 @@ import { v4 as uuidv4 } from 'uuid';
  */
 const LAYOUT_ID_MAP: Record<string, string> = {
   '4cut-grid': '4cut-grid',
-  '1cut-polaroid': '1cut-polaroid',
   '4cut-quoka': '4cut-quoka',
 };
 

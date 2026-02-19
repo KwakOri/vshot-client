@@ -78,7 +78,7 @@ export const useAppStore = create<AppStore>()(
     (set) => ({
   ...initialState,
   chromaKey: initialChromaKey,
-  selectedFrameLayoutId: '1cut-polaroid', // Default layout (single polaroid)
+  selectedFrameLayoutId: '', // Default: no frame selected
   _hasHydrated: false,
 
   // Guest flip horizontal
