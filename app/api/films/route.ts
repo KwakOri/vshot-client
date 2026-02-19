@@ -171,13 +171,10 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({
-      success: true,
-      films: filmsWithUrls,
-      total: count,
-      limit,
-      offset,
-    });
+    return NextResponse.json(
+      { success: true, films: filmsWithUrls, total: count, limit, offset },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   } catch (error) {
     console.error('[Films API] Error:', error);
     return NextResponse.json(
