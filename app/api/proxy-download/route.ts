@@ -34,7 +34,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // 보안: 허용된 도메인만 프록시 (R2 public URL 등)
     const allowedHosts = [
       process.env.R2_PUBLIC_URL ? new URL(process.env.R2_PUBLIC_URL).host : null,
-      'pub-', // Cloudflare R2 public bucket prefix
+      'pub-',                      // Cloudflare R2 public bucket prefix
+      'r2.cloudflarestorage.com',  // R2 pre-signed URL 도메인
     ].filter(Boolean);
 
     const isAllowed = allowedHosts.some(host =>

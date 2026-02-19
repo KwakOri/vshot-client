@@ -49,20 +49,13 @@ export default function AdminFesta() {
     }
   };
 
-  const handleDownload = async (photoUrl: string, filmId: string) => {
-    try {
-      const res = await fetch(photoUrl);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `vshot-${filmId.slice(0, 8)}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('[AdminFesta] Download failed:', err);
-      alert('다운로드에 실패했습니다.');
-    }
+  const handleDownload = (photoUrl: string, filmId: string) => {
+    const filename = `vshot-${filmId.slice(0, 8)}.png`;
+    const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(photoUrl)}&filename=${encodeURIComponent(filename)}`;
+    const a = document.createElement('a');
+    a.href = proxyUrl;
+    a.download = filename;
+    a.click();
   };
 
   const totalPages = Math.ceil(total / limit);
