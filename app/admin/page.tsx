@@ -68,9 +68,7 @@ export default function AdminPage() {
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-3">
           {/* Desktop */}
           <div className="hidden md:flex items-center justify-between">
-            <h1 className="text-lg font-bold" style={{ color: '#FC712B' }}>
-              VShot Admin
-            </h1>
+            <VshotIcon size={28} />
             <nav className="flex gap-1">
               {tabs.map((tab) => (
                 <button
