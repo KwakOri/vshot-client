@@ -116,13 +116,17 @@ export default function HostV3ReadyPage() {
     setSelectedFrameLayoutId(layout.id);
   };
 
+  const handleFrameDeselect = () => {
+    setSelectedFrameLayoutId('');
+  };
+
   const createRoom = () => {
     store.setSelectedAudioDeviceId(selectedAudioDeviceId);
     store.setSelectedAudioOutputDeviceId(selectedAudioOutputDeviceId);
     store.setSelectedFrameLayoutId(selectedFrameLayoutId);
 
     const resolved = resolveFrameLayout(selectedFrameLayoutId, activeLayouts);
-    if (resolved) store.setResolvedFrameLayout(resolved);
+    store.setResolvedFrameLayout(resolved ?? null);
 
     store.setRole('host');
 
@@ -275,6 +279,7 @@ export default function HostV3ReadyPage() {
                   layouts={activeLayouts}
                   selectedLayoutId={selectedFrameLayoutId}
                   onSelect={handleFrameSelect}
+                  onDeselect={handleFrameDeselect}
                   variant="dark"
                 />
               </div>
