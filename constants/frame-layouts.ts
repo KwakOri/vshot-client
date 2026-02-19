@@ -51,22 +51,6 @@ export const LAYOUT_DEFINITIONS: FrameLayoutDefinition[] = [
   //   tags: ['grid', 'equal', 'standard', 'life4cut'],
   // },
 
-  // 2. Polaroid Single (one-cut frame: 1600x2400, slot: 1400x2100 at 100,120)
-  {
-    id: '1cut-polaroid',
-    label: '폴라로이드 (단일)',
-    slotCount: 1,
-    positionRatios: [
-      { x: 100 / 1600, y: 120 / 2400, width: 1400 / 1600, height: 2100 / 2400, zIndex: 0 },
-    ],
-    thumbnailSrc: '/frames/one-cut.png',
-    frameSrc: '/frames/one-cut.png',
-    description: '단일 사진을 위한 세로형 폴라로이드 스타일',
-    category: 'single',
-    isActive: true,
-    sortOrder: 2,
-    tags: ['polaroid', 'single', 'classic'],
-  },
 
   // // 3. Quoka Frame (custom positions for specific frame overlay)
   // // This uses fixed pixel positions relative to a 3000x4500 frame image
