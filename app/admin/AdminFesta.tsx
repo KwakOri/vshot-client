@@ -49,6 +49,22 @@ export default function AdminFesta() {
     }
   };
 
+  const handleDownload = async (photoUrl: string, filmId: string) => {
+    try {
+      const res = await fetch(photoUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vshot-${filmId.slice(0, 8)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[AdminFesta] Download failed:', err);
+      alert('다운로드에 실패했습니다.');
+    }
+  };
+
   const totalPages = Math.ceil(total / limit);
 
   return (
@@ -154,16 +170,27 @@ export default function AdminFesta() {
                 </div>
               )}
 
-              {/* Delete */}
-              {statusFilter === 'active' && (
-                <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                  <button
-                    onClick={() => handleDelete(film.id)}
-                    className="text-xs font-semibold transition"
-                    style={{ color: '#ef4444' }}
-                  >
-                    삭제
-                  </button>
+              {/* Actions */}
+              {(film.photoUrl || statusFilter === 'active') && (
+                <div className="mt-3 pt-3 flex items-center gap-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  {film.photoUrl && (
+                    <button
+                      onClick={() => handleDownload(film.photoUrl!, film.id)}
+                      className="text-xs font-semibold transition"
+                      style={{ color: '#FC712B' }}
+                    >
+                      사진 다운로드
+                    </button>
+                  )}
+                  {statusFilter === 'active' && (
+                    <button
+                      onClick={() => handleDelete(film.id)}
+                      className="text-xs font-semibold transition"
+                      style={{ color: '#ef4444' }}
+                    >
+                      삭제
+                    </button>
+                  )}
                 </div>
               )}
             </div>
