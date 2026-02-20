@@ -1,19 +1,19 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import {
-  getAllFrames,
-  createFrame,
-  updateFrame,
-  deleteFrame,
-  getFrameAccess,
-  addFrameAccess,
-  removeFrameAccess,
-} from '@/lib/frames-api';
 import { getUsers } from '@/lib/auth';
-import { getGroups } from '@/lib/frames-api';
+import {
+  addFrameAccess,
+  createFrame,
+  deleteFrame,
+  getAllFrames,
+  getFrameAccess,
+  getGroups,
+  removeFrameAccess,
+  updateFrame,
+} from '@/lib/frames-api';
 import type { Frame, FrameAccess, Group } from '@/types/frames';
 import type { FrameSlotRatio } from '@/types/index';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface SlotInput {
   x: number;
@@ -31,7 +31,10 @@ const EMPTY_SLOT: SlotInput = { x: 0, y: 0, width: 0, height: 0, zIndex: 0 };
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="text-[11px] font-semibold uppercase tracking-wider mb-1.5 block" style={{ color: '#E2D4C4', opacity: 0.5 }}>
+    <label
+      className="text-[11px] font-semibold uppercase tracking-wider mb-1.5 block"
+      style={{ color: '#E2D4C4', opacity: 0.5 }}
+    >
       {children}
     </label>
   );
@@ -97,7 +100,13 @@ function ToggleSwitch({
           }}
         />
       </div>
-      <span className="text-xs font-medium" style={{ color: checked ? '#FC712B' : '#E2D4C4', opacity: checked ? 1 : 0.5 }}>
+      <span
+        className="text-xs font-medium"
+        style={{
+          color: checked ? '#FC712B' : '#E2D4C4',
+          opacity: checked ? 1 : 0.5,
+        }}
+      >
         {label}
       </span>
     </button>
@@ -132,13 +141,20 @@ function FileDropzone({
       <FieldLabel>{label}</FieldLabel>
       <div
         onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         className="relative rounded-lg cursor-pointer transition-all duration-150 flex items-center gap-3 px-3 py-2.5"
         style={{
-          background: dragOver ? 'rgba(252,113,43,0.08)' : 'rgba(255,255,255,0.03)',
-          border: `1px dashed ${dragOver ? '#FC712B' : 'rgba(255,255,255,0.12)'}`,
+          background: dragOver
+            ? 'rgba(252,113,43,0.08)'
+            : 'rgba(255,255,255,0.03)',
+          border: `1px dashed ${
+            dragOver ? '#FC712B' : 'rgba(255,255,255,0.12)'
+          }`,
         }}
       >
         {/* Icon */}
@@ -147,20 +163,34 @@ function FileDropzone({
           style={{ background: 'rgba(252,113,43,0.1)' }}
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 1v12M1 7h12" stroke="#FC712B" strokeWidth="1.5" strokeLinecap="round" />
+            <path
+              d="M7 1v12M1 7h12"
+              stroke="#FC712B"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
           </svg>
         </div>
         <div className="min-w-0 flex-1">
           {file ? (
-            <span className="text-xs truncate block" style={{ color: '#F3E9E7' }}>
+            <span
+              className="text-xs truncate block"
+              style={{ color: '#F3E9E7' }}
+            >
               {file.name}
             </span>
           ) : preview ? (
-            <span className="text-xs truncate block" style={{ color: '#FD9319' }}>
+            <span
+              className="text-xs truncate block"
+              style={{ color: '#FD9319' }}
+            >
               이미지 등록됨
             </span>
           ) : (
-            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            <span
+              className="text-xs"
+              style={{ color: 'rgba(255,255,255,0.3)' }}
+            >
               클릭 또는 드래그
             </span>
           )}
@@ -207,7 +237,9 @@ export default function AdminFrames() {
   const [sortOrder, setSortOrder] = useState(0);
   const [frameImage, setFrameImage] = useState<File | null>(null);
   const [thumbnailImage, setThumbnailImage] = useState<File | null>(null);
-  const [frameImagePreview, setFrameImagePreview] = useState<string | null>(null);
+  const [frameImagePreview, setFrameImagePreview] = useState<string | null>(
+    null
+  );
 
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
@@ -270,7 +302,7 @@ export default function AdminFrames() {
     const tileSize = 12;
     for (let ty = 0; ty < h; ty += tileSize) {
       for (let tx = 0; tx < w; tx += tileSize) {
-        const isEven = ((tx / tileSize) + (ty / tileSize)) % 2 === 0;
+        const isEven = (tx / tileSize + ty / tileSize) % 2 === 0;
         ctx.fillStyle = isEven ? '#2a2620' : '#252119';
         ctx.fillRect(tx, ty, tileSize, tileSize);
       }
@@ -290,7 +322,16 @@ export default function AdminFrames() {
 
     function drawSlots(c: CanvasRenderingContext2D, cw: number, ch: number) {
       const ratios = slotsToRatios();
-      const colors = ['#FC712B', '#FD9319', '#4CAF50', '#2196F3', '#E040FB', '#FF5252', '#00BCD4', '#8BC34A'];
+      const colors = [
+        '#FC712B',
+        '#FD9319',
+        '#4CAF50',
+        '#2196F3',
+        '#E040FB',
+        '#FF5252',
+        '#00BCD4',
+        '#8BC34A',
+      ];
       ratios.forEach((r, i) => {
         const sx = r.x * cw;
         const sy = r.y * ch;
@@ -318,7 +359,14 @@ export default function AdminFrames() {
         c.fillText(`#${i + 1}`, sx + 6, sy + labelH / 2);
       });
     }
-  }, [showForm, canvasWidth, canvasHeight, slots, frameImagePreview, slotsToRatios]);
+  }, [
+    showForm,
+    canvasWidth,
+    canvasHeight,
+    slots,
+    frameImagePreview,
+    slotsToRatios,
+  ]);
 
   const resetForm = () => {
     setName('');
@@ -405,7 +453,15 @@ export default function AdminFrames() {
       formData.append('slotPositions', JSON.stringify(slotsToRatios()));
       formData.append('isPublic', String(isPublic));
       formData.append('category', category);
-      formData.append('tags', JSON.stringify(tags.split(',').map((t) => t.trim()).filter(Boolean)));
+      formData.append(
+        'tags',
+        JSON.stringify(
+          tags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        )
+      );
       formData.append('sortOrder', String(sortOrder));
 
       if (frameImage) formData.append('frameImage', frameImage);
@@ -507,8 +563,13 @@ export default function AdminFrames() {
         </div>
         <button
           onClick={() => {
-            if (showForm) { resetForm(); setShowForm(false); }
-            else { resetForm(); setShowForm(true); }
+            if (showForm) {
+              resetForm();
+              setShowForm(false);
+            } else {
+              resetForm();
+              setShowForm(true);
+            }
           }}
           className="px-3 py-1.5 rounded-lg text-xs font-bold transition"
           style={{ background: '#FC712B', color: 'white' }}
@@ -524,7 +585,10 @@ export default function AdminFrames() {
         <form
           onSubmit={handleSubmit}
           className="rounded-xl border overflow-hidden"
-          style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.08)' }}
+          style={{
+            background: 'rgba(255,255,255,0.02)',
+            borderColor: 'rgba(255,255,255,0.08)',
+          }}
         >
           <div className="flex" style={{ minHeight: '680px' }}>
             {/* ====== LEFT: Preview ====== */}
@@ -536,7 +600,10 @@ export default function AdminFrames() {
                 borderRight: '1px solid rgba(255,255,255,0.06)',
               }}
             >
-              <div className="text-[10px] uppercase tracking-widest mb-3 font-semibold" style={{ color: '#FC712B', opacity: 0.7 }}>
+              <div
+                className="text-[10px] uppercase tracking-widest mb-3 font-semibold"
+                style={{ color: '#FC712B', opacity: 0.7 }}
+              >
                 Preview
               </div>
               <div
@@ -551,20 +618,29 @@ export default function AdminFrames() {
                 />
               </div>
               <div className="mt-3 text-center">
-                <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                <span
+                  className="text-[10px] font-mono"
+                  style={{ color: 'rgba(255,255,255,0.25)' }}
+                >
                   {canvasWidth} x {canvasHeight}px
                 </span>
               </div>
             </div>
 
             {/* ====== RIGHT: Settings ====== */}
-            <div className="flex-1 p-5 overflow-y-auto space-y-5" style={{ maxHeight: '680px' }}>
+            <div
+              className="flex-1 p-5 overflow-y-auto space-y-5"
+              style={{ maxHeight: '680px' }}
+            >
               {/* Title */}
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold" style={{ color: '#FC712B' }}>
                   {editingFrame ? '프레임 수정' : '새 프레임'}
                 </h3>
-                <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                <span
+                  className="text-[10px] font-mono"
+                  style={{ color: 'rgba(255,255,255,0.2)' }}
+                >
                   {slots.length}개 슬롯
                 </span>
               </div>
@@ -573,11 +649,20 @@ export default function AdminFrames() {
               <div className="space-y-3">
                 <div>
                   <FieldLabel>이름</FieldLabel>
-                  <StyledInput value={name} onChange={(e) => setName(e.target.value)} placeholder="프레임 이름" required />
+                  <StyledInput
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="프레임 이름"
+                    required
+                  />
                 </div>
                 <div>
                   <FieldLabel>설명</FieldLabel>
-                  <StyledInput value={description} onChange={(e) => setDescription(e.target.value)} placeholder="선택 사항" />
+                  <StyledInput
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="선택 사항"
+                  />
                 </div>
               </div>
 
@@ -585,8 +670,18 @@ export default function AdminFrames() {
               <div>
                 <FieldLabel>프레임 크기 (px)</FieldLabel>
                 <div className="grid grid-cols-2 gap-2">
-                  <StyledInput type="number" value={canvasWidth} onChange={(e) => setCanvasWidth(Number(e.target.value))} placeholder="Width" />
-                  <StyledInput type="number" value={canvasHeight} onChange={(e) => setCanvasHeight(Number(e.target.value))} placeholder="Height" />
+                  <StyledInput
+                    type="number"
+                    value={canvasWidth}
+                    onChange={(e) => setCanvasWidth(Number(e.target.value))}
+                    placeholder="Width"
+                  />
+                  <StyledInput
+                    type="number"
+                    value={canvasHeight}
+                    onChange={(e) => setCanvasHeight(Number(e.target.value))}
+                    placeholder="Height"
+                  />
                 </div>
               </div>
 
@@ -596,7 +691,16 @@ export default function AdminFrames() {
                 <div className="space-y-2">
                   {slots.map((slot, i) => {
                     const ratio = slotsToRatios()[i];
-                    const colors = ['#FC712B', '#FD9319', '#4CAF50', '#2196F3', '#E040FB', '#FF5252', '#00BCD4', '#8BC34A'];
+                    const colors = [
+                      '#FC712B',
+                      '#FD9319',
+                      '#4CAF50',
+                      '#2196F3',
+                      '#E040FB',
+                      '#FF5252',
+                      '#00BCD4',
+                      '#8BC34A',
+                    ];
                     const color = colors[i % colors.length];
                     return (
                       <div
@@ -608,11 +712,21 @@ export default function AdminFrames() {
                         }}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold" style={{ color }}>#{i + 1}</span>
+                          <span
+                            className="text-[11px] font-bold"
+                            style={{ color }}
+                          >
+                            #{i + 1}
+                          </span>
                           <div className="flex items-center gap-2">
                             {ratio && (
-                              <span className="text-[9px] font-mono" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                                {ratio.x.toFixed(3)}, {ratio.y.toFixed(3)}, {ratio.width.toFixed(3)}, {ratio.height.toFixed(3)}
+                              <span
+                                className="text-[9px] font-mono"
+                                style={{ color: 'rgba(255,255,255,0.2)' }}
+                              >
+                                {ratio.x.toFixed(3)}, {ratio.y.toFixed(3)},{' '}
+                                {ratio.width.toFixed(3)},{' '}
+                                {ratio.height.toFixed(3)}
                               </span>
                             )}
                             {slots.length > 1 && (
@@ -622,30 +736,49 @@ export default function AdminFrames() {
                                 className="w-5 h-5 rounded flex items-center justify-center transition-colors hover:bg-red-500/20"
                                 style={{ color: 'rgba(255,255,255,0.2)' }}
                               >
-                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                                  <path d="M2 5h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                                <svg
+                                  width="10"
+                                  height="10"
+                                  viewBox="0 0 10 10"
+                                  fill="none"
+                                >
+                                  <path
+                                    d="M2 5h6"
+                                    stroke="currentColor"
+                                    strokeWidth="1.5"
+                                    strokeLinecap="round"
+                                  />
                                 </svg>
                               </button>
                             )}
                           </div>
                         </div>
                         <div className="grid grid-cols-4 gap-1.5">
-                          {(['x', 'y', 'width', 'height'] as const).map((field) => (
-                            <div key={field}>
-                              <div className="text-[9px] uppercase mb-0.5" style={{ color: 'rgba(255,255,255,0.2)' }}>{field}</div>
-                              <input
-                                type="number"
-                                value={slot[field]}
-                                onChange={(e) => updateSlot(i, field, Number(e.target.value))}
-                                className="w-full px-2 py-1.5 rounded text-xs outline-none transition-colors focus:ring-1 focus:ring-[#FC712B]/40"
-                                style={{
-                                  background: 'rgba(255,255,255,0.05)',
-                                  border: '1px solid rgba(255,255,255,0.06)',
-                                  color: '#F3E9E7',
-                                }}
-                              />
-                            </div>
-                          ))}
+                          {(['x', 'y', 'width', 'height'] as const).map(
+                            (field) => (
+                              <div key={field}>
+                                <div
+                                  className="text-[9px] uppercase mb-0.5"
+                                  style={{ color: 'rgba(255,255,255,0.2)' }}
+                                >
+                                  {field}
+                                </div>
+                                <input
+                                  type="number"
+                                  value={slot[field]}
+                                  onChange={(e) =>
+                                    updateSlot(i, field, Number(e.target.value))
+                                  }
+                                  className="w-full px-2 py-1.5 rounded text-xs outline-none transition-colors focus:ring-1 focus:ring-[#FC712B]/40"
+                                  style={{
+                                    background: 'rgba(255,255,255,0.05)',
+                                    border: '1px solid rgba(255,255,255,0.06)',
+                                    color: '#F3E9E7',
+                                  }}
+                                />
+                              </div>
+                            )
+                          )}
                         </div>
                       </div>
                     );
@@ -664,16 +797,28 @@ export default function AdminFrames() {
                         background: 'transparent',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'rgba(252,113,43,0.4)';
+                        e.currentTarget.style.borderColor =
+                          'rgba(252,113,43,0.4)';
                         e.currentTarget.style.color = '#FC712B';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                        e.currentTarget.style.borderColor =
+                          'rgba(255,255,255,0.1)';
                         e.currentTarget.style.color = 'rgba(255,255,255,0.3)';
                       }}
                     >
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                      >
+                        <path
+                          d="M6 2v8M2 6h8"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                        />
                       </svg>
                       슬롯 추가
                     </button>
@@ -700,27 +845,50 @@ export default function AdminFrames() {
 
               {/* 메타데이터 */}
               <div className="space-y-3">
-                <ToggleSwitch checked={isPublic} onChange={setIsPublic} label="공용 프레임" />
+                <ToggleSwitch
+                  checked={isPublic}
+                  onChange={setIsPublic}
+                  label="공용 프레임"
+                />
 
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <FieldLabel>카테고리</FieldLabel>
-                    <StyledInput value={category} onChange={(e) => setCategory(e.target.value)} placeholder="single" />
+                    <StyledInput
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      placeholder="single"
+                    />
                   </div>
                   <div>
                     <FieldLabel>태그</FieldLabel>
-                    <StyledInput value={tags} onChange={(e) => setTags(e.target.value)} placeholder="쉼표 구분" />
+                    <StyledInput
+                      value={tags}
+                      onChange={(e) => setTags(e.target.value)}
+                      placeholder="쉼표 구분"
+                    />
                   </div>
                   <div>
                     <FieldLabel>정렬</FieldLabel>
-                    <StyledInput type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} placeholder="0" />
+                    <StyledInput
+                      type="number"
+                      value={sortOrder}
+                      onChange={(e) => setSortOrder(Number(e.target.value))}
+                      placeholder="0"
+                    />
                   </div>
                 </div>
               </div>
 
               {/* Error + Submit */}
               {error && (
-                <div className="text-xs px-3 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+                <div
+                  className="text-xs px-3 py-2 rounded-lg"
+                  style={{
+                    background: 'rgba(239,68,68,0.1)',
+                    color: '#ef4444',
+                  }}
+                >
                   {error}
                 </div>
               )}
@@ -730,102 +898,165 @@ export default function AdminFrames() {
                 disabled={saving}
                 className="w-full py-2.5 rounded-lg text-xs font-bold text-white transition-all duration-150
                   disabled:opacity-50 hover:brightness-110 active:scale-[0.99]"
-                style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)' }}
+                style={{
+                  background: 'linear-gradient(135deg, #FC712B, #FD9319)',
+                }}
               >
-                {saving ? '저장 중...' : editingFrame ? '프레임 수정' : '프레임 생성'}
+                {saving
+                  ? '저장 중...'
+                  : editingFrame
+                  ? '프레임 수정'
+                  : '프레임 생성'}
               </button>
             </div>
           </div>
         </form>
       )}
 
-      {/* Frames Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredFrames.map((frame) => (
-          <div
-            key={frame.id}
-            className="rounded-xl border overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
-          >
-            {/* 썸네일 */}
-            <div className="aspect-[2/3] bg-black/30 relative flex items-center justify-center">
-              {frame.thumbnailUrl || frame.frameImageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={frame.thumbnailUrl || frame.frameImageUrl || ''}
-                  alt={frame.name}
-                  className="w-full h-full object-contain"
-                />
-              ) : (
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>No Image</span>
-              )}
-              <div className="absolute top-2 left-2 flex gap-1">
-                <span
-                  className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                  style={{
-                    background: frame.isPublic ? 'rgba(76,175,80,0.2)' : 'rgba(252,113,43,0.2)',
-                    color: frame.isPublic ? '#4CAF50' : '#FC712B',
-                  }}
-                >
-                  {frame.isPublic ? '공용' : '비공용'}
-                </span>
-                {!frame.isActive && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}>
-                    비활성
-                  </span>
-                )}
-              </div>
-            </div>
+      {/* Frames Grid - form이 열려 있으면 숨김 */}
+      {!showForm && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {filteredFrames.map((frame) => (
+              <div
+                key={frame.id}
+                className="rounded-xl border overflow-hidden"
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  borderColor: 'rgba(255,255,255,0.08)',
+                }}
+              >
+                <div className="relative mt-3 bg-black/30 overflow-hidden aspect-[3/4]">
+                  {/* 이미지 레이어 */}
+                  {frame.thumbnailUrl || frame.frameImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={frame.thumbnailUrl || frame.frameImageUrl || ''}
+                      alt={frame.name}
+                      className="absolute inset-0 w-full h-full object-contain"
+                    />
+                  ) : (
+                    <span
+                      className="absolute inset-0 flex items-center justify-center text-xs"
+                      style={{ color: 'rgba(255,255,255,0.2)' }}
+                    >
+                      No Image
+                    </span>
+                  )}
+                  {/* 배지 레이어 */}
+                </div>
 
-            {/* Info */}
-            <div className="p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold truncate" style={{ color: 'rgba(255,255,255,0.8)' }}>
-                  {frame.name}
-                </h4>
-                <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                  {frame.canvasWidth}x{frame.canvasHeight} / {frame.slotCount}칸
-                </span>
-              </div>
+                {/* Info */}
+                <div className="p-2.5 space-y-2">
+                  <div>
+                    <div className="flex items-center justify-between gap-1">
+                      <h4
+                        className="text-xs font-bold truncate"
+                        style={{ color: 'rgba(255,255,255,0.8)' }}
+                      >
+                        {frame.name}
+                      </h4>
+                      <div className="flex gap-1 shrink-0">
+                        <span
+                          className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                          style={{
+                            background: frame.isPublic
+                              ? 'rgba(76,175,80,0.2)'
+                              : 'rgba(252,113,43,0.2)',
+                            color: frame.isPublic ? '#4CAF50' : '#FC712B',
+                          }}
+                        >
+                          {frame.isPublic ? '공용' : '비공용'}
+                        </span>
+                        {!frame.isActive && (
+                          <span
+                            className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                            style={{
+                              background: 'rgba(239,68,68,0.2)',
+                              color: '#ef4444',
+                            }}
+                          >
+                            비활성
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span
+                      className="text-[9px]"
+                      style={{ color: 'rgba(255,255,255,0.3)' }}
+                    >
+                      {frame.canvasWidth}x{frame.canvasHeight} ·{' '}
+                      {frame.slotCount}칸
+                    </span>
+                  </div>
 
-              {frame.description && (
-                <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.35)' }}>{frame.description}</p>
-              )}
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => openEditForm(frame)}
-                  className="text-xs font-semibold transition"
-                  style={{ color: '#FD9319' }}
-                >
-                  수정
-                </button>
-                {!frame.isPublic && (
-                  <button
-                    onClick={() => openAccessModal(frame)}
-                    className="text-xs font-semibold transition"
-                    style={{ color: '#4CAF50' }}
-                  >
-                    권한
-                  </button>
-                )}
-                <button
-                  onClick={() => handleDelete(frame.id)}
-                  className="text-xs font-semibold transition ml-auto"
-                  style={{ color: '#ef4444' }}
-                >
-                  삭제
-                </button>
+                  {/* 액션 버튼 */}
+                  <div className="space-y-1.5">
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditForm(frame);
+                        }}
+                        className="flex-1 py-2 rounded-lg text-xs font-bold transition active:scale-95"
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
+                          color: 'white',
+                          boxShadow: '0 2px 8px rgba(252,113,43,0.25)',
+                        }}
+                      >
+                        수정
+                      </button>
+                      {!frame.isPublic && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAccessModal(frame);
+                          }}
+                          className="flex-1 py-2 rounded-lg text-xs font-bold transition active:scale-95"
+                          style={{
+                            background: 'rgba(76,175,80,0.12)',
+                            color: '#4CAF50',
+                            border: '1px solid rgba(76,175,80,0.25)',
+                          }}
+                        >
+                          권한
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(frame.id);
+                      }}
+                      className="w-full py-2 rounded-lg text-xs font-bold transition active:scale-95"
+                      style={{
+                        background: 'rgba(239,68,68,0.1)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239,68,68,0.22)',
+                      }}
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {filteredFrames.length === 0 && (
-        <div className="text-center py-8 text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          프레임이 없습니다
-        </div>
+          {filteredFrames.length === 0 && (
+            <div
+              className="text-center py-8 text-sm"
+              style={{ color: 'rgba(255,255,255,0.3)' }}
+            >
+              프레임이 없습니다
+            </div>
+          )}
+        </>
       )}
 
       {/* Access Modal */}
@@ -866,7 +1097,9 @@ function AccessModal({
   onRefresh: () => void;
 }) {
   const [addType, setAddType] = useState<'user' | 'group'>('user');
-  const [users, setUsers] = useState<{ id: string; email: string; role: string }[]>([]);
+  const [users, setUsers] = useState<
+    { id: string; email: string; role: string }[]
+  >([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [adding, setAdding] = useState(false);
@@ -874,7 +1107,10 @@ function AccessModal({
   useEffect(() => {
     (async () => {
       try {
-        const [usersData, groupsData] = await Promise.all([getUsers(), getGroups()]);
+        const [usersData, groupsData] = await Promise.all([
+          getUsers(),
+          getGroups(),
+        ]);
         setUsers(usersData.users);
         setGroups(groupsData);
       } catch (err) {
@@ -901,7 +1137,10 @@ function AccessModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
       <div
         className="rounded-xl p-5 border w-full max-w-md mx-4 space-y-4"
         style={{ background: '#1B1612', borderColor: 'rgba(255,255,255,0.1)' }}
@@ -911,23 +1150,43 @@ function AccessModal({
           <h3 className="text-sm font-bold" style={{ color: '#FC712B' }}>
             접근 권한 - {frame.name}
           </h3>
-          <button onClick={onClose} className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>닫기</button>
+          <button
+            onClick={onClose}
+            className="text-xs"
+            style={{ color: 'rgba(255,255,255,0.4)' }}
+          >
+            닫기
+          </button>
         </div>
 
         {/* 추가 */}
         <div className="space-y-2">
           <div className="flex gap-2">
             <button
-              onClick={() => { setAddType('user'); setSelectedId(''); }}
+              onClick={() => {
+                setAddType('user');
+                setSelectedId('');
+              }}
               className="px-2 py-0.5 rounded text-xs"
-              style={addType === 'user' ? { background: 'rgba(252,113,43,0.15)', color: '#FC712B' } : { color: 'rgba(255,255,255,0.3)' }}
+              style={
+                addType === 'user'
+                  ? { background: 'rgba(252,113,43,0.15)', color: '#FC712B' }
+                  : { color: 'rgba(255,255,255,0.3)' }
+              }
             >
               유저
             </button>
             <button
-              onClick={() => { setAddType('group'); setSelectedId(''); }}
+              onClick={() => {
+                setAddType('group');
+                setSelectedId('');
+              }}
               className="px-2 py-0.5 rounded text-xs"
-              style={addType === 'group' ? { background: 'rgba(252,113,43,0.15)', color: '#FC712B' } : { color: 'rgba(255,255,255,0.3)' }}
+              style={
+                addType === 'group'
+                  ? { background: 'rgba(252,113,43,0.15)', color: '#FC712B' }
+                  : { color: 'rgba(255,255,255,0.3)' }
+              }
             >
               그룹
             </button>
@@ -937,13 +1196,24 @@ function AccessModal({
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
               className="flex-1 px-3 py-2 rounded-lg text-sm outline-none border appearance-none"
-              style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' }}
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                borderColor: 'rgba(255,255,255,0.1)',
+                color: 'white',
+              }}
             >
               <option value="">선택...</option>
               {addType === 'user'
-                ? users.map((u) => <option key={u.id} value={u.id}>{u.email}</option>)
-                : groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)
-              }
+                ? users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.email}
+                    </option>
+                  ))
+                : groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
             </select>
             <button
               onClick={handleAdd}
@@ -959,20 +1229,46 @@ function AccessModal({
         {/* 목록 */}
         <div
           className="rounded-lg border max-h-60 overflow-y-auto"
-          style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.06)' }}
+          style={{
+            background: 'rgba(255,255,255,0.02)',
+            borderColor: 'rgba(255,255,255,0.06)',
+          }}
         >
           {loading ? (
-            <div className="text-center py-4 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>로딩...</div>
+            <div
+              className="text-center py-4 text-xs"
+              style={{ color: 'rgba(255,255,255,0.3)' }}
+            >
+              로딩...
+            </div>
           ) : accessList.length === 0 ? (
-            <div className="text-center py-4 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>접근 권한 없음</div>
+            <div
+              className="text-center py-4 text-xs"
+              style={{ color: 'rgba(255,255,255,0.3)' }}
+            >
+              접근 권한 없음
+            </div>
           ) : (
             accessList.map((a) => (
-              <div key={a.id} className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+              <div
+                key={a.id}
+                className="flex items-center justify-between px-3 py-2 border-b"
+                style={{ borderColor: 'rgba(255,255,255,0.04)' }}
+              >
                 <div>
-                  <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: 'rgba(255,255,255,0.7)' }}
+                  >
                     {a.type === 'user' ? a.userEmail : a.groupName}
                   </span>
-                  <span className="text-[10px] ml-1.5 px-1 rounded" style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' }}>
+                  <span
+                    className="text-[10px] ml-1.5 px-1 rounded"
+                    style={{
+                      background: 'rgba(255,255,255,0.06)',
+                      color: 'rgba(255,255,255,0.35)',
+                    }}
+                  >
                     {a.type}
                   </span>
                 </div>
