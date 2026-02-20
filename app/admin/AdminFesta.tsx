@@ -146,7 +146,7 @@ export default function AdminFesta() {
               }}
             >
               {/* 썸네일 */}
-              <div className="relative bg-black/30 overflow-hidden aspect-[3/4]">
+              <div className="mt-3 relative overflow-hidden aspect-[3/4]">
                 {/* 이미지 레이어 */}
                 {film.photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -177,10 +177,26 @@ export default function AdminFesta() {
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
                       {film.photoUrl && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e' }}>사진</span>
+                        <span
+                          className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                          style={{
+                            background: 'rgba(34,197,94,0.2)',
+                            color: '#22c55e',
+                          }}
+                        >
+                          사진
+                        </span>
                       )}
                       {film.videoUrl && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(59,130,246,0.2)', color: '#3b82f6' }}>영상</span>
+                        <span
+                          className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                          style={{
+                            background: 'rgba(59,130,246,0.2)',
+                            color: '#3b82f6',
+                          }}
+                        >
+                          영상
+                        </span>
                       )}
                       <button
                         type="button"
@@ -189,8 +205,14 @@ export default function AdminFesta() {
                         }
                         className="text-[9px] px-1.5 py-0.5 rounded font-medium transition"
                         style={{
-                          background: expandedQR === film.id ? 'rgba(252,113,43,0.15)' : 'rgba(255,255,255,0.07)',
-                          color: expandedQR === film.id ? '#FC712B' : 'rgba(255,255,255,0.4)',
+                          background:
+                            expandedQR === film.id
+                              ? 'rgba(252,113,43,0.15)'
+                              : 'rgba(255,255,255,0.07)',
+                          color:
+                            expandedQR === film.id
+                              ? '#FC712B'
+                              : 'rgba(255,255,255,0.4)',
                         }}
                       >
                         QR
