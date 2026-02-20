@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
 import { QRCodeDisplay } from '@/components/QRCodeDisplay';
-import { getFilms, deleteFilm } from '@/lib/films';
+import { deleteFilm, getFilms } from '@/lib/films';
 import type { FilmResponse } from '@/types/films';
+import { useCallback, useEffect, useState } from 'react';
 
 type Film = NonNullable<FilmResponse['film']>;
 
@@ -62,7 +62,9 @@ export default function AdminFesta() {
 
   const handleDownload = (photoUrl: string, filmId: string) => {
     const filename = `vshot-${filmId.slice(0, 8)}.png`;
-    const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(photoUrl)}&filename=${encodeURIComponent(filename)}`;
+    const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(
+      photoUrl
+    )}&filename=${encodeURIComponent(filename)}`;
     const a = document.createElement('a');
     a.href = proxyUrl;
     a.download = filename;
@@ -88,12 +90,18 @@ export default function AdminFesta() {
           {['active', 'expired', 'deleted'].map((s) => (
             <button
               key={s}
-              onClick={() => { setStatusFilter(s); setPage(0); }}
+              onClick={() => {
+                setStatusFilter(s);
+                setPage(0);
+              }}
               className={`px-3 py-1.5 rounded-full text-xs font-bold transition`}
               style={
                 statusFilter === s
                   ? { background: '#FC712B', color: 'white' }
-                  : { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)' }
+                  : {
+                      background: 'rgba(255,255,255,0.06)',
+                      color: 'rgba(255,255,255,0.5)',
+                    }
               }
             >
               {s}
@@ -108,13 +116,19 @@ export default function AdminFesta() {
       {/* Loading */}
       {loading && (
         <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-3 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#FC712B' }} />
+          <div
+            className="w-8 h-8 border-3 border-t-transparent rounded-full animate-spin"
+            style={{ borderColor: '#FC712B' }}
+          />
         </div>
       )}
 
       {/* Empty */}
       {!loading && films.length === 0 && (
-        <div className="text-center py-12" style={{ color: 'rgba(255,255,255,0.3)' }}>
+        <div
+          className="text-center py-12"
+          style={{ color: 'rgba(255,255,255,0.3)' }}
+        >
           Film이 없습니다
         </div>
       )}
@@ -126,7 +140,10 @@ export default function AdminFesta() {
             <div
               key={film.id}
               className="rounded-xl border overflow-hidden"
-              style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
+              style={{
+                background: 'rgba(255,255,255,0.04)',
+                borderColor: 'rgba(255,255,255,0.08)',
+              }}
             >
               {/* 썸네일 */}
               <div className="relative bg-black/30 overflow-hidden aspect-[3/4]">
@@ -146,44 +163,54 @@ export default function AdminFesta() {
                     사진 없음
                   </span>
                 )}
-                {/* 배지 레이어 */}
-                <div className="absolute top-1.5 left-1.5 z-10 flex gap-1">
-                  {film.photoUrl && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e' }}>사진</span>
-                  )}
-                  {film.videoUrl && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(59,130,246,0.2)', color: '#3b82f6' }}>영상</span>
-                  )}
-                </div>
               </div>
 
               {/* Info */}
               <div className="p-2.5 space-y-2">
                 <div>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-mono truncate" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                    <span
+                      className="text-xs font-mono truncate"
+                      style={{ color: 'rgba(255,255,255,0.5)' }}
+                    >
                       {film.id.slice(0, 8)}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setExpandedQR(expandedQR === film.id ? null : film.id)}
-                      className="shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium transition"
-                      style={{
-                        background: expandedQR === film.id ? 'rgba(252,113,43,0.15)' : 'rgba(255,255,255,0.07)',
-                        color: expandedQR === film.id ? '#FC712B' : 'rgba(255,255,255,0.4)',
-                      }}
-                    >
-                      QR
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {film.photoUrl && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e' }}>사진</span>
+                      )}
+                      {film.videoUrl && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(59,130,246,0.2)', color: '#3b82f6' }}>영상</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedQR(expandedQR === film.id ? null : film.id)
+                        }
+                        className="text-[9px] px-1.5 py-0.5 rounded font-medium transition"
+                        style={{
+                          background: expandedQR === film.id ? 'rgba(252,113,43,0.15)' : 'rgba(255,255,255,0.07)',
+                          color: expandedQR === film.id ? '#FC712B' : 'rgba(255,255,255,0.4)',
+                        }}
+                      >
+                        QR
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                  <span
+                    className="text-[9px]"
+                    style={{ color: 'rgba(255,255,255,0.3)' }}
+                  >
                     {new Date(film.createdAt).toLocaleDateString('ko-KR')}
                   </span>
                 </div>
 
                 {/* QR 확장 */}
                 {expandedQR === film.id && (
-                  <div className="flex flex-col items-center py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                  <div
+                    className="flex flex-col items-center py-2 rounded-lg"
+                    style={{ background: 'rgba(255,255,255,0.03)' }}
+                  >
                     <QRCodeDisplay filmId={film.id} size={100} />
                   </div>
                 )}
@@ -197,11 +224,22 @@ export default function AdminFesta() {
                       className="w-full py-2 rounded-lg text-xs font-bold transition active:scale-95"
                       style={
                         downloadedFilms.has(film.id)
-                          ? { background: 'rgba(74,222,128,0.1)', color: '#86efac', border: '1px solid rgba(74,222,128,0.2)' }
-                          : { background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)', color: 'white', boxShadow: '0 2px 8px rgba(252,113,43,0.25)' }
+                          ? {
+                              background: 'rgba(74,222,128,0.1)',
+                              color: '#86efac',
+                              border: '1px solid rgba(74,222,128,0.2)',
+                            }
+                          : {
+                              background:
+                                'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
+                              color: 'white',
+                              boxShadow: '0 2px 8px rgba(252,113,43,0.25)',
+                            }
                       }
                     >
-                      {downloadedFilms.has(film.id) ? '다시 다운로드' : '사진 다운로드'}
+                      {downloadedFilms.has(film.id)
+                        ? '다시 다운로드'
+                        : '사진 다운로드'}
                     </button>
                   )}
                   {statusFilter === 'active' && (
@@ -209,7 +247,11 @@ export default function AdminFesta() {
                       type="button"
                       onClick={() => handleDelete(film.id)}
                       className="w-full py-2 rounded-lg text-xs font-bold transition active:scale-95"
-                      style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.22)' }}
+                      style={{
+                        background: 'rgba(239,68,68,0.1)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239,68,68,0.22)',
+                      }}
                     >
                       삭제
                     </button>
@@ -228,18 +270,29 @@ export default function AdminFesta() {
             onClick={() => setPage(Math.max(0, page - 1))}
             disabled={page === 0}
             className="px-3 py-1.5 rounded-lg text-sm font-semibold disabled:opacity-30 transition border"
-            style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' }}
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              borderColor: 'rgba(255,255,255,0.1)',
+              color: 'white',
+            }}
           >
             이전
           </button>
-          <span className="px-3 py-1.5 text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          <span
+            className="px-3 py-1.5 text-sm"
+            style={{ color: 'rgba(255,255,255,0.4)' }}
+          >
             {page + 1} / {totalPages}
           </span>
           <button
             onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
             disabled={page >= totalPages - 1}
             className="px-3 py-1.5 rounded-lg text-sm font-semibold disabled:opacity-30 transition border"
-            style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' }}
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              borderColor: 'rgba(255,255,255,0.1)',
+              color: 'white',
+            }}
           >
             다음
           </button>
