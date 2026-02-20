@@ -12,6 +12,7 @@ import { CountdownOverlay } from '@/components/v3/FrameOverlayPreview';
 import { GuestWaitingIndicator, SessionHistoryPanel } from '@/components/v3/GuestWaitingIndicator';
 import { RESOLUTION } from '@/constants/constants';
 import { getLayoutById } from '@/constants/frame-layouts';
+import { FrameLayout } from '@/types';
 import { useChromaKey } from '@/hooks/useChromaKey';
 import { useCompositeCanvas } from '@/hooks/useCompositeCanvas';
 import { useHostSettings } from '@/hooks/useHostSettings';
@@ -87,7 +88,7 @@ export default function HostV3RoomPage() {
   const [isVideoProcessing, setIsVideoProcessing] = useState(false);
   const [videoProcessingProgress, setVideoProcessingProgress] = useState('');
 
-  const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
+  const selectedLayout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -111,6 +112,7 @@ export default function HostV3RoomPage() {
         smoothness: smoothness / 100,
       },
       selectedFrameLayoutId: store.selectedFrameLayoutId,
+      layoutData: store.resolvedFrameLayout || undefined,
     },
     sendSignal: sendMessage,
     resetWebRTCConnection: resetForNextGuest,
@@ -143,12 +145,10 @@ export default function HostV3RoomPage() {
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
       console.log('[Host V3] Session complete:', sessionId);
-      const layout = getLayoutById(store.selectedFrameLayoutId);
+      const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-          const fullUrl = `${API_URL}${frameResultUrl}`;
-          const framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
+          const framedBlobUrl = await generatePhotoFrameBlobWithLayout([frameResultUrl], layout);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
           console.error('[Host V3] Failed to apply frame:', err);
@@ -224,6 +224,15 @@ export default function HostV3RoomPage() {
           userId: store.userId,
           role: 'host',
         });
+        // Sync frame selection to server so guest-joined-v3 includes correct layout
+        if (store.selectedFrameLayoutId) {
+          sendMessage({
+            type: 'frame-selected-v3',
+            roomId,
+            layoutId: store.selectedFrameLayoutId,
+            layout: { layoutId: store.selectedFrameLayoutId, slotCount: 1, totalPhotos: 1, selectablePhotos: 1 },
+          });
+        }
         setSessionState(SessionState.WAITING_FOR_GUEST);
       } catch (error) {
         console.error('[Host V3] Init error:', error);
@@ -248,6 +257,31 @@ export default function HostV3RoomPage() {
         setSessionState(SessionState.GUEST_CONNECTED);
         setLastSessionResult(null);
         setRecordedVideoBlob(null);
+        // Re-send current settings to new guest
+        if (store.roomId) {
+          sendMessage({
+            type: 'chromakey-settings',
+            roomId: store.roomId,
+            settings: { enabled: chromaKeyEnabled, color: chromaKeyColor, similarity: sensitivity, smoothness },
+          });
+          sendMessage({
+            type: 'host-display-options',
+            roomId: store.roomId,
+            options: { flipHorizontal: hostFlipHorizontal },
+          });
+          const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
+          sendMessage({
+            type: 'frame-layout-settings',
+            roomId: store.roomId,
+            settings: {
+              layoutId: store.selectedFrameLayoutId,
+              slotCount: 1,
+              totalPhotos: 1,
+              selectablePhotos: 1,
+              layoutData: layout || undefined,
+            },
+          } as any);
+        }
         break;
       case 'guest-left-v3':
         setSessionState(SessionState.WAITING_FOR_GUEST);
@@ -259,7 +293,7 @@ export default function HostV3RoomPage() {
       case 'countdown-tick-v3':
         if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
           videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
-            const layout = getLayoutById(store.selectedFrameLayoutId);
+            const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
             if (layout && layout.frameSrc) {
               try {
                 setIsVideoProcessing(true);
@@ -530,29 +564,14 @@ export default function HostV3RoomPage() {
     if (!lastSessionResult?.frameResultUrl) return;
 
     const url = lastSessionResult.frameResultUrl;
-    const isBlobUrl = url.startsWith('blob:');
 
     try {
-      let downloadUrl: string;
-      if (isBlobUrl) {
-        downloadUrl = url;
-      } else {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${API_URL}${url}`);
-        const blob = await response.blob();
-        downloadUrl = URL.createObjectURL(blob);
-      }
-
       const link = document.createElement('a');
-      link.href = downloadUrl;
+      link.href = url;
       link.download = `vshot-v3-${store.roomId}-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      if (!isBlobUrl) {
-        URL.revokeObjectURL(downloadUrl);
-      }
     } catch (error) {
       console.error('[Host V3] Download error:', error);
     }
@@ -879,10 +898,7 @@ export default function HostV3RoomPage() {
               {lastSessionResult.frameResultUrl && (
                 <div className="mb-4 flex justify-center">
                   <img
-                    src={lastSessionResult.frameResultUrl.startsWith('blob:')
-                      ? lastSessionResult.frameResultUrl
-                      : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
-                    }
+                    src={lastSessionResult.frameResultUrl}
                     alt="촬영 결과"
                     className="max-h-48 rounded-xl shadow-lg"
                   />

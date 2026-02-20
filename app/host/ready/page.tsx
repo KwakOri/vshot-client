@@ -2,7 +2,8 @@
 
 import { DeviceSelector } from '@/components';
 import { FrameSelector } from '@/components/v3/FrameSelector';
-import { getActiveLayouts } from '@/constants/frame-layouts';
+import { useAvailableFrames } from '@/hooks/useAvailableFrames';
+import { resolveFrameLayout } from '@/constants/frame-layouts';
 import { useMediaDevices } from '@/hooks/useMediaDevices';
 import { useAppStore } from '@/lib/store';
 import { FrameLayout } from '@/types';
@@ -28,7 +29,7 @@ export default function HostV3ReadyPage() {
   );
 
   // Frame selection
-  const activeLayouts = getActiveLayouts();
+  const { layouts: activeLayouts, isLoading: isFramesLoading } = useAvailableFrames();
   const [selectedFrameLayoutId, setSelectedFrameLayoutId] = useState<string>(
     store.selectedFrameLayoutId
   );
@@ -115,10 +116,18 @@ export default function HostV3ReadyPage() {
     setSelectedFrameLayoutId(layout.id);
   };
 
+  const handleFrameDeselect = () => {
+    setSelectedFrameLayoutId('');
+  };
+
   const createRoom = () => {
     store.setSelectedAudioDeviceId(selectedAudioDeviceId);
     store.setSelectedAudioOutputDeviceId(selectedAudioOutputDeviceId);
     store.setSelectedFrameLayoutId(selectedFrameLayoutId);
+
+    const resolved = resolveFrameLayout(selectedFrameLayoutId, activeLayouts);
+    store.setResolvedFrameLayout(resolved ?? null);
+
     store.setRole('host');
 
     stopMicTest();
@@ -229,18 +238,18 @@ export default function HostV3ReadyPage() {
             </div>
 
             {/* Frame Selection */}
-            {activeLayouts.length > 1 && (
-              <div>
-                <label className="font-display text-xs font-semibold text-dark/40 uppercase tracking-wider mb-3 block">
-                  프레임 선택
-                </label>
-                <FrameSelector
-                  layouts={activeLayouts}
-                  selectedLayoutId={selectedFrameLayoutId}
-                  onSelect={handleFrameSelect}
-                />
-              </div>
-            )}
+            <div>
+              <label className="font-display text-xs font-semibold text-dark/40 uppercase tracking-wider mb-3 block">
+                프레임 선택
+              </label>
+              <FrameSelector
+                layouts={activeLayouts}
+                selectedLayoutId={selectedFrameLayoutId}
+                onSelect={handleFrameSelect}
+                onDeselect={handleFrameDeselect}
+                isLoading={isFramesLoading}
+              />
+            </div>
 
             {/* V3 Mode Info */}
             <div className="flex items-start gap-3 p-3 rounded-xl bg-secondary/5 border border-secondary/15">

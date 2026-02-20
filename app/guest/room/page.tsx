@@ -68,7 +68,7 @@ export default function GuestV3RoomPage() {
     frameResultUrl: string;
   } | null>(null);
 
-  const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
+  const selectedLayout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -110,12 +110,10 @@ export default function GuestV3RoomPage() {
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
       console.log('[Guest V3] Session complete:', sessionId);
-      const layout = getLayoutById(store.selectedFrameLayoutId);
+      const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-          const fullUrl = `${API_URL}${frameResultUrl}`;
-          const framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout);
+          const framedBlobUrl = await generatePhotoFrameBlobWithLayout([frameResultUrl], layout);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
           console.error('[Guest V3] Failed to apply frame:', err);
@@ -260,6 +258,9 @@ export default function GuestV3RoomPage() {
             if (message.hostSettings.selectedFrameLayoutId) {
               store.setSelectedFrameLayoutId(message.hostSettings.selectedFrameLayoutId);
             }
+            if (message.hostSettings.layoutData) {
+              store.setResolvedFrameLayout(message.hostSettings.layoutData);
+            }
           }
         }
         break;
@@ -315,6 +316,9 @@ export default function GuestV3RoomPage() {
     on('frame-layout-settings', (message: any) => {
       if (message.settings) {
         store.setSelectedFrameLayoutId(message.settings.layoutId);
+        if (message.settings.layoutData) {
+          store.setResolvedFrameLayout(message.settings.layoutData);
+        }
       }
     });
   }, [on, store]);
@@ -432,29 +436,14 @@ export default function GuestV3RoomPage() {
     if (!lastSessionResult?.frameResultUrl) return;
 
     const url = lastSessionResult.frameResultUrl;
-    const isBlobUrl = url.startsWith('blob:');
 
     try {
-      let downloadUrl: string;
-      if (isBlobUrl) {
-        downloadUrl = url;
-      } else {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${API_URL}${url}`);
-        const blob = await response.blob();
-        downloadUrl = URL.createObjectURL(blob);
-      }
-
       const link = document.createElement('a');
-      link.href = downloadUrl;
+      link.href = url;
       link.download = `vshot-v3-${store.roomId}-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      if (!isBlobUrl) {
-        URL.revokeObjectURL(downloadUrl);
-      }
     } catch (error) {
       console.error('[Guest V3] Download error:', error);
     }
@@ -494,10 +483,7 @@ export default function GuestV3RoomPage() {
             {lastSessionResult.frameResultUrl ? (
               <div className="relative">
                 <img
-                  src={lastSessionResult.frameResultUrl.startsWith('blob:')
-                    ? lastSessionResult.frameResultUrl
-                    : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${lastSessionResult.frameResultUrl}`
-                  }
+                  src={lastSessionResult.frameResultUrl}
                   alt="촬영 결과"
                   className="w-full rounded-2xl shadow-2xl"
                   style={{ boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)' }}

@@ -7,6 +7,7 @@ import {
 import { CountdownOverlay } from '@/components/v3/FrameOverlayPreview';
 import { RESOLUTION } from '@/constants/constants';
 import { getLayoutById } from '@/constants/frame-layouts';
+import { FrameLayout } from '@/types';
 import { useChromaKey } from '@/hooks/useChromaKey';
 import { useCompositeCanvas } from '@/hooks/useCompositeCanvas';
 import { useHostSettings } from '@/hooks/useHostSettings';
@@ -50,11 +51,11 @@ export default function HostV3RoomPage() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [sourceType, setSourceType] = useState<'camera' | 'screen'>('camera');
 
-  const [chromaKeyEnabled, setChromaKeyEnabled] = useState(true);
+  const chromaKeyEnabled = true; // Always enabled
   const [sensitivity, setSensitivity] = useState(50);
   const [smoothness, setSmoothness] = useState(10);
   const [chromaKeyColor, setChromaKeyColor] = useState('#00ff00');
-  const [guestBlurAmount, setGuestBlurAmount] = useState(50);
+  const [guestBlurAmount, setGuestBlurAmount] = useState(40);
 
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
   const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
@@ -89,6 +90,8 @@ export default function HostV3RoomPage() {
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
   const [isGuestViewingQR, setIsGuestViewingQR] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [lastSessionResult, setLastSessionResult] = useState<{
     sessionId: string;
@@ -105,7 +108,7 @@ export default function HostV3RoomPage() {
   const [leftPanelOpen, setLeftPanelOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
 
-  const selectedLayout = getLayoutById(store.selectedFrameLayoutId);
+  const selectedLayout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,6 +130,7 @@ export default function HostV3RoomPage() {
         smoothness: smoothness / 100,
       },
       selectedFrameLayoutId: store.selectedFrameLayoutId,
+      layoutData: store.resolvedFrameLayout || undefined,
     },
     sendSignal: sendMessage,
     resetWebRTCConnection: resetForNextGuest,
@@ -161,13 +165,11 @@ export default function HostV3RoomPage() {
 
       const filmId = nanoid(8);
       let framedBlobUrl: string | null = null;
-      const layout = getLayoutById(store.selectedFrameLayoutId);
+      const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
       if (layout) {
         try {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-          const fullUrl = `${API_URL}${frameResultUrl}`;
           const t1 = performance.now();
-          framedBlobUrl = await generatePhotoFrameBlobWithLayout([fullUrl], layout, filmId);
+          framedBlobUrl = await generatePhotoFrameBlobWithLayout([frameResultUrl], layout, filmId);
           console.log(`[⏱ Timing] 1. 프레임 이미지 생성: ${(performance.now() - t1).toFixed(0)}ms`);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
@@ -187,7 +189,7 @@ export default function HostV3RoomPage() {
           let photoFileId: string | undefined;
           if (photoSrc) {
             const t2 = performance.now();
-            const photoResponse = await fetch(photoSrc.startsWith('blob:') ? photoSrc : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${photoSrc}`);
+            const photoResponse = await fetch(photoSrc);
             const photoBlob = await photoResponse.blob();
             console.log(`[⏱ Timing] 2. 사진 Blob 변환: ${(performance.now() - t2).toFixed(0)}ms (${(photoBlob.size / 1024).toFixed(0)}KB)`);
 
@@ -293,13 +295,12 @@ export default function HostV3RoomPage() {
 
   useEffect(() => {
     if (!settingsLoaded) return;
-    setChromaKeyEnabled(savedSettings.chromaKeyEnabled);
     setSensitivity(savedSettings.sensitivity);
     setSmoothness(savedSettings.smoothness);
     setChromaKeyColor(savedSettings.chromaKeyColor);
     setHostFlipHorizontal(savedSettings.hostFlipHorizontal);
     setGuestFlipHorizontal(savedSettings.guestFlipHorizontal);
-    setGuestBlurAmount(savedSettings.guestBlurAmount ?? 50);
+    setGuestBlurAmount(savedSettings.guestBlurAmount ?? 40);
   }, [settingsLoaded]);
 
   useEffect(() => {
@@ -325,6 +326,15 @@ export default function HostV3RoomPage() {
           role: 'host',
           mode: 'festa',
         });
+        // Sync frame selection to server so guest-joined-v3 includes correct layout
+        if (store.selectedFrameLayoutId) {
+          sendMessage({
+            type: 'frame-selected-v3',
+            roomId,
+            layoutId: store.selectedFrameLayoutId,
+            layout: { layoutId: store.selectedFrameLayoutId, slotCount: 1, totalPhotos: 1, selectablePhotos: 1 },
+          });
+        }
         setSessionState(SessionState.WAITING_FOR_GUEST);
       } catch (error) {
         console.error('[Festa Host] Init error:', error);
@@ -351,6 +361,32 @@ export default function HostV3RoomPage() {
         setRecordedVideoBlob(null);
         recordedVideoBlobRef.current = null;
         setIsGuestViewingQR(false);
+        // Re-send current settings to new guest
+        if (store.roomId) {
+          sendMessage({
+            type: 'chromakey-settings',
+            roomId: store.roomId,
+            settings: { enabled: chromaKeyEnabled, color: chromaKeyColor, similarity: sensitivity, smoothness },
+          });
+          sendMessage({
+            type: 'host-display-options',
+            roomId: store.roomId,
+            options: { flipHorizontal: hostFlipHorizontal },
+          });
+          // Send frame layout settings to guest
+          const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
+          sendMessage({
+            type: 'frame-layout-settings',
+            roomId: store.roomId,
+            settings: {
+              layoutId: store.selectedFrameLayoutId,
+              slotCount: 1,
+              totalPhotos: 1,
+              selectablePhotos: 1,
+              layoutData: layout || undefined,
+            },
+          } as any);
+        }
         break;
       case 'guest-left-v3':
         setSessionState(SessionState.WAITING_FOR_GUEST);
@@ -362,7 +398,7 @@ export default function HostV3RoomPage() {
       case 'countdown-tick-v3':
         if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
           videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
-            const layout = getLayoutById(store.selectedFrameLayoutId);
+            const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
             if (layout && layout.frameSrc) {
               try {
                 setIsVideoProcessing(true);
@@ -686,15 +722,18 @@ export default function HostV3RoomPage() {
     if (localStream && localVideoRef.current) localVideoRef.current.srcObject = localStream;
   }, [localStream]);
 
-  const handleCopyRoomCode = () => {
+  const handleCopyRoomCode = useCallback(() => {
     if (!localStream) {
       alert('먼저 화면 공유를 시작해서 촬영 준비를 완료해주세요');
       return;
     }
     if (store.roomId) {
       navigator.clipboard.writeText(store.roomId);
+      setCopied(true);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 1500);
     }
-  };
+  }, [localStream, store.roomId]);
 
   const isGuestConnected = !guestManagement.waitingForGuest && sessionState !== SessionState.WAITING_FOR_GUEST;
   const canCapture = isGuestConnected && sessionState === SessionState.GUEST_CONNECTED && !!remoteStream;
@@ -741,6 +780,7 @@ export default function HostV3RoomPage() {
           <img
             src={selectedLayout.frameSrc}
             alt=""
+            crossOrigin="anonymous"
             className="absolute max-w-full max-h-full object-fill pointer-events-none z-[2]"
             style={{ aspectRatio: '2/3', opacity: 1 }}
           />
@@ -788,14 +828,32 @@ export default function HostV3RoomPage() {
           {store.roomId && (
             <button
               onClick={handleCopyRoomCode}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md transition ${localStream ? 'hover:bg-white/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
-              style={{ background: 'rgba(0,0,0,0.4)' }}
+              className={`relative flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md overflow-hidden transition-all duration-300 ease-out ${
+                copied
+                  ? 'bg-emerald-500/90 scale-105'
+                  : localStream
+                    ? 'hover:bg-white/20 cursor-pointer'
+                    : 'opacity-40 cursor-not-allowed'
+              }`}
+              style={copied ? undefined : { background: 'rgba(0,0,0,0.4)' }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-              <span className="text-white/80 font-bold text-xs tracking-wider">COPY ROOM ID</span>
+              <span className={`inline-flex items-center gap-2 transition-all duration-300 ${
+                copied ? 'opacity-0 translate-y-3 scale-90' : 'opacity-100 translate-y-0 scale-100'
+              }`}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span className="text-white/80 font-bold text-xs tracking-wider">COPY ROOM ID</span>
+              </span>
+              <span className={`absolute inset-0 flex items-center justify-center gap-1.5 transition-all duration-300 ${
+                copied ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-3 scale-90'
+              }`}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span className="text-white font-bold text-xs tracking-wider">DONE</span>
+              </span>
             </button>
           )}
         </div>
@@ -937,23 +995,6 @@ export default function HostV3RoomPage() {
           </button>
           {!collapsedSections['chromakey'] && (
             <div className="space-y-3 mt-2">
-              <div className="flex items-center justify-between">
-                <p className="text-white/50 text-xs">활성화</p>
-                <button
-                  onClick={() => {
-                    const newVal = !chromaKeyEnabled;
-                    setChromaKeyEnabled(newVal);
-                    updateSetting('chromaKeyEnabled', newVal);
-                    syncChromaKeySettings();
-                  }}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${chromaKeyEnabled ? 'bg-orange-500' : 'bg-white/20'}`}
-                >
-                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${chromaKeyEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                </button>
-              </div>
-
-              {chromaKeyEnabled && (
-                <>
                   <div>
                     <label className="text-white/40 text-xs block mb-1">색상 (HEX)</label>
                     <div className="flex items-center gap-2">
@@ -1003,8 +1044,6 @@ export default function HostV3RoomPage() {
                       className="w-full accent-orange-500"
                     />
                   </div>
-                </>
-              )}
             </div>
           )}
         </div>

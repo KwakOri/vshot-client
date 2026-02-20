@@ -51,22 +51,6 @@ export const LAYOUT_DEFINITIONS: FrameLayoutDefinition[] = [
   //   tags: ['grid', 'equal', 'standard', 'life4cut'],
   // },
 
-  // 2. Polaroid Single (one-cut frame: 1600x2400, slot: 1400x2100 at 100,120)
-  {
-    id: '1cut-polaroid',
-    label: '폴라로이드 (단일)',
-    slotCount: 1,
-    positionRatios: [
-      { x: 100 / 1600, y: 120 / 2400, width: 1400 / 1600, height: 2100 / 2400, zIndex: 0 },
-    ],
-    thumbnailSrc: '/frames/one-cut.png',
-    frameSrc: '/frames/one-cut.png',
-    description: '단일 사진을 위한 세로형 폴라로이드 스타일',
-    category: 'single',
-    isActive: true,
-    sortOrder: 2,
-    tags: ['polaroid', 'single', 'classic'],
-  },
 
   // // 3. Quoka Frame (custom positions for specific frame overlay)
   // // This uses fixed pixel positions relative to a 3000x4500 frame image
@@ -184,3 +168,72 @@ export function searchLayoutsByTag(tag: string): FrameLayout[] {
  * Default layout (fallback)
  */
 export const DEFAULT_LAYOUT = FRAME_LAYOUTS[0]; // 2x2 grid (인생네컷)
+
+/**
+ * Convert a DB Frame to FrameLayout (for rendering)
+ */
+export function dbFrameToLayout(frame: {
+  id: string;
+  name: string;
+  description?: string | null;
+  canvasWidth: number;
+  canvasHeight: number;
+  slotPositions: FrameSlotRatio[];
+  slotCount: number;
+  frameImageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  category?: string | null;
+  tags?: string[];
+  sortOrder?: number;
+  isActive?: boolean;
+  createdAt?: string;
+}): FrameLayout {
+  return {
+    id: frame.id,
+    label: frame.name,
+    slotCount: frame.slotCount,
+    positions: resolveSlotPositions(frame.slotPositions, frame.canvasWidth, frame.canvasHeight),
+    canvasWidth: frame.canvasWidth,
+    canvasHeight: frame.canvasHeight,
+    thumbnailSrc: frame.thumbnailUrl || frame.frameImageUrl || '',
+    frameSrc: frame.frameImageUrl || '',
+    description: frame.description || undefined,
+    category: frame.category || undefined,
+    isActive: frame.isActive,
+    sortOrder: frame.sortOrder,
+    tags: frame.tags,
+    createdAt: frame.createdAt,
+    recommendedCaptureWidth: frame.canvasWidth,
+    recommendedCaptureHeight: frame.canvasHeight,
+  };
+}
+
+/**
+ * Resolve a frame layout by ID from available layouts, with hardcoded fallback
+ */
+export function resolveFrameLayout(
+  id: string,
+  availableLayouts?: FrameLayout[]
+): FrameLayout | undefined {
+  if (availableLayouts) {
+    const found = availableLayouts.find(l => l.id === id);
+    if (found) return found;
+  }
+  return getLayoutById(id);
+}
+
+/**
+ * Get layout by ID, checking DB frames first, then falling back to hardcoded
+ */
+export function getLayoutByIdWithFallback(
+  id: string,
+  dbFrames?: Array<Parameters<typeof dbFrameToLayout>[0]>
+): FrameLayout | undefined {
+  // DB 프레임에서 먼저 찾기
+  if (dbFrames) {
+    const dbFrame = dbFrames.find(f => f.id === id);
+    if (dbFrame) return dbFrameToLayout(dbFrame);
+  }
+  // 하드코딩 fallback
+  return getLayoutById(id);
+}
