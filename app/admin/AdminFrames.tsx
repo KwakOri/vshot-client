@@ -926,7 +926,7 @@ export default function AdminFrames() {
                   borderColor: 'rgba(255,255,255,0.08)',
                 }}
               >
-                <div className="relative bg-black/30 overflow-hidden aspect-[3/4]">
+                <div className="relative mt-3 bg-black/30 overflow-hidden aspect-[3/4]">
                   {/* 이미지 레이어 */}
                   {frame.thumbnailUrl || frame.frameImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -960,7 +960,9 @@ export default function AdminFrames() {
                         <span
                           className="text-[9px] px-1.5 py-0.5 rounded font-medium"
                           style={{
-                            background: frame.isPublic ? 'rgba(76,175,80,0.2)' : 'rgba(252,113,43,0.2)',
+                            background: frame.isPublic
+                              ? 'rgba(76,175,80,0.2)'
+                              : 'rgba(252,113,43,0.2)',
                             color: frame.isPublic ? '#4CAF50' : '#FC712B',
                           }}
                         >
@@ -969,7 +971,10 @@ export default function AdminFrames() {
                         {!frame.isActive && (
                           <span
                             className="text-[9px] px-1.5 py-0.5 rounded font-medium"
-                            style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}
+                            style={{
+                              background: 'rgba(239,68,68,0.2)',
+                              color: '#ef4444',
+                            }}
                           >
                             비활성
                           </span>
