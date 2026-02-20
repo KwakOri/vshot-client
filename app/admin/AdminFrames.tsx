@@ -750,18 +750,20 @@ export default function AdminFrames() {
                 style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
               >
                 {/* 썸네일 */}
-                <div className="relative bg-black/30 flex items-center justify-center overflow-hidden aspect-[3/4]">
+                <div className="relative bg-black/30 overflow-hidden aspect-[3/4]">
+                  {/* 이미지 레이어 */}
                   {frame.thumbnailUrl || frame.frameImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={frame.thumbnailUrl || frame.frameImageUrl || ''}
                       alt={frame.name}
-                      className="w-full h-full object-contain"
+                      className="absolute inset-0 w-full h-full object-contain"
                     />
                   ) : (
-                    <span className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>No Image</span>
+                    <span className="absolute inset-0 flex items-center justify-center text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>No Image</span>
                   )}
-                  <div className="absolute top-1.5 left-1.5 flex gap-1">
+                  {/* 배지 레이어 */}
+                  <div className="absolute top-1.5 left-1.5 z-10 flex gap-1">
                     <span
                       className="text-[9px] px-1.5 py-0.5 rounded font-medium"
                       style={{
