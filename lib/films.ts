@@ -38,7 +38,7 @@ export async function getFilms(params?: {
   if (params?.limit) searchParams.set('limit', String(params.limit));
   if (params?.offset) searchParams.set('offset', String(params.offset));
 
-  const response = await fetch(`/api/films?${searchParams}`);
+  const response = await fetch(`/api/films?${searchParams}`, { cache: 'no-store' });
   return response.json();
 }
 

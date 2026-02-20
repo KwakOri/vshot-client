@@ -49,6 +49,15 @@ export default function AdminFesta() {
     }
   };
 
+  const handleDownload = (photoUrl: string, filmId: string) => {
+    const filename = `vshot-${filmId.slice(0, 8)}.png`;
+    const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(photoUrl)}&filename=${encodeURIComponent(filename)}`;
+    const a = document.createElement('a');
+    a.href = proxyUrl;
+    a.download = filename;
+    a.click();
+  };
+
   const totalPages = Math.ceil(total / limit);
 
   return (
@@ -154,18 +163,35 @@ export default function AdminFesta() {
                 </div>
               )}
 
-              {/* Delete */}
-              {statusFilter === 'active' && (
-                <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              {/* Actions */}
+              <div className="mt-3 pt-3 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                {film.photoUrl && (
+                  <button
+                    onClick={() => handleDownload(film.photoUrl!, film.id)}
+                    className="w-full py-2.5 rounded-lg text-sm font-bold transition active:scale-95"
+                    style={{
+                      background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
+                      color: 'white',
+                      boxShadow: '0 4px 12px rgba(252,113,43,0.3)',
+                    }}
+                  >
+                    사진 다운로드
+                  </button>
+                )}
+                {statusFilter === 'active' && (
                   <button
                     onClick={() => handleDelete(film.id)}
-                    className="text-xs font-semibold transition"
-                    style={{ color: '#ef4444' }}
+                    className="w-full py-2.5 rounded-lg text-sm font-bold transition active:scale-95"
+                    style={{
+                      background: 'rgba(239,68,68,0.12)',
+                      color: '#ef4444',
+                      border: '1px solid rgba(239,68,68,0.25)',
+                    }}
                   >
                     삭제
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ))}
         </div>
