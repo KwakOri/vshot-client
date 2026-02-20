@@ -7,6 +7,8 @@ import type { FilmResponse } from '@/types/films';
 
 type Film = NonNullable<FilmResponse['film']>;
 
+const DOWNLOAD_HISTORY_KEY = 'vshot_admin_downloaded_films';
+
 export default function AdminFesta() {
   const [films, setFilms] = useState<Film[]>([]);
   const [total, setTotal] = useState(0);
@@ -14,6 +16,15 @@ export default function AdminFesta() {
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState('active');
   const [expandedQR, setExpandedQR] = useState<string | null>(null);
+  const [downloadedFilms, setDownloadedFilms] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const stored = localStorage.getItem(DOWNLOAD_HISTORY_KEY);
+      return stored ? new Set<string>(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
   const limit = 20;
 
   const fetchFilms = useCallback(async () => {
@@ -56,6 +67,15 @@ export default function AdminFesta() {
     a.href = proxyUrl;
     a.download = filename;
     a.click();
+
+    setDownloadedFilms((prev) => {
+      const next = new Set(prev);
+      next.add(filmId);
+      try {
+        localStorage.setItem(DOWNLOAD_HISTORY_KEY, JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
   };
 
   const totalPages = Math.ceil(total / limit);
@@ -169,13 +189,21 @@ export default function AdminFesta() {
                   <button
                     onClick={() => handleDownload(film.photoUrl!, film.id)}
                     className="w-full py-2.5 rounded-lg text-sm font-bold transition active:scale-95"
-                    style={{
-                      background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
-                      color: 'white',
-                      boxShadow: '0 4px 12px rgba(252,113,43,0.3)',
-                    }}
+                    style={
+                      downloadedFilms.has(film.id)
+                        ? {
+                            background: 'rgba(74,222,128,0.1)',
+                            color: '#86efac',
+                            border: '1px solid rgba(74,222,128,0.2)',
+                          }
+                        : {
+                            background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
+                            color: 'white',
+                            boxShadow: '0 4px 12px rgba(252,113,43,0.3)',
+                          }
+                    }
                   >
-                    사진 다운로드
+                    {downloadedFilms.has(film.id) ? '다시 다운로드' : '사진 다운로드'}
                   </button>
                 )}
                 {statusFilter === 'active' && (
