@@ -121,104 +121,100 @@ export default function AdminFesta() {
 
       {/* Film Grid */}
       {!loading && films.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {films.map((film) => (
             <div
               key={film.id}
-              className="rounded-xl p-4 border"
+              className="rounded-xl border overflow-hidden"
               style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
             >
-              {/* Photo Thumbnail */}
-              <div
-                className="aspect-[3/2] rounded-lg overflow-hidden mb-3"
-                style={{ background: 'rgba(255,255,255,0.04)' }}
-              >
+              {/* 썸네일 */}
+              <div className="relative bg-black/30 overflow-hidden aspect-[3/4]">
+                {/* 이미지 레이어 */}
                 {film.photoUrl ? (
-                  <img src={film.photoUrl} alt="Film photo" className="w-full h-full object-cover" />
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={film.photoUrl}
+                    alt="Film photo"
+                    className="absolute inset-0 w-full h-full object-contain"
+                  />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-sm" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                  <span
+                    className="absolute inset-0 flex items-center justify-center text-xs"
+                    style={{ color: 'rgba(255,255,255,0.2)' }}
+                  >
                     사진 없음
-                  </div>
+                  </span>
                 )}
+                {/* 배지 레이어 */}
+                <div className="absolute top-1.5 left-1.5 z-10 flex gap-1">
+                  {film.photoUrl && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e' }}>사진</span>
+                  )}
+                  {film.videoUrl && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(59,130,246,0.2)', color: '#3b82f6' }}>영상</span>
+                  )}
+                </div>
               </div>
 
               {/* Info */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-mono truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                    {film.id.slice(0, 8)}
+              <div className="p-2.5 space-y-2">
+                <div>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-mono truncate" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                      {film.id.slice(0, 8)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedQR(expandedQR === film.id ? null : film.id)}
+                      className="shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium transition"
+                      style={{
+                        background: expandedQR === film.id ? 'rgba(252,113,43,0.15)' : 'rgba(255,255,255,0.07)',
+                        color: expandedQR === film.id ? '#FC712B' : 'rgba(255,255,255,0.4)',
+                      }}
+                    >
+                      QR
+                    </button>
                   </div>
-                  <div className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                    {new Date(film.createdAt).toLocaleString('ko-KR')}
-                  </div>
-                  <div className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                    만료: {new Date(film.expiresAt).toLocaleDateString('ko-KR')}
-                  </div>
-                  <div className="flex gap-1 mt-1">
-                    {film.photoUrl && (
-                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>사진</span>
-                    )}
-                    {film.videoUrl && (
-                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(59,130,246,0.15)', color: '#3b82f6' }}>영상</span>
-                    )}
-                  </div>
+                  <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                    {new Date(film.createdAt).toLocaleDateString('ko-KR')}
+                  </span>
                 </div>
 
-                {/* QR Code */}
-                <button
-                  onClick={() => setExpandedQR(expandedQR === film.id ? null : film.id)}
-                  className="flex-shrink-0 p-1 rounded-lg transition"
-                  style={{ background: 'rgba(255,255,255,0.06)' }}
-                  title="QR 코드 보기"
-                >
-                  <QRCodeDisplay filmId={film.id} size={60} />
-                </button>
-              </div>
+                {/* QR 확장 */}
+                {expandedQR === film.id && (
+                  <div className="flex flex-col items-center py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                    <QRCodeDisplay filmId={film.id} size={100} />
+                  </div>
+                )}
 
-              {/* Expanded QR */}
-              {expandedQR === film.id && (
-                <div className="mt-3 pt-3 flex flex-col items-center" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                  <QRCodeDisplay filmId={film.id} size={200} />
-                  <p className="text-xs mt-2" style={{ color: 'rgba(255,255,255,0.3)' }}>인쇄/공유용</p>
+                {/* 액션 버튼 */}
+                <div className="space-y-1.5">
+                  {film.photoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(film.photoUrl!, film.id)}
+                      className="w-full py-2 rounded-lg text-xs font-bold transition active:scale-95"
+                      style={
+                        downloadedFilms.has(film.id)
+                          ? { background: 'rgba(74,222,128,0.1)', color: '#86efac', border: '1px solid rgba(74,222,128,0.2)' }
+                          : { background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)', color: 'white', boxShadow: '0 2px 8px rgba(252,113,43,0.25)' }
+                      }
+                    >
+                      {downloadedFilms.has(film.id) ? '다시 다운로드' : '사진 다운로드'}
+                    </button>
+                  )}
+                  {statusFilter === 'active' && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(film.id)}
+                      className="w-full py-2 rounded-lg text-xs font-bold transition active:scale-95"
+                      style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.22)' }}
+                    >
+                      삭제
+                    </button>
+                  )}
                 </div>
-              )}
-
-              {/* Actions */}
-              <div className="mt-3 pt-3 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                {film.photoUrl && (
-                  <button
-                    onClick={() => handleDownload(film.photoUrl!, film.id)}
-                    className="w-full py-2.5 rounded-lg text-sm font-bold transition active:scale-95"
-                    style={
-                      downloadedFilms.has(film.id)
-                        ? {
-                            background: 'rgba(74,222,128,0.1)',
-                            color: '#86efac',
-                            border: '1px solid rgba(74,222,128,0.2)',
-                          }
-                        : {
-                            background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
-                            color: 'white',
-                            boxShadow: '0 4px 12px rgba(252,113,43,0.3)',
-                          }
-                    }
-                  >
-                    {downloadedFilms.has(film.id) ? '다시 다운로드' : '사진 다운로드'}
-                  </button>
-                )}
-                {statusFilter === 'active' && (
-                  <button
-                    onClick={() => handleDelete(film.id)}
-                    className="w-full py-2.5 rounded-lg text-sm font-bold transition active:scale-95"
-                    style={{
-                      background: 'rgba(239,68,68,0.12)',
-                      color: '#ef4444',
-                      border: '1px solid rgba(239,68,68,0.25)',
-                    }}
-                  >
-                    삭제
-                  </button>
-                )}
               </div>
             </div>
           ))}
