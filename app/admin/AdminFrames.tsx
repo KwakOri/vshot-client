@@ -739,93 +739,111 @@ export default function AdminFrames() {
         </form>
       )}
 
-      {/* Frames Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredFrames.map((frame) => (
-          <div
-            key={frame.id}
-            className="rounded-xl border overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
-          >
-            {/* 썸네일 */}
-            <div className="aspect-[2/3] bg-black/30 relative flex items-center justify-center">
-              {frame.thumbnailUrl || frame.frameImageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={frame.thumbnailUrl || frame.frameImageUrl || ''}
-                  alt={frame.name}
-                  className="w-full h-full object-contain"
-                />
-              ) : (
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>No Image</span>
-              )}
-              <div className="absolute top-2 left-2 flex gap-1">
-                <span
-                  className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                  style={{
-                    background: frame.isPublic ? 'rgba(76,175,80,0.2)' : 'rgba(252,113,43,0.2)',
-                    color: frame.isPublic ? '#4CAF50' : '#FC712B',
-                  }}
-                >
-                  {frame.isPublic ? '공용' : '비공용'}
-                </span>
-                {!frame.isActive && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}>
-                    비활성
-                  </span>
-                )}
-              </div>
-            </div>
+      {/* Frames Grid - form이 열려 있으면 숨김 */}
+      {!showForm && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {filteredFrames.map((frame) => (
+              <div
+                key={frame.id}
+                className="rounded-xl border overflow-hidden"
+                style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
+              >
+                {/* 썸네일 */}
+                <div className="relative bg-black/30 flex items-center justify-center overflow-hidden" style={{ height: '140px' }}>
+                  {frame.thumbnailUrl || frame.frameImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={frame.thumbnailUrl || frame.frameImageUrl || ''}
+                      alt={frame.name}
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>No Image</span>
+                  )}
+                  <div className="absolute top-1.5 left-1.5 flex gap-1">
+                    <span
+                      className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                      style={{
+                        background: frame.isPublic ? 'rgba(76,175,80,0.2)' : 'rgba(252,113,43,0.2)',
+                        color: frame.isPublic ? '#4CAF50' : '#FC712B',
+                      }}
+                    >
+                      {frame.isPublic ? '공용' : '비공용'}
+                    </span>
+                    {!frame.isActive && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}>
+                        비활성
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-            {/* Info */}
-            <div className="p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold truncate" style={{ color: 'rgba(255,255,255,0.8)' }}>
-                  {frame.name}
-                </h4>
-                <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                  {frame.canvasWidth}x{frame.canvasHeight} / {frame.slotCount}칸
-                </span>
-              </div>
+                {/* Info */}
+                <div className="p-2.5 space-y-2">
+                  <div>
+                    <h4 className="text-xs font-bold truncate" style={{ color: 'rgba(255,255,255,0.8)' }}>
+                      {frame.name}
+                    </h4>
+                    <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                      {frame.canvasWidth}x{frame.canvasHeight} · {frame.slotCount}칸
+                    </span>
+                  </div>
 
-              {frame.description && (
-                <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.35)' }}>{frame.description}</p>
-              )}
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => openEditForm(frame)}
-                  className="text-xs font-semibold transition"
-                  style={{ color: '#FD9319' }}
-                >
-                  수정
-                </button>
-                {!frame.isPublic && (
-                  <button
-                    onClick={() => openAccessModal(frame)}
-                    className="text-xs font-semibold transition"
-                    style={{ color: '#4CAF50' }}
-                  >
-                    권한
-                  </button>
-                )}
-                <button
-                  onClick={() => handleDelete(frame.id)}
-                  className="text-xs font-semibold transition ml-auto"
-                  style={{ color: '#ef4444' }}
-                >
-                  삭제
-                </button>
+                  {/* 액션 버튼 */}
+                  <div className="space-y-1.5">
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openEditForm(frame); }}
+                        className="flex-1 py-2 rounded-lg text-xs font-bold transition active:scale-95"
+                        style={{
+                          background: 'linear-gradient(135deg, #FC712B 0%, #FD9319 100%)',
+                          color: 'white',
+                          boxShadow: '0 2px 8px rgba(252,113,43,0.25)',
+                        }}
+                      >
+                        수정
+                      </button>
+                      {!frame.isPublic && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openAccessModal(frame); }}
+                          className="flex-1 py-2 rounded-lg text-xs font-bold transition active:scale-95"
+                          style={{
+                            background: 'rgba(76,175,80,0.12)',
+                            color: '#4CAF50',
+                            border: '1px solid rgba(76,175,80,0.25)',
+                          }}
+                        >
+                          권한
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleDelete(frame.id); }}
+                      className="w-full py-2 rounded-lg text-xs font-bold transition active:scale-95"
+                      style={{
+                        background: 'rgba(239,68,68,0.1)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239,68,68,0.22)',
+                      }}
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {filteredFrames.length === 0 && (
-        <div className="text-center py-8 text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          프레임이 없습니다
-        </div>
+          {filteredFrames.length === 0 && (
+            <div className="text-center py-8 text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              프레임이 없습니다
+            </div>
+          )}
+        </>
       )}
 
       {/* Access Modal */}
