@@ -397,6 +397,7 @@ export default function HostV3RoomPage() {
         break;
       case 'countdown-tick-v3':
         if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
+          // hardMaxMs=12000: 5s countdown + 2s post-roll + 5s safety buffer
           videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
             const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
             if (layout && layout.frameSrc) {

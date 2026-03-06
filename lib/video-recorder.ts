@@ -8,6 +8,7 @@ export class VideoRecorder {
   private getCanvas: () => HTMLCanvasElement | null;
   private stream: MediaStream | null = null;
   private recordingTimeout: NodeJS.Timeout | null = null;
+  private hardMaxTimeout: NodeJS.Timeout | null = null;
   private onVideoComplete: ((blob: Blob, photoNumber: number) => void) | null = null;
   private currentPhotoNumber: number = 0;
 
@@ -19,13 +20,15 @@ export class VideoRecorder {
   /**
    * Start recording from canvas
    * @param photoNumber Current photo number (1-8)
-   * @param duration Recording duration in milliseconds (default: 10000ms)
+   * @param duration Recording duration in milliseconds (0 = manual stop)
    * @param onComplete Callback when recording completes
+   * @param hardMaxMs Hard maximum duration regardless of manual stop (prevents unbounded recording)
    */
   async startRecording(
     photoNumber: number,
     duration: number = 10000,
-    onComplete?: (blob: Blob, photoNumber: number) => void
+    onComplete?: (blob: Blob, photoNumber: number) => void,
+    hardMaxMs: number = 15000
   ): Promise<void> {
     const canvas = this.getCanvas();
     console.log('[VideoRecorder] startRecording called - photoNumber:', photoNumber);
@@ -81,13 +84,14 @@ export class VideoRecorder {
         console.error('[VideoRecorder] Recording error:', event);
       };
 
-      this.recorder.start();
+      // Use timeslice mode to flush chunks periodically (reduces memory pressure)
+      this.recorder.start(1000);
       console.log(`[VideoRecorder] Started recording for photo #${photoNumber}`);
       console.log(`[VideoRecorder] - Duration: ${duration === 0 ? 'continuous (manual stop)' : duration + 'ms (' + (duration / 1000) + 's)'}`);
+      console.log(`[VideoRecorder] - HardMax: ${hardMaxMs}ms`);
       console.log(`[VideoRecorder] - MimeType: ${mimeType}`);
 
       // Auto-stop after duration (if duration > 0)
-      // If duration is 0, recording continues until manually stopped
       if (duration > 0) {
         this.recordingTimeout = setTimeout(() => {
           this.stopRecording();
@@ -95,6 +99,14 @@ export class VideoRecorder {
       } else {
         console.log('[VideoRecorder] Continuous recording mode - will record until manually stopped');
       }
+
+      // Hard max watchdog: always fires to prevent unbounded recording
+      this.hardMaxTimeout = setTimeout(() => {
+        if (this.recorder?.state === 'recording') {
+          console.warn(`[VideoRecorder] Hard max watchdog triggered at ${hardMaxMs}ms for photo #${this.currentPhotoNumber}`);
+          this.stopRecording();
+        }
+      }, hardMaxMs);
 
     } catch (error) {
       console.error('[VideoRecorder] Failed to start recording:', error);
@@ -183,6 +195,11 @@ export class VideoRecorder {
     if (this.recordingTimeout) {
       clearTimeout(this.recordingTimeout);
       this.recordingTimeout = null;
+    }
+
+    if (this.hardMaxTimeout) {
+      clearTimeout(this.hardMaxTimeout);
+      this.hardMaxTimeout = null;
     }
 
     if (this.recorder && this.recorder.state !== 'inactive') {

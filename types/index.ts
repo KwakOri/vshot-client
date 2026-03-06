@@ -37,7 +37,7 @@ export type SignalMessage =
   | { type: 'countdown-tick-v3'; roomId: string; count: number }
   | { type: 'capture-now-v3'; roomId: string }
   | { type: 'photo-uploaded-v3'; roomId: string; userId: string; role: 'host' | 'guest'; photoUrl: string }
-  | { type: 'photos-merged-v3'; roomId: string; mergedPhotoUrl: string }
+  | { type: 'photos-merged-v3'; roomId: string; mergedPhotoUrl: string; mergeStatus?: 'provisional' | 'final' }
   | { type: 'session-complete-v3'; roomId: string; sessionId: string; frameResultUrl: string }
   // V3 Messages - Host Settings Sync
   | { type: 'host-settings-sync-v3'; roomId: string; settings: HostSettings }

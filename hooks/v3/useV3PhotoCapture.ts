@@ -168,12 +168,20 @@ export function useV3PhotoCapture({
           hostFlip,
         );
 
-        // Convert to base64
-        const photoBase64 = await blobToBase64(photoBlob);
+        // --- Insurance upload (small JPEG, sent first for fast provisional merge) ---
+        setUploadProgress(5);
+        const insuranceBlob = await createInsuranceJpeg(photoBlob);
+        const insuranceBase64 = await blobToBase64(insuranceBlob);
+        uploadPhotoWithRetry(roomId, userId, role, insuranceBase64, 'insurance').then(() => {
+          console.log(`[V3PhotoCapture] Insurance upload complete for ${role}`);
+        }).catch((err) => {
+          console.warn('[V3PhotoCapture] Insurance upload failed (non-fatal):', err);
+        });
 
-        // Upload to server
+        // --- Final upload (full-res PNG) ---
         setUploadProgress(10);
-        const photoUrl = await uploadPhoto(roomId, userId, role, photoBase64);
+        const photoBase64 = await blobToBase64(photoBlob);
+        const photoUrl = await uploadPhotoWithRetry(roomId, userId, role, photoBase64, 'final');
 
         setUploadProgress(100);
         setCapturedPhotoUrl(photoUrl);
@@ -490,40 +498,83 @@ async function blobToBase64(blob: Blob): Promise<string> {
 }
 
 /**
- * Upload photo to server
+ * Create a small JPEG insurance image (long-edge 720px) from a full-res blob.
+ * Used as a fast provisional upload before the full-res PNG.
  */
-async function uploadPhoto(
+async function createInsuranceJpeg(blob: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob);
+  const { width, height } = bitmap;
+
+  const maxEdge = 720;
+  const scale = Math.min(maxEdge / Math.max(width, height), 1);
+  const targetW = Math.round(width * scale);
+  const targetH = Math.round(height * scale);
+
+  const canvas = new OffscreenCanvas(targetW, targetH);
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+  bitmap.close();
+
+  const insuranceBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.65 });
+  console.log(`[V3PhotoCapture] Insurance JPEG: ${targetW}x${targetH}, ${(insuranceBlob.size / 1024).toFixed(0)}KB`);
+  return insuranceBlob;
+}
+
+/**
+ * Upload photo to server with simple retry (up to 3 attempts)
+ */
+async function uploadPhotoWithRetry(
   roomId: string,
   userId: string,
   role: 'host' | 'guest',
-  imageData: string
+  imageData: string,
+  uploadType: 'insurance' | 'final' = 'final',
+  maxAttempts = 3
 ): Promise<string> {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
-  const response = await fetch(`${API_URL}/api/photo-v3/upload`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': API_KEY || '',
-    },
-    body: JSON.stringify({
-      roomId,
-      userId,
-      role,
-      imageData,
-    }),
-  });
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(
-      `Upload failed: ${response.status} ${response.statusText} - ${errorData.error || 'Unknown error'}`
-    );
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(`${API_URL}/api/photo-v3/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY || '',
+        },
+        body: JSON.stringify({
+          roomId,
+          userId,
+          role,
+          imageData,
+          uploadType,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          `Upload failed: ${response.status} ${response.statusText} - ${errorData.error || 'Unknown error'}`
+        );
+      }
+
+      const data = await response.json();
+      if (attempt > 1) {
+        console.log(`[V3PhotoCapture] ${uploadType} upload succeeded on attempt ${attempt}`);
+      }
+      return data.url;
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(`[V3PhotoCapture] ${uploadType} upload attempt ${attempt}/${maxAttempts} failed:`, error);
+      if (attempt < maxAttempts) {
+        await sleep(1000 * attempt); // Back-off: 1s, 2s
+      }
+    }
   }
 
-  const data = await response.json();
-  return data.url;
+  throw lastError!;
 }
 
 /**
