@@ -17,6 +17,7 @@ import { useWebRTC } from '@/hooks/useWebRTC';
 import { useGuestManagement } from '@/hooks/v3/useGuestManagement';
 import { useV3PhotoCapture } from '@/hooks/v3/useV3PhotoCapture';
 import { generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
+import { getProxyDownloadUrl } from '@/lib/proxy-download';
 import { useAppStore } from '@/lib/store';
 import { VideoRecorder, downloadVideo } from '@/lib/video-recorder';
 import { composeVideoWithWebGL, VideoSource } from '@/lib/webgl-video-composer';
@@ -168,10 +169,11 @@ export default function HostV3RoomPage() {
       const filmId = nanoid(8);
       let framedBlobUrl: string | null = null;
       const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
+      const frameSourceUrl = getProxyDownloadUrl(frameResultUrl, `festa-merge-${sessionId}.png`);
       if (layout) {
         try {
           const t1 = performance.now();
-          framedBlobUrl = await generatePhotoFrameBlobWithLayout([frameResultUrl], layout, filmId);
+          framedBlobUrl = await generatePhotoFrameBlobWithLayout([frameSourceUrl], layout, filmId);
           console.log(`[⏱ Timing] 1. 프레임 이미지 생성: ${(performance.now() - t1).toFixed(0)}ms`);
           setLastSessionResult({ sessionId, frameResultUrl: framedBlobUrl });
         } catch (err) {
@@ -187,11 +189,14 @@ export default function HostV3RoomPage() {
       // Film auto-creation (background)
       (async () => {
         try {
-          const photoSrc = framedBlobUrl || frameResultUrl;
+          const photoSrc = framedBlobUrl || frameSourceUrl;
           let photoFileId: string | undefined;
           if (photoSrc) {
             const t2 = performance.now();
             const photoResponse = await fetch(photoSrc);
+            if (!photoResponse.ok) {
+              throw new Error(`Failed to fetch photo asset: ${photoResponse.status} ${photoResponse.statusText}`);
+            }
             const photoBlob = await photoResponse.blob();
             console.log(`[⏱ Timing] 2. 사진 Blob 변환: ${(performance.now() - t2).toFixed(0)}ms (${(photoBlob.size / 1024).toFixed(0)}KB)`);
 
