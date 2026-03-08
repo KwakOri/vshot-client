@@ -24,9 +24,9 @@ export default function Home() {
   const handleStartCapture = useCallback(() => {
     store.reset();
     if (role === 'host') {
-      router.push('/festa-host');
+      router.push('/photo-host');
     } else {
-      router.push('/festa-guest');
+      router.push('/photo-guest');
     }
   }, [store, router, role]);
 
@@ -225,7 +225,7 @@ export default function Home() {
                 <>
                   {role === 'host' && (
                     <button
-                      onClick={() => handleMenuNav('/festa-host')}
+                      onClick={() => handleMenuNav('/photo-host')}
                       className="group flex items-center gap-3 rounded-xl px-4 py-3.5 text-left transition-all hover:bg-white/10"
                     >
                       <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary transition-colors group-hover:bg-primary/25">
@@ -236,7 +236,7 @@ export default function Home() {
                       </span>
                       <div>
                         <div className="text-sm font-semibold text-white">부스 만들기</div>
-                        <div className="text-xs text-white/40">Festa Host 모드</div>
+                        <div className="text-xs text-white/40">Photo Host 모드</div>
                       </div>
                     </button>
                   )}
