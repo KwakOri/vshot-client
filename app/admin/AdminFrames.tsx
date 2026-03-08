@@ -926,7 +926,7 @@ export default function AdminFrames() {
                   borderColor: 'rgba(255,255,255,0.08)',
                 }}
               >
-                <div className="relative mt-3 bg-black/30 overflow-hidden aspect-[3/4]">
+                <div className="relative mt-3 overflow-hidden aspect-[3/4]">
                   {/* 이미지 레이어 */}
                   {frame.thumbnailUrl || frame.frameImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
