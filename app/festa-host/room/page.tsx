@@ -22,6 +22,7 @@ import { VideoRecorder, downloadVideo } from '@/lib/video-recorder';
 import { composeVideoWithWebGL, VideoSource } from '@/lib/webgl-video-composer';
 import { uploadBlob } from '@/lib/files';
 import { createFilm } from '@/lib/films';
+import { DEFAULT_V3_RECORDING_TIMING, shouldStartRecordingAtCount } from '@/lib/recording-timing';
 import { nanoid } from 'nanoid';
 import { SessionState, SignalMessage } from '@/types';
 import { useRouter } from 'next/navigation';
@@ -99,6 +100,7 @@ export default function HostV3RoomPage() {
   } | null>(null);
 
   const videoRecorderRef = useRef<VideoRecorder | null>(null);
+  const recordingStopTimeoutRef = useRef<number | null>(null);
   const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
   const recordedVideoBlobRef = useRef<Blob | null>(null);
   const [isVideoProcessing, setIsVideoProcessing] = useState(false);
@@ -279,6 +281,14 @@ export default function HostV3RoomPage() {
     guestBlurAmount: 0,
   });
 
+  useEffect(() => {
+    return () => {
+      if (recordingStopTimeoutRef.current) {
+        window.clearTimeout(recordingStopTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Preview canvas: with blur (displayed on screen)
   useCompositeCanvas({
     compositeCanvas: previewCanvasRef.current,
@@ -396,8 +406,11 @@ export default function HostV3RoomPage() {
         setSessionState(SessionState.WAITING_FOR_GUEST);
         break;
       case 'countdown-tick-v3':
-        if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
-          // hardMaxMs=12000: 5s countdown + 2s post-roll + 5s safety buffer
+        if (
+          shouldStartRecordingAtCount(message.count, DEFAULT_V3_RECORDING_TIMING) &&
+          videoRecorderRef.current &&
+          !videoRecorderRef.current.isRecording()
+        ) {
           videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
             const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
             if (layout && layout.frameSrc) {
@@ -433,17 +446,20 @@ export default function HostV3RoomPage() {
               setRecordedVideoBlob(rawBlob);
               recordedVideoBlobRef.current = rawBlob;
             }
-          }).catch((err) => console.error('[Festa Host] Video recording start error:', err));
+          }, DEFAULT_V3_RECORDING_TIMING.hardMaxMs).catch((err) => console.error('[Festa Host] Video recording start error:', err));
         }
         break;
       case 'capture-now-v3':
         setShowFlash(true);
         setTimeout(() => setShowFlash(false), 300);
-        setTimeout(() => {
+        if (recordingStopTimeoutRef.current) {
+          window.clearTimeout(recordingStopTimeoutRef.current);
+        }
+        recordingStopTimeoutRef.current = window.setTimeout(() => {
           if (videoRecorderRef.current?.isRecording()) {
             videoRecorderRef.current.stopRecording();
           }
-        }, 2000);
+        }, DEFAULT_V3_RECORDING_TIMING.postRollMs);
         break;
       case 'qr-dismissed-festa':
         setIsGuestViewingQR(false);

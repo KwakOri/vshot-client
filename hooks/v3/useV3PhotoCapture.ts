@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, useEffectEvent } from 'react';
+import { uploadBlobWithResume } from '@/lib/resumable-upload';
 import { SignalMessage } from '@/types';
 
 interface ChromaKeySettings {
@@ -178,10 +179,12 @@ export function useV3PhotoCapture({
           console.warn('[V3PhotoCapture] Insurance upload failed (non-fatal):', err);
         });
 
-        // --- Final upload (full-res PNG) ---
+        // --- Final upload (full-res PNG, resumable) ---
         setUploadProgress(10);
-        const photoBase64 = await blobToBase64(photoBlob);
-        const photoUrl = await uploadPhotoWithRetry(roomId, userId, role, photoBase64, 'final');
+        const photoUrl = await uploadFinalPhotoWithResume(roomId, userId, role, photoBlob, (progress) => {
+          const normalized = 10 + Math.round(progress * 0.85);
+          setUploadProgress(Math.min(95, normalized));
+        });
 
         setUploadProgress(100);
         setCapturedPhotoUrl(photoUrl);
@@ -575,6 +578,36 @@ async function uploadPhotoWithRetry(
   }
 
   throw lastError!;
+}
+
+async function uploadFinalPhotoWithResume(
+  roomId: string,
+  userId: string,
+  role: 'host' | 'guest',
+  blob: Blob,
+  onProgress?: (progress: number) => void
+): Promise<string> {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
+  const headers = API_KEY ? { 'X-API-Key': API_KEY } : undefined;
+
+  const data = await uploadBlobWithResume<{ url: string }>({
+    blob,
+    startUrl: `${API_URL}/api/photo-v3/uploads/start`,
+    startBody: {
+      roomId,
+      userId,
+      role,
+      uploadType: 'final',
+    },
+    getChunkUrl: (uploadId) => `${API_URL}/api/photo-v3/uploads/${uploadId}/chunk`,
+    getStatusUrl: (uploadId) => `${API_URL}/api/photo-v3/uploads/${uploadId}/status`,
+    getCompleteUrl: (uploadId) => `${API_URL}/api/photo-v3/uploads/${uploadId}/complete`,
+    headers,
+    onProgress,
+  });
+
+  return data.url;
 }
 
 /**

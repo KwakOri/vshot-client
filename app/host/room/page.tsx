@@ -22,6 +22,7 @@ import { useWebRTC } from '@/hooks/useWebRTC';
 import { useGuestManagement } from '@/hooks/v3/useGuestManagement';
 import { useV3PhotoCapture } from '@/hooks/v3/useV3PhotoCapture';
 import { generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
+import { DEFAULT_V3_RECORDING_TIMING, shouldStartRecordingAtCount } from '@/lib/recording-timing';
 import { useAppStore } from '@/lib/store';
 import { VideoRecorder, downloadVideo } from '@/lib/video-recorder';
 import { composeVideoWithWebGL, VideoSource } from '@/lib/webgl-video-composer';
@@ -84,6 +85,7 @@ export default function HostV3RoomPage() {
   } | null>(null);
 
   const videoRecorderRef = useRef<VideoRecorder | null>(null);
+  const recordingStopTimeoutRef = useRef<number | null>(null);
   const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
   const [isVideoProcessing, setIsVideoProcessing] = useState(false);
   const [videoProcessingProgress, setVideoProcessingProgress] = useState('');
@@ -203,6 +205,14 @@ export default function HostV3RoomPage() {
   }, [settingsLoaded]);
 
   useEffect(() => {
+    return () => {
+      if (recordingStopTimeoutRef.current) {
+        window.clearTimeout(recordingStopTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (initializedRef.current) return;
     if (!store._hasHydrated) return;
 
@@ -291,7 +301,11 @@ export default function HostV3RoomPage() {
         setSessionState(SessionState.WAITING_FOR_GUEST);
         break;
       case 'countdown-tick-v3':
-        if (message.count === 5 && videoRecorderRef.current && !videoRecorderRef.current.isRecording()) {
+        if (
+          shouldStartRecordingAtCount(message.count, DEFAULT_V3_RECORDING_TIMING) &&
+          videoRecorderRef.current &&
+          !videoRecorderRef.current.isRecording()
+        ) {
           videoRecorderRef.current.startRecording(1, 0, async (rawBlob) => {
             const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
             if (layout && layout.frameSrc) {
@@ -324,15 +338,18 @@ export default function HostV3RoomPage() {
             } else {
               setRecordedVideoBlob(rawBlob);
             }
-          }).catch((err) => console.error('[Host V3] Video recording start error:', err));
+          }, DEFAULT_V3_RECORDING_TIMING.hardMaxMs).catch((err) => console.error('[Host V3] Video recording start error:', err));
         }
         break;
       case 'capture-now-v3':
-        setTimeout(() => {
+        if (recordingStopTimeoutRef.current) {
+          window.clearTimeout(recordingStopTimeoutRef.current);
+        }
+        recordingStopTimeoutRef.current = window.setTimeout(() => {
           if (videoRecorderRef.current?.isRecording()) {
             videoRecorderRef.current.stopRecording();
           }
-        }, 2000);
+        }, DEFAULT_V3_RECORDING_TIMING.postRollMs);
         break;
     }
   });
