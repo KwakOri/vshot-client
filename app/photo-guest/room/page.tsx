@@ -102,7 +102,9 @@ export default function GuestV3RoomPage() {
     },
     onMergeComplete: (mergedPhotoUrl) => {
       console.log('[Guest V3] Photos merged:', mergedPhotoUrl);
-      setSessionState(SessionState.PROCESSING);
+      setSessionState((current) =>
+        current === SessionState.COMPLETED ? current : SessionState.PROCESSING
+      );
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
       console.log('[Festa Guest] Session complete:', sessionId);
@@ -485,39 +487,63 @@ export default function GuestV3RoomPage() {
       <FlashOverlay show={showFlash} />
       <CountdownOverlay countdown={photoCapture.countdown} frameLayout={selectedLayout || null} />
 
-      {/* ===== Redirect Popup ===== */}
+      {/* ===== Redirect Bottom Sheet ===== */}
       {showRedirectPopup && filmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: 'rgba(27,22,18,0.9)' }}>
+        <>
           <div
-            className="rounded-2xl p-8 max-w-sm w-full flex flex-col items-center gap-5 animate-slide-up"
-            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
-          >
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                  <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-                <p className="font-bold text-xl text-white">촬영 완료!</p>
-              </div>
-              <p className="text-sm text-white/50">잠시 후 사진 받기 페이지로 이동합니다</p>
-            </div>
-
-            {redirectCountdown !== null && (
-              <p className="text-sm text-white/40">
-                {redirectCountdown}초 후 자동으로 이동합니다
-              </p>
-            )}
-
-            <button
-              onClick={() => navigateToDownload()}
-              className="w-full py-3 rounded-xl font-bold text-white text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
-              style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)', boxShadow: '0 4px 20px rgba(252,113,43,0.4)' }}
+            className="fixed inset-x-0 bottom-0 z-40 h-56 pointer-events-none"
+            style={{ background: 'linear-gradient(180deg, rgba(27,22,18,0) 0%, rgba(27,22,18,0.4) 35%, rgba(27,22,18,0.88) 100%)' }}
+          />
+          <div className="fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-4 pointer-events-none">
+            <div
+              className="w-full max-w-md rounded-[28px] px-5 py-4 animate-slide-up pointer-events-auto"
+              style={{
+                background: 'rgba(27,22,18,0.82)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                boxShadow: '0 24px 60px rgba(0,0,0,0.32)',
+                backdropFilter: 'blur(18px)',
+              }}
             >
-              사진 받으러 가기
-            </button>
+              <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-white/15" />
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                      <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                    <p className="font-bold text-lg text-white">촬영 완료</p>
+                  </div>
+                  <p className="text-sm text-white/65 leading-relaxed">
+                    잠시 더 대화를 나눈 뒤 사진 받기 페이지로 이동할 수 있어요.
+                  </p>
+                </div>
+                {redirectCountdown !== null && (
+                  <div
+                    className="flex-shrink-0 rounded-2xl px-3 py-2 text-center"
+                    style={{ background: 'rgba(252,113,43,0.14)', border: '1px solid rgba(252,113,43,0.18)' }}
+                  >
+                    <div className="text-lg font-bold text-white leading-none">{redirectCountdown}</div>
+                    <div className="mt-1 text-[10px] font-bold tracking-[0.18em] text-white/45">SECONDS</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <p className="text-xs text-white/40">
+                  {redirectCountdown !== null ? `${redirectCountdown}초 후 자동 이동` : '준비가 끝나면 자동 이동'}
+                </p>
+                <button
+                  onClick={() => navigateToDownload()}
+                  className="min-w-[148px] py-3 px-4 rounded-2xl font-bold text-white text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)', boxShadow: '0 8px 24px rgba(252,113,43,0.28)' }}
+                >
+                  사진 받으러 가기
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* ===== FULLSCREEN VIDEO ===== */}

@@ -32,6 +32,8 @@ import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid';
 
 export default function HostV3RoomPage() {
+  type PhotoDeliveryState = 'idle' | 'preparing' | 'waiting' | 'navigating';
+
   const router = useRouter();
   const store = useAppStore();
   const wsUrl = (process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001/signaling').replace('/signaling', '/signaling-v3');
@@ -92,9 +94,8 @@ export default function HostV3RoomPage() {
   const [pendingAudioDeviceId, setPendingAudioDeviceId] = useState<string | null>(null);
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
-  const [isGuestRedirecting, setIsGuestRedirecting] = useState(false);
+  const [photoDeliveryState, setPhotoDeliveryState] = useState<PhotoDeliveryState>('idle');
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
-  const [isGuestNavigatingToDownload, setIsGuestNavigatingToDownload] = useState(false);
   const [copied, setCopied] = useState(false);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -163,7 +164,9 @@ export default function HostV3RoomPage() {
     },
     onMergeComplete: (mergedPhotoUrl) => {
       console.log('[Host V3] Photos merged:', mergedPhotoUrl);
-      setSessionState(SessionState.PROCESSING);
+      setSessionState((current) =>
+        current === SessionState.COMPLETED ? current : SessionState.PROCESSING
+      );
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
       const t0 = performance.now();
@@ -187,9 +190,8 @@ export default function HostV3RoomPage() {
         setLastSessionResult({ sessionId, frameResultUrl });
       }
       setSessionState(SessionState.COMPLETED);
-      setIsGuestRedirecting(true);
-      setIsGuestNavigatingToDownload(false);
-      setRedirectCountdown(PHOTO_REDIRECT_COUNTDOWN_SECONDS);
+      setPhotoDeliveryState('preparing');
+      setRedirectCountdown(null);
 
       // Film auto-creation (background)
       (async () => {
@@ -380,9 +382,8 @@ export default function HostV3RoomPage() {
         setLastSessionResult(null);
         setRecordedVideoBlob(null);
         recordedVideoBlobRef.current = null;
-        setIsGuestRedirecting(false);
+        setPhotoDeliveryState('idle');
         setRedirectCountdown(null);
-        setIsGuestNavigatingToDownload(false);
         // Re-send current settings to new guest
         if (store.roomId) {
           sendMessage({
@@ -413,15 +414,13 @@ export default function HostV3RoomPage() {
       case 'guest-left-v3':
         setSessionState(SessionState.WAITING_FOR_GUEST);
         photoCapture.reset();
-        setIsGuestRedirecting(false);
+        setPhotoDeliveryState('idle');
         setRedirectCountdown(null);
-        setIsGuestNavigatingToDownload(false);
         break;
       case 'waiting-for-guest-v3':
         setSessionState(SessionState.WAITING_FOR_GUEST);
-        setIsGuestRedirecting(false);
+        setPhotoDeliveryState('idle');
         setRedirectCountdown(null);
-        setIsGuestNavigatingToDownload(false);
         break;
       case 'countdown-tick-v3':
         if (
@@ -479,16 +478,21 @@ export default function HostV3RoomPage() {
           }
         }, DEFAULT_V3_RECORDING_TIMING.postRollMs);
         break;
+      case 'film-ready-festa':
+        setPhotoDeliveryState('waiting');
+        setRedirectCountdown(PHOTO_REDIRECT_COUNTDOWN_SECONDS);
+        break;
       case 'qr-countdown-festa':
+        setPhotoDeliveryState('waiting');
         setRedirectCountdown(message.count);
         break;
       case 'qr-auto-close-festa':
+        setPhotoDeliveryState('navigating');
         setRedirectCountdown(0);
-        setIsGuestNavigatingToDownload(true);
         break;
       case 'qr-dismissed-festa':
+        setPhotoDeliveryState('navigating');
         setRedirectCountdown(null);
-        setIsGuestNavigatingToDownload(true);
         break;
     }
   });
@@ -1279,7 +1283,7 @@ export default function HostV3RoomPage() {
           className="absolute bottom-4 right-4 z-30 w-80 rounded-2xl backdrop-blur-xl p-4 animate-slide-up"
           style={{ background: 'rgba(27,22,18,0.95)', border: '1px solid rgba(255,255,255,0.1)' }}
         >
-          {isGuestRedirecting ? (
+          {photoDeliveryState !== 'idle' ? (
             <div className="flex items-center gap-3">
               <div className="flex-shrink-0">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(252,113,43,0.2)' }}>
@@ -1288,10 +1292,16 @@ export default function HostV3RoomPage() {
               </div>
               <div>
                 <p className="text-white text-sm font-bold">
-                  {isGuestNavigatingToDownload ? '게스트가 결과 페이지로 이동 중' : '게스트가 결과 페이지로 이동 대기 중'}
+                  {photoDeliveryState === 'preparing'
+                    ? '결과 페이지를 준비하는 중'
+                    : photoDeliveryState === 'navigating'
+                    ? '게스트가 결과 페이지로 이동 중'
+                    : '게스트가 결과 페이지로 이동 대기 중'}
                 </p>
                 <p className="text-white/40 text-xs mt-0.5">
-                  {isGuestNavigatingToDownload
+                  {photoDeliveryState === 'preparing'
+                    ? '사진과 영상을 정리한 뒤 게스트에게 전달합니다'
+                    : photoDeliveryState === 'navigating'
                     ? '세션이 곧 정리됩니다'
                     : `${redirectCountdown ?? PHOTO_REDIRECT_COUNTDOWN_SECONDS}초 후 자동 이동합니다`}
                 </p>
