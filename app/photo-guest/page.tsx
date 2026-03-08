@@ -7,7 +7,7 @@ export default function GuestV3Page() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/festa-guest/ready');
+    router.replace('/photo-guest/ready');
   }, [router]);
 
   return (

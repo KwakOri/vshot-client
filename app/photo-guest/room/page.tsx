@@ -14,9 +14,9 @@ import { useSignaling } from '@/hooks/useSignaling';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { useGuestManagement } from '@/hooks/v3/useGuestManagement';
 import { useV3PhotoCapture } from '@/hooks/v3/useV3PhotoCapture';
+import { getPhotoDownloadPath, PHOTO_REDIRECT_COUNTDOWN_SECONDS } from '@/lib/photo-redirect';
 import { useAppStore } from '@/lib/store';
 import { SessionState, SignalMessage } from '@/types';
-import { QRCodeDisplay } from '@/components/QRCodeDisplay';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
@@ -24,7 +24,7 @@ export default function GuestV3RoomPage() {
   const router = useRouter();
   const store = useAppStore();
   const wsUrl = (process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001/signaling').replace('/signaling', '/signaling-v3');
-  const { connect, sendMessage, on, off, isConnected } = useSignaling({ wsUrl });
+  const { connect, disconnect, sendMessage, on, off, isConnected } = useSignaling({ wsUrl });
   const { localStream, remoteStream, startLocalStream } = useWebRTC({
     sendMessage,
     on,
@@ -46,8 +46,8 @@ export default function GuestV3RoomPage() {
   const [localMicMuted, setLocalMicMuted] = useState(false);
 
   const [filmId, setFilmId] = useState<string | null>(null);
-  const [showQRPopup, setShowQRPopup] = useState(false);
-  const [qrCountdown, setQrCountdown] = useState<number | null>(null);
+  const [showRedirectPopup, setShowRedirectPopup] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
 
   const { videoDevices, audioDevices, audioOutputDevices, refreshDevices } = useMediaDevices();
   const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState<string | null>(
@@ -73,6 +73,7 @@ export default function GuestV3RoomPage() {
   const remoteCanvasRef = useRef<HTMLCanvasElement>(null);
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
   const initializedRef = useRef(false);
+  const hasNavigatedToDownloadRef = useRef(false);
 
   const guestManagement = useGuestManagement({
     roomId: store.roomId || '',
@@ -156,7 +157,7 @@ export default function GuestV3RoomPage() {
     if (!store._hasHydrated) return;
 
     if (!store.roomId || store.role !== 'guest') {
-      router.push('/festa-guest/ready');
+      router.push('/photo-guest/ready');
       return;
     }
 
@@ -179,7 +180,7 @@ export default function GuestV3RoomPage() {
       } catch (error) {
         console.error('[Guest V3] Error:', error);
         alert('연결에 실패했습니다.');
-        router.push('/festa-guest/ready');
+        router.push('/photo-guest/ready');
       }
     };
 
@@ -229,6 +230,28 @@ export default function GuestV3RoomPage() {
     }
   };
 
+  const navigateToDownload = useCallback((shouldNotifyServer = true) => {
+    if (!filmId || hasNavigatedToDownloadRef.current) {
+      return;
+    }
+
+    hasNavigatedToDownloadRef.current = true;
+
+    if (store.roomId && shouldNotifyServer) {
+      sendMessage({ type: 'qr-dismissed-festa', roomId: store.roomId });
+    }
+    if (store.roomId) {
+      sendMessage({ type: 'leave', roomId: store.roomId, userId: store.userId });
+    }
+
+    if (localStream) {
+      localStream.getTracks().forEach((track) => track.stop());
+    }
+
+    disconnect();
+    router.push(getPhotoDownloadPath(filmId));
+  }, [disconnect, filmId, localStream, router, sendMessage, store.roomId, store.userId]);
+
   const handleV3Signal = useEffectEvent((message: any) => {
     guestManagement.registerSignalHandlers(message);
     photoCapture.handleSignalMessage(message);
@@ -269,23 +292,21 @@ export default function GuestV3RoomPage() {
         break;
       case 'film-ready-festa':
         setFilmId(message.filmId);
-        setShowQRPopup(true);
-        setQrCountdown(null);
+        setShowRedirectPopup(true);
+        setRedirectCountdown(PHOTO_REDIRECT_COUNTDOWN_SECONDS);
+        setSessionState(SessionState.COMPLETED);
         break;
       case 'qr-countdown-festa':
-        setQrCountdown(message.count);
+        setRedirectCountdown(message.count);
         break;
       case 'qr-auto-close-festa':
-        setShowQRPopup(false);
-        setFilmId(null);
-        setQrCountdown(null);
-        setSessionState(SessionState.GUEST_CONNECTED);
+        navigateToDownload(false);
         break;
       case 'session-reset-festa':
         photoCapture.reset();
-        setShowQRPopup(false);
+        setShowRedirectPopup(false);
         setFilmId(null);
-        setQrCountdown(null);
+        setRedirectCountdown(null);
         setSessionState(SessionState.GUEST_CONNECTED);
         break;
     }
@@ -386,7 +407,7 @@ export default function GuestV3RoomPage() {
     if (localStream) localStream.getTracks().forEach((track) => track.stop());
     store.setRoomId(null as any);
     store.setRole(null);
-    router.push('/festa-guest/ready');
+    router.push('/photo-guest/ready');
   };
 
   const openSettings = () => {
@@ -464,8 +485,8 @@ export default function GuestV3RoomPage() {
       <FlashOverlay show={showFlash} />
       <CountdownOverlay countdown={photoCapture.countdown} frameLayout={selectedLayout || null} />
 
-      {/* ===== QR Code Popup ===== */}
-      {showQRPopup && filmId && (
+      {/* ===== Redirect Popup ===== */}
+      {showRedirectPopup && filmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: 'rgba(27,22,18,0.9)' }}>
           <div
             className="rounded-2xl p-8 max-w-sm w-full flex flex-col items-center gap-5 animate-slide-up"
@@ -479,33 +500,21 @@ export default function GuestV3RoomPage() {
                 </svg>
                 <p className="font-bold text-xl text-white">촬영 완료!</p>
               </div>
-              <p className="text-sm text-white/50">QR 코드를 스캔하여 사진을 다운로드하세요</p>
+              <p className="text-sm text-white/50">잠시 후 사진 받기 페이지로 이동합니다</p>
             </div>
 
-            <div className="bg-white rounded-xl p-3">
-              <QRCodeDisplay filmId={filmId} size={200} />
-            </div>
-
-            {qrCountdown !== null && (
+            {redirectCountdown !== null && (
               <p className="text-sm text-white/40">
-                이 팝업은 {qrCountdown}초 후에 닫힙니다
+                {redirectCountdown}초 후 자동으로 이동합니다
               </p>
             )}
 
             <button
-              onClick={() => {
-                if (store.roomId) {
-                  sendMessage({ type: 'qr-dismissed-festa', roomId: store.roomId });
-                }
-                setShowQRPopup(false);
-                setFilmId(null);
-                setQrCountdown(null);
-                setSessionState(SessionState.GUEST_CONNECTED);
-              }}
+              onClick={() => navigateToDownload()}
               className="w-full py-3 rounded-xl font-bold text-white text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
               style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)', boxShadow: '0 4px 20px rgba(252,113,43,0.4)' }}
             >
-              닫기
+              사진 받으러 가기
             </button>
           </div>
         </div>

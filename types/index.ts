@@ -1,6 +1,6 @@
 // Signal message types (matching server)
 export type SignalMessage =
-  | { type: 'join'; roomId: string; userId: string; role: 'host' | 'guest'; mode?: 'v3' | 'festa' }
+  | { type: 'join'; roomId: string; userId: string; role: 'host' | 'guest'; mode?: 'v3' | 'festa' | 'photo' }
   | { type: 'joined'; roomId: string; role: 'host' | 'guest'; userId: string; hostId?: string }
   | { type: 'peer-joined'; userId: string; role: 'host' | 'guest' }
   | { type: 'peer-left'; userId: string }

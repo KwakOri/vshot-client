@@ -17,6 +17,7 @@ import { useWebRTC } from '@/hooks/useWebRTC';
 import { useGuestManagement } from '@/hooks/v3/useGuestManagement';
 import { useV3PhotoCapture } from '@/hooks/v3/useV3PhotoCapture';
 import { generatePhotoFrameBlobWithLayout } from '@/lib/frame-generator';
+import { PHOTO_REDIRECT_COUNTDOWN_SECONDS } from '@/lib/photo-redirect';
 import { getProxyDownloadUrl } from '@/lib/proxy-download';
 import { useAppStore } from '@/lib/store';
 import { VideoRecorder, downloadVideo } from '@/lib/video-recorder';
@@ -91,7 +92,9 @@ export default function HostV3RoomPage() {
   const [pendingAudioDeviceId, setPendingAudioDeviceId] = useState<string | null>(null);
   const [pendingAudioOutputDeviceId, setPendingAudioOutputDeviceId] = useState<string | null>(null);
 
-  const [isGuestViewingQR, setIsGuestViewingQR] = useState(false);
+  const [isGuestRedirecting, setIsGuestRedirecting] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+  const [isGuestNavigatingToDownload, setIsGuestNavigatingToDownload] = useState(false);
   const [copied, setCopied] = useState(false);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -184,7 +187,9 @@ export default function HostV3RoomPage() {
         setLastSessionResult({ sessionId, frameResultUrl });
       }
       setSessionState(SessionState.COMPLETED);
-      setIsGuestViewingQR(true);
+      setIsGuestRedirecting(true);
+      setIsGuestNavigatingToDownload(false);
+      setRedirectCountdown(PHOTO_REDIRECT_COUNTDOWN_SECONDS);
 
       // Film auto-creation (background)
       (async () => {
@@ -323,7 +328,7 @@ export default function HostV3RoomPage() {
     if (!store._hasHydrated) return;
 
     if (store.role !== 'host') {
-      router.push('/festa-host/ready');
+      router.push('/photo-host/ready');
       return;
     }
 
@@ -339,7 +344,7 @@ export default function HostV3RoomPage() {
           roomId,
           userId: store.userId,
           role: 'host',
-          mode: 'festa',
+          mode: 'photo',
         });
         // Sync frame selection to server so guest-joined-v3 includes correct layout
         if (store.selectedFrameLayoutId) {
@@ -354,7 +359,7 @@ export default function HostV3RoomPage() {
       } catch (error) {
         console.error('[Festa Host] Init error:', error);
         alert('서버 연결에 실패했습니다.');
-        router.push('/festa-host/ready');
+        router.push('/photo-host/ready');
       }
     };
 
@@ -375,7 +380,9 @@ export default function HostV3RoomPage() {
         setLastSessionResult(null);
         setRecordedVideoBlob(null);
         recordedVideoBlobRef.current = null;
-        setIsGuestViewingQR(false);
+        setIsGuestRedirecting(false);
+        setRedirectCountdown(null);
+        setIsGuestNavigatingToDownload(false);
         // Re-send current settings to new guest
         if (store.roomId) {
           sendMessage({
@@ -406,9 +413,15 @@ export default function HostV3RoomPage() {
       case 'guest-left-v3':
         setSessionState(SessionState.WAITING_FOR_GUEST);
         photoCapture.reset();
+        setIsGuestRedirecting(false);
+        setRedirectCountdown(null);
+        setIsGuestNavigatingToDownload(false);
         break;
       case 'waiting-for-guest-v3':
         setSessionState(SessionState.WAITING_FOR_GUEST);
+        setIsGuestRedirecting(false);
+        setRedirectCountdown(null);
+        setIsGuestNavigatingToDownload(false);
         break;
       case 'countdown-tick-v3':
         if (
@@ -466,8 +479,16 @@ export default function HostV3RoomPage() {
           }
         }, DEFAULT_V3_RECORDING_TIMING.postRollMs);
         break;
+      case 'qr-countdown-festa':
+        setRedirectCountdown(message.count);
+        break;
+      case 'qr-auto-close-festa':
+        setRedirectCountdown(0);
+        setIsGuestNavigatingToDownload(true);
+        break;
       case 'qr-dismissed-festa':
-        setIsGuestViewingQR(false);
+        setRedirectCountdown(null);
+        setIsGuestNavigatingToDownload(true);
         break;
     }
   });
@@ -484,6 +505,8 @@ export default function HostV3RoomPage() {
       'session-complete-v3',
       'session-reset-festa',
       'film-ready-festa',
+      'qr-countdown-festa',
+      'qr-auto-close-festa',
       'qr-dismissed-festa',
     ];
 
@@ -606,17 +629,6 @@ export default function HostV3RoomPage() {
     photoCapture.startCapture();
   };
 
-  const handlePrepareForNextGuest = () => {
-    sendMessage({ type: 'session-reset-festa', roomId: store.roomId! });
-    setLastSessionResult(null);
-    setRecordedVideoBlob(null);
-    recordedVideoBlobRef.current = null;
-    setIsVideoProcessing(false);
-    setVideoProcessingProgress('');
-    photoCapture.reset();
-    setSessionState(SessionState.GUEST_CONNECTED);
-  };
-
   const toggleLocalMic = () => {
     if (!localMicMuted) {
       prevLocalMicVolumeRef.current = localMicVolume;
@@ -645,7 +657,7 @@ export default function HostV3RoomPage() {
     if (localStream) localStream.getTracks().forEach((track) => track.stop());
     store.setRoomId(null as any);
     store.setRole(null);
-    router.push('/festa-host');
+    router.push('/photo-host');
   };
 
   const openSettings = () => {
@@ -1267,7 +1279,7 @@ export default function HostV3RoomPage() {
           className="absolute bottom-4 right-4 z-30 w-80 rounded-2xl backdrop-blur-xl p-4 animate-slide-up"
           style={{ background: 'rgba(27,22,18,0.95)', border: '1px solid rgba(255,255,255,0.1)' }}
         >
-          {isGuestViewingQR ? (
+          {isGuestRedirecting ? (
             <div className="flex items-center gap-3">
               <div className="flex-shrink-0">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(252,113,43,0.2)' }}>
@@ -1275,8 +1287,14 @@ export default function HostV3RoomPage() {
                 </div>
               </div>
               <div>
-                <p className="text-white text-sm font-bold">게스트가 사진을 확인하는 중</p>
-                <p className="text-white/40 text-xs mt-0.5">QR코드를 확인하고 있습니다</p>
+                <p className="text-white text-sm font-bold">
+                  {isGuestNavigatingToDownload ? '게스트가 결과 페이지로 이동 중' : '게스트가 결과 페이지로 이동 대기 중'}
+                </p>
+                <p className="text-white/40 text-xs mt-0.5">
+                  {isGuestNavigatingToDownload
+                    ? '세션이 곧 정리됩니다'
+                    : `${redirectCountdown ?? PHOTO_REDIRECT_COUNTDOWN_SECONDS}초 후 자동 이동합니다`}
+                </p>
               </div>
             </div>
           ) : (
@@ -1288,13 +1306,7 @@ export default function HostV3RoomPage() {
                 </svg>
                 <span className="text-white text-sm font-bold">촬영 완료</span>
               </div>
-              <button
-                onClick={handlePrepareForNextGuest}
-                className="w-full py-2.5 rounded-xl font-bold text-white text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
-                style={{ background: 'linear-gradient(135deg, #FC712B, #FD9319)', boxShadow: '0 4px 20px rgba(252,113,43,0.4)' }}
-              >
-                다음 게스트
-              </button>
+              <p className="text-white/40 text-xs">게스트가 결과 페이지로 이동하면 자동으로 다음 세션 준비 상태가 됩니다</p>
             </div>
           )}
         </div>
