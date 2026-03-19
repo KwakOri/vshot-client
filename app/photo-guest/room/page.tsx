@@ -38,7 +38,7 @@ export default function GuestV3RoomPage() {
   const [hostSmoothness, setHostSmoothness] = useState(10);
   const [hostChromaKeyColor, setHostChromaKeyColor] = useState('#00ff00');
 
-  const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(store.guestFlipHorizontal);
+  const [guestFlipHorizontal, setGuestFlipHorizontal] = useState(false);
   const [hostFlipHorizontal, setHostFlipHorizontal] = useState(false);
 
   const [showFlash, setShowFlash] = useState(false);
@@ -170,6 +170,9 @@ export default function GuestV3RoomPage() {
 
     const init = async () => {
       try {
+        setGuestFlipHorizontal(false);
+        setHostFlipHorizontal(false);
+        store.setGuestFlipHorizontal(false);
         await startCamera();
         await connect();
         sendMessage({
@@ -282,6 +285,17 @@ export default function GuestV3RoomPage() {
             if (message.hostSettings.hostFlipHorizontal !== undefined) {
               setHostFlipHorizontal(message.hostSettings.hostFlipHorizontal);
             }
+          }
+
+          // Always start each guest session with mirror OFF and sync Host immediately.
+          setGuestFlipHorizontal(false);
+          store.setGuestFlipHorizontal(false);
+          if (store.roomId) {
+            sendMessage({
+              type: 'guest-display-options',
+              roomId: store.roomId,
+              options: { flipHorizontal: false },
+            });
           }
         }
         break;

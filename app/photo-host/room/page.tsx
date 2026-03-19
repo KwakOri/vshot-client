@@ -320,10 +320,19 @@ export default function HostV3RoomPage() {
     setSensitivity(savedSettings.sensitivity);
     setSmoothness(savedSettings.smoothness);
     setChromaKeyColor(savedSettings.chromaKeyColor);
-    setHostFlipHorizontal(savedSettings.hostFlipHorizontal);
-    setGuestFlipHorizontal(savedSettings.guestFlipHorizontal);
+    setHostFlipHorizontal(false);
+    setGuestFlipHorizontal(false);
+    updateSetting('hostFlipHorizontal', false);
+    updateSetting('guestFlipHorizontal', false);
     setGuestBlurAmount(savedSettings.guestBlurAmount ?? 40);
-  }, [settingsLoaded]);
+  }, [
+    settingsLoaded,
+    savedSettings.sensitivity,
+    savedSettings.smoothness,
+    savedSettings.chromaKeyColor,
+    savedSettings.guestBlurAmount,
+    updateSetting,
+  ]);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -384,17 +393,13 @@ export default function HostV3RoomPage() {
         recordedVideoBlobRef.current = null;
         setPhotoDeliveryState('idle');
         setRedirectCountdown(null);
+        resetFlipStatesForGuestSession();
         // Re-send current settings to new guest
         if (store.roomId) {
           sendMessage({
             type: 'chromakey-settings',
             roomId: store.roomId,
             settings: { enabled: chromaKeyEnabled, color: chromaKeyColor, similarity: sensitivity, smoothness },
-          });
-          sendMessage({
-            type: 'host-display-options',
-            roomId: store.roomId,
-            options: { flipHorizontal: hostFlipHorizontal },
           });
           // Send frame layout settings to guest
           const layout = store.resolvedFrameLayout || getLayoutById(store.selectedFrameLayoutId);
@@ -416,6 +421,7 @@ export default function HostV3RoomPage() {
         photoCapture.reset();
         setPhotoDeliveryState('idle');
         setRedirectCountdown(null);
+        resetFlipStatesForGuestSession();
         break;
       case 'waiting-for-guest-v3':
         setSessionState(SessionState.WAITING_FOR_GUEST);
@@ -697,6 +703,21 @@ export default function HostV3RoomPage() {
       });
     }
   }, [store.roomId, chromaKeyEnabled, chromaKeyColor, sensitivity, smoothness, sendMessage]);
+
+  const resetFlipStatesForGuestSession = useCallback(() => {
+    setHostFlipHorizontal(false);
+    setGuestFlipHorizontal(false);
+    updateSetting('hostFlipHorizontal', false);
+    updateSetting('guestFlipHorizontal', false);
+
+    if (store.roomId) {
+      sendMessage({
+        type: 'host-display-options',
+        roomId: store.roomId,
+        options: { flipHorizontal: false },
+      });
+    }
+  }, [store.roomId, sendMessage, updateSetting]);
 
   const toggleHostFlip = () => {
     const newFlipState = !hostFlipHorizontal;

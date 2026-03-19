@@ -77,6 +77,8 @@ export default function GuestV3ReadyPage() {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
+    store.setGuestFlipHorizontal(false);
+
     if (!store.userId) {
       const userId = uuidv4();
       store.setUserId(userId);
