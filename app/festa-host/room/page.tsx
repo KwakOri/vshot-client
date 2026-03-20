@@ -160,7 +160,9 @@ export default function HostV3RoomPage() {
     },
     onMergeComplete: (mergedPhotoUrl) => {
       console.log('[Host V3] Photos merged:', mergedPhotoUrl);
-      setSessionState(SessionState.PROCESSING);
+      setSessionState((current) =>
+        current === SessionState.COMPLETED ? current : SessionState.PROCESSING
+      );
     },
     onSessionComplete: async (sessionId, frameResultUrl) => {
       const t0 = performance.now();
@@ -472,6 +474,13 @@ export default function HostV3RoomPage() {
           }
         }, DEFAULT_V3_RECORDING_TIMING.postRollMs);
         break;
+      case 'photo-processing-started-v3':
+        if (message.startedBy === 'guest') {
+          setSessionState((current) =>
+            current === SessionState.COMPLETED ? current : SessionState.PROCESSING
+          );
+        }
+        break;
       case 'qr-dismissed-festa':
         setIsGuestViewingQR(false);
         break;
@@ -486,6 +495,7 @@ export default function HostV3RoomPage() {
       'host-settings-sync-v3',
       'countdown-tick-v3',
       'capture-now-v3',
+      'photo-processing-started-v3',
       'photos-merged-v3',
       'session-complete-v3',
       'session-reset-festa',
@@ -1283,6 +1293,25 @@ export default function HostV3RoomPage() {
         </div>
 
       {/* ===== BOTTOM-RIGHT TOAST (Capture complete) ===== */}
+      {sessionState === SessionState.PROCESSING && (
+        <div
+          className="absolute bottom-4 right-4 z-30 w-80 rounded-2xl backdrop-blur-xl p-4 animate-slide-up"
+          style={{ background: 'rgba(27,22,18,0.95)', border: '1px solid rgba(255,255,255,0.1)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(252,113,43,0.2)' }}>
+                <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            </div>
+            <div>
+              <p className="text-white text-sm font-bold">작업 진행 중</p>
+              <p className="text-white/40 text-xs mt-0.5">게스트 사진 업로드 및 합성을 처리하고 있습니다</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sessionState === SessionState.COMPLETED && lastSessionResult && (
         <div
           className="absolute bottom-4 right-4 z-30 w-80 rounded-2xl backdrop-blur-xl p-4 animate-slide-up"

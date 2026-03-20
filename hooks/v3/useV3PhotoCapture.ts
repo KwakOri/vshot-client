@@ -169,6 +169,15 @@ export function useV3PhotoCapture({
           hostFlip,
         );
 
+        // Notify peer immediately when post-capture processing starts.
+        if (role === 'guest') {
+          sendSignal({
+            type: 'photo-processing-started-v3',
+            roomId,
+            startedBy: role,
+          });
+        }
+
         // --- Insurance upload (small JPEG, sent first for fast provisional merge) ---
         setUploadProgress(5);
         const insuranceBlob = await createInsuranceJpeg(photoBlob);
